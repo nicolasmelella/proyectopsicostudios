@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Crea una base vacía en un Postgres local y corre 01 + 03 + pruebas.
+# Uso: PGHOST=... PGPORT=... PGUSER=postgres ./pruebas/correr_pruebas.sh
+set -euo pipefail
+cd "$(dirname "$0")/.."
+psql -q -c 'drop database if exists psicostudios_prueba' -c 'create database psicostudios_prueba'
+psql -q -d psicostudios_prueba -v ON_ERROR_STOP=1 \
+  -f pruebas/simular_supabase.sql \
+  -f supabase/01_base.sql \
+  -f pruebas/probar.sql

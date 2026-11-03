@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel | Psico Studios</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#12275a">
+  <link rel="icon" type="image/png" href="img/logo-azul.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    /* ---------- Login ---------- */
+    #login { min-height: 100vh; display: grid; place-items: center; background: var(--azul); padding: 16px; }
+    #login .tarjeta { width: 100%; max-width: 380px; }
+    #login img { width: 170px; margin: 0 auto 24px; }
+
+    /* ---------- Estructura ---------- */
+    .topbar { background: var(--azul); color: var(--crema); position: sticky; top: 0; z-index: 30; }
+    .topbar-in { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; gap: 16px; padding: 10px 16px; }
+    .topbar img { height: 34px; width: auto; }
+    .topbar .salir { margin-left: auto; color: var(--crema); border-color: rgba(243,238,220,.5); }
+    .tabs { display: flex; gap: 4px; overflow-x: auto; max-width: 1280px; margin: 0 auto; padding: 0 12px; scrollbar-width: none; }
+    .tabs button { font: inherit; font-weight: 600; background: transparent; color: var(--crema); opacity: .75; border: 0;
+                   border-bottom: 3px solid transparent; padding: .8em .9em; cursor: pointer; white-space: nowrap; min-height: 48px; }
+    .tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--terracota); }
+    .badge { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--terracota);
+             color: #fff; font-size: .75rem; line-height: 20px; text-align: center; margin-left: 4px; }
+    main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    .barra-herr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .barra-herr .fecha-actual { font-weight: 800; font-size: 1.15rem; min-width: 190px; }
+    .barra-herr .der { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+    .barra-herr input[type=date] { width: auto; min-height: 40px; padding: .35em .6em; }
+
+    /* ---------- Grilla de agenda ---------- */
+    .grilla-wrap { overflow-x: auto; background: var(--crema-claro); border: 1px solid var(--borde); border-radius: var(--radius); }
+    table.grilla { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 760px; table-layout: fixed; }
+    .grilla th, .grilla td { border-bottom: 1px solid var(--borde); border-right: 1px solid var(--borde); padding: 0; vertical-align: top; }
+    .grilla thead th { background: var(--azul); color: var(--crema); padding: .6em .4em; font-size: .85rem; position: sticky; top: 0; }
+    .grilla th.h { width: 64px; background: var(--crema); color: var(--texto-suave); font-weight: 700; font-size: .85rem;
+                   padding: .55em .4em; position: sticky; left: 0; z-index: 1; text-align: center; }
+    .grilla thead th.h { background: var(--azul); color: var(--crema); z-index: 2; }
+    .celda { display: block; width: 100%; height: 100%; min-height: 52px; border: 0; background: transparent; cursor: pointer;
+             font: inherit; text-align: left; padding: .4em .5em; color: var(--texto); }
+    .celda.vacia:hover { background: rgba(111,143,184,.12); }
+    .celda.vacia:hover::after { content: "+ reservar"; font-size: .75rem; color: var(--celeste); font-weight: 600; }
+    .celda .n { display: block; font-weight: 700; font-size: .85rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; }
+    .celda .e { display: block; font-size: .72rem; margin-top: .15em; }
+    .t-confirmada { background: #dfe7f2; box-shadow: inset 4px 0 0 var(--azul); }
+    .t-pendiente { background: var(--alerta-fondo); box-shadow: inset 4px 0 0 #d9a21b; }
+    .t-fijo { background: #f1e2d6; box-shadow: inset 4px 0 0 var(--terracota); }
+    .t-solicitud { background: repeating-linear-gradient(135deg, #f8eee6, #f8eee6 8px, #f3e4d8 8px, #f3e4d8 16px); box-shadow: inset 4px 0 0 var(--terracota); }
+    .t-bloqueo { background: repeating-linear-gradient(135deg, #ebebeb, #ebebeb 8px, #e0e0e0 8px, #e0e0e0 16px); color: #555; }
+    .t-liberado { background: var(--ok-fondo); box-shadow: inset 4px 0 0 var(--ok); }
+    .leyenda-ag { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: .8rem; color: var(--texto-suave); }
+    .leyenda-ag span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+    .leyenda-ag .l-c::before { background: #dfe7f2; border-left: 3px solid var(--azul); }
+    .leyenda-ag .l-p::before { background: var(--alerta-fondo); border-left: 3px solid #d9a21b; }
+    .leyenda-ag .l-f::before { background: #f1e2d6; border-left: 3px solid var(--terracota); }
+    .leyenda-ag .l-s::before { background: #f3e4d8; border: 1px dashed var(--terracota); }
+    .leyenda-ag .l-b::before { background: #e0e0e0; }
+    .leyenda-ag .l-l::before { background: var(--ok-fondo); border-left: 3px solid var(--ok); }
+
+    /* ---------- Listas ---------- */
+    .lista { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    .item { background: var(--crema-claro); border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem; }
+    .item h3 { margin-bottom: .2em; }
+    .item .acciones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .8em; }
+    .pill { display: inline-block; font-size: .72rem; font-weight: 700; padding: .2em .6em; border-radius: 999px; }
+    .pill-ok { background: var(--ok-fondo); color: var(--ok); }
+    .pill-alerta { background: var(--alerta-fondo); color: var(--alerta); }
+    .pill-error { background: var(--error-fondo); color: var(--error); }
+    .pill-info { background: #e6ecf5; color: var(--azul); }
+    .seccion-titulo { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 12px; }
+    .seccion-titulo:first-child { margin-top: 0; }
+
+    table.tabla { width: 100%; border-collapse: collapse; background: var(--crema-claro); border-radius: var(--radius); overflow: hidden; }
+    .tabla th, .tabla td { padding: .7em .8em; text-align: left; border-bottom: 1px solid var(--borde); font-size: .92rem; }
+    .tabla th { background: #ece5cf; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+    .tabla tr.click { cursor: pointer; }
+    .tabla tr.click:hover td { background: #f3eedc; }
+
+    .datos { list-style: none; padding: 0; margin: 0 0 1em; }
+    .datos li { display: flex; justify-content: space-between; gap: 1em; padding: .45em 0; border-bottom: 1px solid var(--borde); font-size: .95rem; }
+    .datos li span:first-child { color: var(--texto-suave); }
+    .datos li span:last-child { font-weight: 600; text-align: right; }
+    .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .horas-sel { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+    .horas-sel .chip { min-width: 0; min-height: 40px; padding: .4em; font-weight: 600; }
+    .bloque { border-top: 1px solid var(--borde); margin-top: 1.2em; padding-top: 1em; }
+    .grupo-btn { display: flex; flex-wrap: wrap; gap: 8px; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--azul); color: var(--crema);
+             padding: .8em 1.3em; border-radius: 999px; font-weight: 600; z-index: 80; box-shadow: var(--sombra); max-width: 90vw; }
+    @media (max-width: 600px) { .fila2 { grid-template-columns: 1fr; } .barra-herr .der { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <!-- ===================== LOGIN ===================== -->
+  <section id="login" class="oculto">
+    <form class="tarjeta" id="form-login">
+      <img src="img/logo-azul.png" alt="Psico Studios" width="170" height="95">
+      <h1 style="font-size:1.3rem;text-align:center">Panel del equipo</h1>
+      <div class="campo">
+        <label for="l-usuario">Usuario</label>
+        <input id="l-usuario" autocomplete="username" required autocapitalize="none" spellcheck="false">
+      </div>
+      <div class="campo">
+        <label for="l-clave">Contraseña</label>
+        <input id="l-clave" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="aviso-login" class="aviso aviso-error oculto" role="alert"></div>
+      <button class="btn btn-primario btn-bloque" id="btn-login">Entrar</button>
+      <p class="ayuda centro" style="margin-top:1em">La sesión se cierra sola al cerrar el navegador o tras 60 minutos sin uso.</p>
+    </form>
+  </section>
+
+  <!-- ===================== APP ===================== -->
+  <div id="app" class="oculto">
+    <header class="topbar">
+      <div class="topbar-in">
+        <img src="img/logo-crema.png" alt="Psico Studios" width="61" height="34">
+        <strong>Panel</strong>
+        <button class="btn btn-borde btn-chico salir" id="btn-salir">Cerrar sesión</button>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="agenda" aria-selected="true">Agenda</button>
+        <button role="tab" data-tab="pendientes" aria-selected="false">Pendientes <span class="badge oculto" id="badge-pend"></span></button>
+        <button role="tab" data-tab="fijos" aria-selected="false">Fijos</button>
+        <button role="tab" data-tab="profesionales" aria-selected="false">Profesionales</button>
+        <button role="tab" data-tab="ajustes" aria-selected="false">Precios y ajustes</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- AGENDA -->
+      <section data-vista="agenda">
+        <div class="barra-herr">
+          <button class="btn btn-borde btn-chico" id="ag-ant" aria-label="Día anterior">◀</button>
+          <button class="btn btn-borde btn-chico" id="ag-hoy">Hoy</button>
+          <button class="btn btn-borde btn-chico" id="ag-sig" aria-label="Día siguiente">▶</button>
+          <span class="fecha-actual" id="ag-fecha"></span>
+          <input type="date" id="ag-elegir" aria-label="Ir a fecha">
+          <div class="der">
+            <button class="btn btn-primario btn-chico" id="btn-nueva-reserva">+ Reserva</button>
+            <button class="btn btn-borde btn-chico" id="btn-nuevo-fijo">+ Fijo</button>
+            <button class="btn btn-borde btn-chico" id="btn-bloquear">Bloquear horario</button>
+          </div>
+        </div>
+        <div class="grilla-wrap"><div id="grilla"><div class="cargando" style="padding:1em">Cargando agenda…</div></div></div>
+        <div class="leyenda-ag">
+          <span class="l-c">Confirmada (señada)</span><span class="l-p">Sin seña</span><span class="l-f">Fijo</span>
+          <span class="l-s">Solicitud de fijo</span><span class="l-l">Fijo liberado</span><span class="l-b">Bloqueado</span>
+        </div>
+      </section>
+
+      <!-- PENDIENTES -->
+      <section data-vista="pendientes" class="oculto">
+        <div class="seccion-titulo"><h2>Reservas esperando la seña</h2><span class="suave chico">Se liberan solas al vencer</span></div>
+        <div id="lista-pend" class="lista"></div>
+        <div class="seccion-titulo"><h2>Solicitudes de horario fijo</h2></div>
+        <div id="lista-sol" class="lista"></div>
+      </section>
+
+      <!-- FIJOS -->
+      <section data-vista="fijos" class="oculto">
+        <div class="seccion-titulo"><h2>Horarios fijos activos</h2><span class="suave chico" id="fijos-mes"></span></div>
+        <div id="lista-fijos"></div>
+      </section>
+
+      <!-- PROFESIONALES -->
+      <section data-vista="profesionales" class="oculto">
+        <div class="barra-herr">
+          <input type="search" id="buscar-prof" placeholder="Buscar por nombre o WhatsApp…" style="max-width:360px">
+          <span class="suave chico" id="cant-prof"></span>
+        </div>
+        <div style="overflow-x:auto"><div id="lista-prof"></div></div>
+      </section>
+
+      <!-- AJUSTES -->
+      <section data-vista="ajustes" class="oculto">
+        <div class="seccion-titulo"><h2>Precios vigentes</h2></div>
+        <div id="tabla-precios"></div>
+        <form class="tarjeta" id="form-precio" style="margin-top:12px;max-width:640px">
+          <h3>Cargar un aumento</h3>
+          <p class="suave chico">Se agrega un precio nuevo con fecha de inicio. Las reservas ya hechas mantienen el precio que tenían.</p>
+          <div class="fila2">
+            <div class="campo"><label for="p-mod">Modalidad</label>
+              <select id="p-mod"><option value="suelta">Por horas</option><option value="fijo">Horario fijo</option></select></div>
+            <div class="campo"><label for="p-franja">Franja</label>
+              <select id="p-franja"><option value="manana">Mañana</option><option value="tarde">Tarde</option></select></div>
+            <div class="campo"><label for="p-valor">Precio por hora ($)</label><input id="p-valor" type="number" min="1" step="1" required></div>
+            <div class="campo"><label for="p-desde">Vigente desde</label><input id="p-desde" type="date" required></div>
+          </div>
+          <button class="btn btn-primario">Guardar precio</button>
+        </form>
+        <div class="seccion-titulo"><h2>Ajustes generales</h2></div>
+        <div id="lista-config"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal genérico -->
+  <div class="modal-fondo oculto" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-cerrar" aria-label="Cerrar">×</button>
+      <div id="modal-cuerpo"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/panel.js"></script>
+</body>
+</html>

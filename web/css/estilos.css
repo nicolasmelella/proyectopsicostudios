@@ -1,0 +1,135 @@
+/* =====================================================================
+   PSICOSTUDIOS · estilos compartidos (web de reservas + panel)
+   Colores del manual de marca 2026. Para cambiar un color, tocá solo :root.
+   ===================================================================== */
+:root {
+  --azul: #12275a;          /* Azul oscuro: textos y botones principales */
+  --celeste: #6f8fb8;       /* Azul claro: apoyo, estados */
+  --terracota: #c06a46;     /* Acento */
+  --terracota-osc: #a5532f; /* Acento para botones con texto blanco (mejor contraste) */
+  --crema: #f3eedc;         /* Fondo de marca */
+  --crema-claro: #faf7ee;   /* Fondo de tarjetas */
+  --blanco: #ffffff;
+  --texto: #12275a;
+  --texto-suave: #4a597b;
+  --borde: #e2dbc4;
+  --ok: #2f7d5b;
+  --ok-fondo: #e3f1e9;
+  --alerta: #9a6a00;
+  --alerta-fondo: #fbf0d3;
+  --error: #b3261e;
+  --error-fondo: #fbe4e2;
+  --font-main: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius: 14px;
+  --sombra: 0 2px 10px rgba(18, 39, 90, .08);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-main);
+  color: var(--texto);
+  background: var(--crema);
+  line-height: 1.5;
+  font-size: 16px;
+}
+img { max-width: 100%; display: block; }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 .5em; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); font-weight: 800; }
+h2 { font-size: 1.3rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0 0 1em; }
+a { color: var(--azul); }
+.oculto { display: none !important; }
+.suave { color: var(--texto-suave); }
+.chico { font-size: .875rem; }
+.centro { text-align: center; }
+
+/* ---------- Botones ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5em;
+  font: inherit; font-weight: 700; font-size: 1rem;
+  padding: .85em 1.4em; border-radius: 999px; border: 2px solid transparent;
+  cursor: pointer; text-decoration: none; transition: transform .1s, background .15s, opacity .15s;
+  min-height: 48px;
+}
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primario { background: var(--azul); color: var(--crema); }
+.btn-primario:hover:not(:disabled) { background: #0c1c44; }
+.btn-acento { background: var(--terracota-osc); color: var(--blanco); }
+.btn-acento:hover:not(:disabled) { background: #8f4626; }
+.btn-borde { background: transparent; color: var(--azul); border-color: var(--azul); }
+.btn-borde:hover:not(:disabled) { background: rgba(18, 39, 90, .06); }
+.btn-peligro { background: transparent; color: var(--error); border-color: var(--error); }
+.btn-chico { padding: .45em .95em; min-height: 36px; font-size: .875rem; }
+.btn-bloque { width: 100%; }
+.btn-wa { background: #1f8f4e; color: #fff; }
+
+/* ---------- Tarjetas y formularios ---------- */
+.tarjeta {
+  background: var(--crema-claro); border: 1px solid var(--borde);
+  border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--sombra);
+}
+label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .35em; }
+input, select, textarea {
+  width: 100%; font: inherit; color: var(--texto);
+  padding: .75em .9em; border: 1.5px solid var(--borde); border-radius: 10px;
+  background: var(--blanco); min-height: 48px;
+}
+input:focus, select:focus, textarea:focus, .btn:focus-visible, .chip:focus-visible, .hora:focus-visible {
+  outline: 3px solid var(--celeste); outline-offset: 2px;
+}
+.campo { margin-bottom: 1rem; }
+.ayuda { font-size: .8rem; color: var(--texto-suave); margin-top: .3em; }
+
+.aviso { padding: .85em 1em; border-radius: 10px; margin: 1em 0; font-size: .95rem; }
+.aviso-error { background: var(--error-fondo); color: var(--error); }
+.aviso-ok { background: var(--ok-fondo); color: var(--ok); }
+.aviso-alerta { background: var(--alerta-fondo); color: var(--alerta); }
+.aviso-info { background: #e6ecf5; color: var(--azul); }
+
+/* ---------- Chips (opciones) ---------- */
+.chips { display: flex; gap: .5rem; overflow-x: auto; padding: .25rem .1rem .6rem; scrollbar-width: thin; }
+.chip {
+  flex: 0 0 auto; font: inherit; cursor: pointer; text-align: center;
+  background: var(--blanco); color: var(--azul); border: 1.5px solid var(--borde);
+  border-radius: 12px; padding: .55em .85em; min-width: 64px; min-height: 48px;
+}
+.chip small { display: block; font-size: .72rem; color: var(--texto-suave); text-transform: uppercase; letter-spacing: .04em; }
+.chip strong { font-size: 1.1rem; }
+.chip[aria-pressed="true"] { background: var(--azul); color: var(--crema); border-color: var(--azul); }
+.chip[aria-pressed="true"] small { color: var(--crema); opacity: .8; }
+
+/* ---------- Spinner ---------- */
+.cargando { display: flex; align-items: center; gap: .6em; color: var(--texto-suave); padding: 1em 0; }
+.cargando::before {
+  content: ""; width: 18px; height: 18px; border-radius: 50%;
+  border: 3px solid var(--borde); border-top-color: var(--azul); animation: girar .8s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------- Modal ---------- */
+.modal-fondo {
+  position: fixed; inset: 0; background: rgba(18, 39, 90, .45); z-index: 50;
+  display: flex; align-items: flex-end; justify-content: center; padding: 0;
+}
+.modal {
+  background: var(--crema-claro); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+  border-radius: var(--radius) var(--radius) 0 0; padding: 1.25rem 1.25rem 1.5rem; position: relative;
+}
+.modal-cerrar {
+  position: absolute; top: .6rem; right: .6rem; width: 40px; height: 40px; border-radius: 50%;
+  border: 0; background: transparent; font-size: 1.6rem; line-height: 1; cursor: pointer; color: var(--azul);
+}
+@media (min-width: 700px) {
+  .modal-fondo { align-items: center; padding: 1rem; }
+  .modal { border-radius: var(--radius); }
+}
+
+/* ---------- Marca de modo demo ---------- */
+.demo-banda {
+  background: var(--terracota); color: var(--crema); text-align: center;
+  font-size: .8rem; font-weight: 700; padding: .35em 1em; letter-spacing: .03em;
+}

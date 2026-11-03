@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reservá tu consultorio | Psico Studios</title>
+  <meta name="description" content="Alquiler de consultorios por hora o con horario fijo para profesionales de la salud mental. Elegí día y horario online y confirmá con una seña.">
+  <meta property="og:title" content="Reservá tu consultorio | Psico Studios">
+  <meta property="og:description" content="Consultorios por hora o con horario fijo para profesionales de la salud mental. Reservá online.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#f3eedc">
+  <link rel="icon" type="image/png" href="img/logo-azul.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    .contenedor { max-width: 760px; margin: 0 auto; padding: 0 16px 140px; }
+    header.marca { text-align: center; padding: 28px 16px 8px; }
+    header.marca img { width: 150px; margin: 0 auto 18px; }
+    header.marca p { color: var(--texto-suave); max-width: 520px; margin: 0 auto; }
+
+    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: var(--crema-claro);
+             border: 1px solid var(--borde); padding: 6px; border-radius: 999px; margin: 24px 0; }
+    .modos button { font: inherit; font-weight: 700; border: 0; border-radius: 999px; padding: .8em .5em;
+                    background: transparent; color: var(--azul); cursor: pointer; min-height: 48px; }
+    .modos button[aria-selected="true"] { background: var(--azul); color: var(--crema); }
+
+    .paso { margin-bottom: 18px; }
+    .paso-titulo { display: flex; align-items: center; gap: .6em; margin-bottom: .75em; }
+    .paso-num { width: 28px; height: 28px; border-radius: 50%; background: var(--terracota); color: var(--crema);
+                display: grid; place-items: center; font-weight: 800; font-size: .9rem; flex: 0 0 auto; }
+    .paso-titulo h2 { margin: 0; font-size: 1.1rem; }
+
+    .horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+    .hora { font: inherit; cursor: pointer; background: var(--blanco); color: var(--azul);
+            border: 1.5px solid var(--borde); border-radius: 12px; padding: .6em .4em; min-height: 60px; text-align: center; }
+    .hora strong { display: block; font-size: 1.05rem; }
+    .hora small { font-size: .72rem; color: var(--texto-suave); }
+    .hora[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: var(--crema); }
+    .hora[aria-pressed="true"] small { color: var(--crema); opacity: .85; }
+    .hora:disabled { background: transparent; color: #a9aec0; border-style: dashed; cursor: not-allowed; }
+    .hora:disabled small { color: #a9aec0; }
+    .leyenda { display: flex; gap: 1em; flex-wrap: wrap; font-size: .8rem; color: var(--texto-suave); margin-top: .75em; }
+
+    .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--azul); color: var(--crema);
+             padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(18,39,90,.25); }
+    .barra-in { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+    .barra .detalle { font-size: .85rem; line-height: 1.35; }
+    .barra .detalle strong { font-size: 1.05rem; }
+    .barra .btn { background: var(--terracota-osc); color: #fff; flex: 0 0 auto; }
+
+    .precios { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    .precios th, .precios td { text-align: left; padding: .55em .4em; border-bottom: 1px solid var(--borde); }
+    .precios td:last-child, .precios th:last-child { text-align: right; }
+
+    .resultado { text-align: center; }
+    .resultado .icono { width: 64px; height: 64px; border-radius: 50%; background: var(--ok-fondo); color: var(--ok);
+                        display: grid; place-items: center; margin: 0 auto 12px; font-size: 2rem; }
+    .dato-pago { background: var(--blanco); border: 1.5px dashed var(--celeste); border-radius: 12px; padding: 1em;
+                 margin: 1em 0; text-align: left; }
+    .dato-pago .fila { display: flex; justify-content: space-between; align-items: center; gap: .5em; padding: .3em 0; }
+    .dato-pago .valor { font-weight: 700; word-break: break-all; }
+    .cuenta { font-size: 1.6rem; font-weight: 800; color: var(--terracota-osc); }
+    .resumen-lista { list-style: none; padding: 0; margin: 0 0 1em; text-align: left; }
+    .resumen-lista li { display: flex; justify-content: space-between; gap: 1em; padding: .4em 0; border-bottom: 1px solid var(--borde); }
+    .resumen-lista li span:last-child { font-weight: 700; text-align: right; }
+
+    .wa-flotante { position: fixed; right: 16px; bottom: 96px; z-index: 15; width: 56px; height: 56px; border-radius: 50%;
+                   background: #1f8f4e; display: grid; place-items: center; box-shadow: var(--sombra); }
+    .wa-flotante svg { width: 30px; height: 30px; fill: #fff; }
+    @media (min-width: 901px) { .wa-flotante { display: none; } }
+    @media (max-width: 480px) { .barra .detalle { font-size: .78rem; } .barra .btn { padding: .7em 1em; } }
+  </style>
+</head>
+<body>
+  <header class="marca">
+    <img src="img/logo-azul.png" alt="Psico Studios" width="150" height="83">
+    <h1>Reservá tu consultorio</h1>
+    <p>Consultorios para profesionales de la salud mental. Elegí el día y el horario, y confirmá con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
+  </header>
+
+  <main class="contenedor">
+    <div class="modos" role="tablist" aria-label="Tipo de reserva">
+      <button role="tab" id="tab-suelta" aria-selected="true" aria-controls="vista-suelta">Por horas</button>
+      <button role="tab" id="tab-fijo" aria-selected="false" aria-controls="vista-fijo">Horario fijo semanal</button>
+    </div>
+
+    <div id="aviso-general" class="aviso aviso-error oculto" role="alert"></div>
+
+    <!-- ===================== POR HORAS ===================== -->
+    <section id="vista-suelta" role="tabpanel" aria-labelledby="tab-suelta">
+      <div class="paso">
+        <div class="paso-titulo"><span class="paso-num">1</span><h2>Elegí el día</h2></div>
+        <div class="chips" id="dias-suelta"></div>
+        <div class="ayuda">¿Buscás otra fecha? <label style="display:inline;font-weight:600"><input type="date" id="fecha-otra" style="display:inline-block;width:auto;min-height:36px;padding:.3em .5em"></label></div>
+      </div>
+
+      <div class="paso">
+        <div class="paso-titulo"><span class="paso-num">2</span><h2>Elegí los horarios</h2></div>
+        <p class="suave chico" id="texto-horas">Podés elegir una o varias horas. Cada turno dura 1 hora.</p>
+        <div id="horas-suelta" class="horas"></div>
+        <div class="leyenda"><span>☀️ Mañana: hasta las <span data-cfg="hora_fin_manana">13</span> hs</span><span>🌙 Tarde: desde las <span data-cfg="hora_fin_manana">13</span> hs</span></div>
+      </div>
+
+      <div class="paso oculto" id="paso-consultorio">
+        <div class="paso-titulo"><span class="paso-num">3</span><h2>Consultorio</h2></div>
+        <select id="consultorio-suelta" aria-label="Consultorio"></select>
+        <p class="ayuda">Si no tenés preferencia, te asignamos uno libre.</p>
+      </div>
+    </section>
+
+    <!-- ===================== FIJO ===================== -->
+    <section id="vista-fijo" role="tabpanel" aria-labelledby="tab-fijo" class="oculto">
+      <div class="aviso aviso-info chico">El horario fijo es el mismo día y hora todas las semanas, con precio preferencial. Mínimo 2 horas seguidas. Lo confirmamos por WhatsApp.</div>
+      <div class="paso">
+        <div class="paso-titulo"><span class="paso-num">1</span><h2>¿Qué día de la semana?</h2></div>
+        <div class="chips" id="dias-fijo"></div>
+      </div>
+      <div class="paso oculto" id="paso-inicio-fijo">
+        <div class="paso-titulo"><span class="paso-num">2</span><h2>¿Desde cuándo?</h2></div>
+        <div class="chips" id="inicio-fijo"></div>
+      </div>
+      <div class="paso oculto" id="paso-horas-fijo">
+        <div class="paso-titulo"><span class="paso-num">3</span><h2>Elegí los horarios</h2></div>
+        <p class="suave chico">Se muestran las horas libres <strong>todas las semanas</strong>.</p>
+        <div id="horas-fijo" class="horas"></div>
+        <div id="aviso-bloque" class="aviso aviso-alerta chico oculto">El horario fijo es de 2 horas seguidas como mínimo.</div>
+      </div>
+    </section>
+
+    <!-- ===================== PRECIOS ===================== -->
+    <section class="tarjeta" style="margin-top:28px" aria-labelledby="titulo-precios">
+      <h2 id="titulo-precios">Precios por hora</h2>
+      <table class="precios">
+        <thead><tr><th></th><th>Mañana</th><th>Tarde</th></tr></thead>
+        <tbody id="tabla-precios"><tr><td colspan="3"><div class="cargando">Cargando…</div></td></tr></tbody>
+      </table>
+      <p class="ayuda" style="margin-top:.8em">Abierto de lunes a sábado, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs.</p>
+    </section>
+  </main>
+
+  <!-- Barra inferior con el resumen -->
+  <div class="barra oculto" id="barra">
+    <div class="barra-in">
+      <div class="detalle" id="barra-detalle"></div>
+      <button class="btn" id="btn-continuar">Continuar</button>
+    </div>
+  </div>
+
+  <!-- Formulario de datos -->
+  <div class="modal-fondo oculto" id="modal-datos" role="dialog" aria-modal="true" aria-labelledby="titulo-datos">
+    <div class="modal">
+      <button class="modal-cerrar" data-cerrar aria-label="Cerrar">×</button>
+      <h2 id="titulo-datos">Tus datos</h2>
+      <ul class="resumen-lista" id="resumen-datos"></ul>
+      <form id="form-datos" novalidate>
+        <div class="campo">
+          <label for="f-nombre">Nombre y apellido</label>
+          <input id="f-nombre" name="nombre" autocomplete="name" required minlength="2" maxlength="80">
+        </div>
+        <div class="campo">
+          <label for="f-whatsapp">WhatsApp</label>
+          <input id="f-whatsapp" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" required placeholder="Ej: 11 4195 2323" maxlength="20">
+          <div class="ayuda">Con código de área, sin 0 ni 15.</div>
+        </div>
+        <div class="campo">
+          <label for="f-profesion">Profesión</label>
+          <select id="f-profesion" name="profesion">
+            <option value="">Elegí una opción</option>
+            <option>Psicólogo/a</option><option>Psiquiatra</option><option>Psicopedagogo/a</option>
+            <option>Terapeuta ocupacional</option><option>Fonoaudiólogo/a</option><option>Nutricionista</option><option>Otra</option>
+          </select>
+        </div>
+        <label style="display:flex;gap:.6em;align-items:flex-start;font-weight:500" id="acepto-wrap">
+          <input type="checkbox" id="f-acepto" required style="width:22px;min-height:22px;margin-top:.15em;flex:0 0 auto">
+          <span id="acepto-texto"></span>
+        </label>
+        <div id="aviso-form" class="aviso aviso-error oculto" role="alert"></div>
+        <button class="btn btn-acento btn-bloque" type="submit" id="btn-enviar" style="margin-top:1em">Reservar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Resultado -->
+  <div class="modal-fondo oculto" id="modal-resultado" role="dialog" aria-modal="true" aria-labelledby="titulo-resultado">
+    <div class="modal resultado" id="contenido-resultado"></div>
+  </div>
+
+  <a class="wa-flotante oculto" id="wa-flotante" target="_blank" rel="noopener" aria-label="Escribinos por WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.1 4.9 4.3 2.4.9 2.9.7 3.4.7.5-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4zM12 21.8c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4c-1-1.6-1.5-3.4-1.5-5.2 0-5.4 4.4-9.8 9.8-9.8 2.6 0 5.1 1 6.9 2.9 1.8 1.8 2.9 4.3 2.9 6.9 0 5.4-4.4 9.8-9.8 9.8zM20.5 3.5C18.2 1.2 15.2 0 12 0 5.4 0 .1 5.3.1 11.9c0 2.1.6 4.1 1.6 6L0 24l6.3-1.6c1.7.9 3.7 1.4 5.7 1.4 6.6 0 11.9-5.3 11.9-11.9 0-3.2-1.2-6.2-3.4-8.4z"/></svg>
+  </a>
+
+  <script type="module" src="js/reservar.js"></script>
+</body>
+</html>
