@@ -11,5 +11,7 @@ psql -q -d psicostudios_prueba -v ON_ERROR_STOP=1 \
   -f pruebas/probar_mercadopago.sql \
   -f pruebas/probar_calendario.sql \
   -f pruebas/probar_pedidos.sql \
-  -f pruebas/probar_comprobantes.sql
+  -f pruebas/probar_comprobantes.sql \
+  -f pruebas/probar_avisos.sql
 node --experimental-strip-types --no-warnings pruebas/probar_funciones.mjs
+node --experimental-strip-types --no-warnings pruebas/probar_envio_avisos.mjs

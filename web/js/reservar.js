@@ -630,6 +630,7 @@ function mostrarResultadoSuelta(r, nombre) {
       <p class="ayuda">Tarjeta de débito, crédito o dinero en cuenta. Se confirma al instante.</p>
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
       <details class="otra-forma"><summary>¿Preferís transferir?</summary>${transferencia}</details>` : transferencia}
+    ${estado.cfg.avisos_email_activo === 'si' ? '<p class="aviso aviso-info chico" style="margin-top:.8em">📧 Te mandamos un mail con el detalle y el link para pagar o subir el comprobante.</p>' : ''}
     <p class="ayuda" style="margin-top:.8em">¿Vas a transferir más tarde? Guardá este link para subir el comprobante:
       <button class="btn btn-borde btn-chico" data-copiar="${esc(linkComprobante(r.pedido, r.token))}">Copiar link</button></p>
     <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de cada turno. Si la seña no llega a tiempo, los horarios se liberan automáticamente.</p>
@@ -759,7 +760,7 @@ async function mostrarRetorno(id, token, resultado) {
 // ================================================================ COMPROBANTE DE PAGO
 const MAX_ARCHIVO = 5 * 1024 * 1024;
 const EXTENSION = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
-const linkComprobante = (pedido, token) => `${location.origin}${location.pathname}?comprobante=${pedido}&t=${token}`;
+const linkComprobante = (pedido, token) => `${location.origin}${location.pathname}?ver=${pedido}&t=${token}`;
 
 function datosTransferencia(monto) {
   const c = estado.cfg, ok = (v) => v && v !== 'COMPLETAR';
@@ -847,10 +848,19 @@ async function mostrarSubirComprobante(id, token) {
   const { data: r, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
   if (error) { caja.innerHTML = `<h2 id="titulo-resultado">No encontramos el pedido</h2><p>${esc(mensajeError(error))}</p>${botonVolver()}`; conectarVolver(); return; }
   const falta = Math.max(0, r.sena - r.pagado);
-  caja.innerHTML = `<h2 id="titulo-resultado">Subir comprobante</h2>
+  const titulo = { confirmada: '✓ Tu reserva está confirmada', parcial: 'Tu reserva', vencida: 'Tu reserva se venció', pendiente: 'Falta pagar la seña' }[r.estado] || 'Tu reserva';
+  const pagar = r.estado === 'pendiente' && falta > 0;
+  caja.innerHTML = `<h2 id="titulo-resultado">${titulo}</h2>
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(r.id)}</strong></p>${listaReservas(r.reservas, true)}
+    ${r.estado === 'confirmada' ? `<div class="dato-pago"><div class="fila"><span>Pagaste</span><span class="valor">${pesos(r.pagado)}</span></div>
+      <div class="fila"><span>Saldo (se abona el día de cada turno)</span><span class="valor">${pesos(r.total - r.pagado)}</span></div></div>` : ''}
+    ${pagar && r.expira_en ? `<p class="suave chico" style="margin-bottom:.25em">Pagá la seña de <strong>${pesos(falta)}</strong> antes de que termine este tiempo:</p><div class="cuenta">${faltan(r.expira_en)}</div>` : ''}
+    ${pagar && mpActivo() ? '<button class="btn btn-mp btn-bloque" id="pagar-mp" style="margin-top:1em">Pagar seña con Mercado Pago</button><div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>' : ''}
     ${r.estado === 'vencida' ? '<p class="aviso aviso-alerta">Este pedido venció. Si ya transferiste, subí el comprobante igual y lo resolvemos.</p>' : ''}
-    ${datosTransferencia(falta)}${bloqueComprobante()}${botonVolver()}`;
+    ${r.estado !== 'confirmada' ? (pagar && mpActivo() ? `<details class="otra-forma"><summary>¿Preferís transferir?</summary>${datosTransferencia(falta)}${bloqueComprobante()}</details>`
+      : `${datosTransferencia(falta)}${bloqueComprobante()}`) : ''}
+    ${botonVolver()}`;
+  $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(id, token, e.currentTarget, $('#aviso-mp')));
   conectarComprobante(id, token);
   conectarVolver();
 }
@@ -877,9 +887,10 @@ try {
     q.delete('pago'); q.delete('pedido'); q.delete('t');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
     mostrarRetorno(id, token, resultado);
-  } else if (q.has('comprobante') && q.has('t')) {
-    const [id, token] = [Number(q.get('comprobante')), q.get('t')];
-    q.delete('comprobante'); q.delete('t');
+  } else if ((q.has('ver') || q.has('comprobante')) && q.has('t')) {
+    // "Mi reserva" (link de los mails) o el link para subir el comprobante
+    const [id, token] = [Number(q.get('ver') || q.get('comprobante')), q.get('t')];
+    q.delete('ver'); q.delete('comprobante'); q.delete('t');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
     mostrarSubirComprobante(id, token);
   }

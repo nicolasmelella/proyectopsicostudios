@@ -82,6 +82,9 @@ Y `supabase/06_pedidos.sql` → **Run** → *"Pedidos de varios días listos"*.
 Y `supabase/07_comprobantes.sql` → **Run** → *"Comprobantes listos…"*.
 (Subir el comprobante de la transferencia desde la web y revisarlo en el panel → Pendientes. Crea solo el espacio privado de archivos.)
 
+Y `supabase/08_avisos.sql` → **Run** → *"Avisos listos…"*.
+(Avisos automáticos por mail y WhatsApp. Arrancan apagados: se configuran con [`docs/avisos-mail-y-whatsapp.md`](docs/avisos-mail-y-whatsapp.md).)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

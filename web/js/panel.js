@@ -762,9 +762,12 @@ const CONFIG_PROTEGIDA = [
   ['cvu_transferencia', 'CVU / CBU'],
   ['titular_transferencia', 'Titular de la cuenta'],
   ['whatsapp_contacto', 'WhatsApp del equipo'],
+  ['email_equipo', 'Mail del equipo (recibe los avisos)'],
 ];
 const CONFIG_VISIBLE = [
   ['mercadopago_activo', 'Cobrar la seña con Mercado Pago', 'sino'],
+  ['avisos_email_activo', 'Avisos por mail a los profesionales', 'sino'],
+  ['avisos_whatsapp_activo', 'Avisos por WhatsApp (requiere la API de WhatsApp Business)', 'sino'],
   ['porcentaje_sena', 'Seña para confirmar (%)', 'number'],
   ['retencion_suelta_minutos', 'Minutos para pagar la seña', 'number'],
   ['retencion_fijo_horas', 'Horas para aprobar una solicitud de fijo', 'number'],
