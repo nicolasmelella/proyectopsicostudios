@@ -712,6 +712,8 @@ const CONFIG_VISIBLE = [
   ['hora_fin_manana', 'Desde qué hora rige precio de tarde', 'number'],
   ['meses_reserva_maximo', 'Meses hacia adelante que se puede reservar', 'number'],
   ['max_horas_por_reserva', 'Máximo de horas por reserva web', 'number'],
+  ['min_horas_fijo_manana', 'Horario fijo: mínimo de horas por la mañana', 'number'],
+  ['min_horas_fijo_tarde', 'Horario fijo: mínimo de horas seguidas por la tarde', 'number'],
   ['max_pendientes_por_whatsapp', 'Reservas sin pagar por persona (web)', 'number'],
 ];
 

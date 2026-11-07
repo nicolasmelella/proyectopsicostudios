@@ -403,14 +403,19 @@ async function elegirInicioFijo(f) {
   pintarHorasFijo();
 }
 
+// Horario fijo: por la mañana desde 1 hora; por la tarde, mínimo 2 horas seguidas (misma regla que la base)
 function bloquesValidos(horas) {
-  const hs = [...horas].sort((a, b) => a - b);
+  const hs = [...horas].map(Number).sort((a, b) => a - b);
   if (!hs.length) return false;
-  let largo = 1;
+  const finManana = Number(estado.cfg.hora_fin_manana || 13);
+  const minManana = Number(estado.cfg.min_horas_fijo_manana || 1);
+  const minTarde = Number(estado.cfg.min_horas_fijo_tarde || 2);
+  let inicio = 0;
   for (let i = 1; i <= hs.length; i++) {
-    if (hs[i] === hs[i - 1] + 1) { largo++; continue; }
-    if (largo < 2) return false;
-    largo = 1;
+    if (i < hs.length && hs[i] === hs[i - 1] + 1) continue;
+    const largo = i - inicio;
+    if (largo < (hs[i - 1] >= finManana ? minTarde : minManana)) return false;
+    inicio = i;
   }
   return true;
 }

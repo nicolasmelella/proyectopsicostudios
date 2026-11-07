@@ -12,7 +12,7 @@ Estado: ✅ funciona en el sistema · 🕓 pendiente (documentado, todavía no p
 | | **Horas sueltas** (pestaña "Por horas") | **Horario fijo** (pestaña "Horario fijo semanal") |
 |---|---|---|
 | Qué es | Una o varias horas, en uno o varios días puntuales | El mismo día y horario **todas las semanas** |
-| Mínimo | 1 hora | 2 horas seguidas |
+| Mínimo | 1 hora | **Mañana:** 1 hora · **Tarde (desde las 13 hs):** 2 horas seguidas |
 | Precio por hora | Mañana $8.500 · Tarde $9.000 | Mañana $8.200 · Tarde $8.500 |
 | Cómo se confirma | Pagando la **seña (50%)** online o por transferencia | El equipo **aprueba la solicitud** desde el panel |
 | Si no se confirma | Se libera sola a las **2 horas** | Se libera sola a las **48 horas** |

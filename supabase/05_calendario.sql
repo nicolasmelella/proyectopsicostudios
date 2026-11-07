@@ -27,6 +27,37 @@ begin
   end if;
 end $$;
 
+-- Horario fijo: mínimo de horas seguidas según la franja.
+-- Mañana (antes de 'hora_fin_manana'): desde 1 hora. Tarde: mínimo 2 horas seguidas.
+-- Un bloque que llega a la tarde (ej: 12 a 14) cuenta como de tarde.
+insert into public.config (clave, valor, descripcion) values
+  ('min_horas_fijo_manana', '1', 'Horario fijo: mínimo de horas seguidas por la mañana'),
+  ('min_horas_fijo_tarde',  '2', 'Horario fijo: mínimo de horas seguidas por la tarde')
+on conflict (clave) do nothing;
+
+create or replace function public.validar_bloques_fijo(p_horas smallint[]) returns void
+language plpgsql stable set search_path = public as $$
+declare
+  v smallint[];
+  i integer;
+  v_inicio integer := 1;
+  v_minimo integer;
+begin
+  select array_agg(x order by x) into v from unnest(p_horas) x;
+  for i in 2 .. cardinality(v) + 1 loop
+    continue when i <= cardinality(v) and v[i] = v[i - 1] + 1;
+    -- termina un bloque de horas seguidas: v[v_inicio] .. v[i - 1]
+    v_minimo := case when v[i - 1] >= public.cfg('hora_fin_manana')
+                     then public.cfg('min_horas_fijo_tarde') else public.cfg('min_horas_fijo_manana') end;
+    if i - v_inicio < v_minimo then
+      raise exception 'BLOQUE_CORTO'
+        using hint = format('Por la tarde (desde las %s hs) el horario fijo es de %s horas seguidas como mínimo',
+                            public.cfg('hora_fin_manana'), public.cfg('min_horas_fijo_tarde'));
+    end if;
+    v_inicio := i;
+  end loop;
+end $$;
+
 -- Último día que se puede reservar online
 create or replace function public.fecha_maxima_reserva() returns date
 language sql stable set search_path = public as $$
@@ -153,7 +184,7 @@ declare
   v_semanal integer;
   v_ordenadas smallint[];
   i integer;
-  v_largo integer := 1;
+
 begin
   perform public.validar_contacto(p_profesion, p_email);
   if extract(isodow from p_desde) <> p_dia then
@@ -170,16 +201,7 @@ begin
   perform public.controlar_pendientes(p_whatsapp);
 
   select array_agg(x order by x) into v_ordenadas from unnest(p_horas) x;
-  for i in 2 .. cardinality(v_ordenadas) + 1 loop
-    if i <= cardinality(v_ordenadas) and v_ordenadas[i] = v_ordenadas[i - 1] + 1 then
-      v_largo := v_largo + 1;
-    else
-      if v_largo < 2 then
-        raise exception 'BLOQUE_CORTO' using hint = 'El horario fijo es de 2 horas seguidas como mínimo';
-      end if;
-      v_largo := 1;
-    end if;
-  end loop;
+  perform public.validar_bloques_fijo(v_ordenadas);
 
   if p_consultorio is not null then
     if not exists (select 1 from public.consultorios where id = p_consultorio and activo and online) then
@@ -221,6 +243,7 @@ revoke execute on function public.resumen_disponibilidad(date, date)        from
 grant execute on function public.fecha_maxima_reserva()                    to anon, authenticated;
 grant execute on function public.resumen_disponibilidad(date, date)         to anon, authenticated;
 revoke execute on function public.validar_contacto(text, text)               from public, anon, authenticated;
+revoke execute on function public.validar_bloques_fijo(smallint[])         from public, anon, authenticated;
 revoke execute on function public.crear_reserva(text, text, text, text, date, smallint[], smallint)                 from public, anon, authenticated;
 revoke execute on function public.crear_solicitud_fijo(text, text, text, text, smallint, smallint[], date, smallint) from public, anon, authenticated;
 grant execute on function public.crear_reserva(text, text, text, text, date, smallint[], smallint)                  to anon, authenticated;

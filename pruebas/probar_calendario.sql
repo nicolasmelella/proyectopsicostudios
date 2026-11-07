@@ -33,6 +33,18 @@ select pg_temp.ok((select email = 'limite@prueba.com' and profesion = 'Psicólog
                   'se guardan el mail (en minúsculas) y la profesión');
 set role anon;
 
+-- Horario fijo: por la mañana desde 1 hora, por la tarde mínimo 2 horas seguidas
+create temp table fj as select (public.hoy_ar() + ((3 - extract(isodow from public.hoy_ar())::int + 7) % 7) + 21)::date as miercoles;
+grant select on fj to anon;
+select pg_temp.ok((select public.crear_solicitud_fijo('Fija Mañana', '1177001100', 'Psicóloga', 'fm@prueba.com', 3::smallint, array[9]::smallint[], miercoles)->>'id' is not null from fj),
+                  'fijo: 1 hora por la mañana se puede');
+select pg_temp.espera_error((select format($$select public.crear_solicitud_fijo('Fija Tarde', '1177002200', 'Psicóloga', 'ft@prueba.com', 3::smallint, array[15]::smallint[], %L)$$, miercoles) from fj), 'BLOQUE_CORTO');
+select pg_temp.ok((select public.crear_solicitud_fijo('Fija Tarde', '1177002200', 'Psicóloga', 'ft@prueba.com', 3::smallint, array[16,17]::smallint[], miercoles)->>'id' is not null from fj),
+                  'fijo: 2 horas seguidas por la tarde se puede');
+select pg_temp.espera_error((select format($$select public.crear_solicitud_fijo('Fija Mixta', '1177003300', 'Psicóloga', 'fx@prueba.com', 3::smallint, array[10,13]::smallint[], %L)$$, miercoles) from fj), 'BLOQUE_CORTO');
+select pg_temp.ok((select public.crear_solicitud_fijo('Fija Cruce', '1177004400', 'Psicóloga', 'fc@prueba.com', 3::smallint, array[12,13]::smallint[], miercoles)->>'id' is not null from fj),
+                  'fijo: de 12 a 14 (cruza el mediodía, 2 horas) se puede');
+
 -- Resumen por día (lo usa el calendario de la web)
 create temp table res as select * from public.resumen_disponibilidad(public.hoy_ar(), public.hoy_ar() + 90);
 select pg_temp.ok((select count(*) > 40 from res), 'el resumen trae todos los días hábiles de los 2 meses');
