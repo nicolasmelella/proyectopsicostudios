@@ -16,6 +16,8 @@ pruebas/    → pruebas automáticas de la base (no hace falta tocarlas)
 
 > 📄 Reglas del negocio (precios, seña, horas sueltas vs. fijo y reglas pendientes): [`docs/reglas-del-negocio.md`](docs/reglas-del-negocio.md)
 >
+> 🔎 Revisión del Excel actual y mejoras pendientes (fijos y panel): [`docs/revision-excel-y-mejoras.md`](docs/revision-excel-y-mejoras.md)
+>
 > 🎬 Video de cómo funciona (1 minuto, para mostrar o mandar por WhatsApp): [`docs/como-funciona-reservas.mp4`](docs/como-funciona-reservas.mp4)
 
 ---
