@@ -425,7 +425,7 @@ export function crearClienteDemo() {
           estado: r?.estado || fj?.estado || 'bloqueado', nombre: p?.nombre || b?.motivo, whatsapp: p?.whatsapp || null,
           profesional_id: p?.id || null, reserva_id: r?.id || null, fijo_id: fj?.id || null, bloqueo_id: b?.id || null,
           pagado: r ? pagado(r.id) >= r.precio_total : fj ? db.pagos.some((x) => x.fijo_id === fj.id && !x.anulado && x.periodo === f.slice(0, 7)) : null,
-          detalle: null, monto_total: r?.precio_total ?? fj?.precio_semanal ?? null, monto_pagado: r ? pagado(r.id) : null,
+          detalle: r?.comentario || fj?.comentario || null, monto_total: r?.precio_total ?? fj?.precio_semanal ?? null, monto_pagado: r ? pagado(r.id) : null,
           expira_en: r?.expira_en || fj?.expira_en || null,
         });
       }
@@ -518,6 +518,12 @@ export function crearClienteDemo() {
       db.bloqueos.push(b);
       cons.forEach((c) => horas.forEach((h) => db.ocupaciones.set(key(c.id, p_fecha, h), { bloqueo_id: b.id })));
       return b.id;
+    },
+    // ---- 11_comentarios.sql ----
+    guardar_comentario({ p_texto, p_reserva_id, p_fijo_id }) {
+      const x = p_reserva_id ? db.reservas.find((r) => r.id === p_reserva_id) : p_fijo_id ? db.fijos.find((f) => f.id === p_fijo_id) : null;
+      if (!x) return err('NO_ENCONTRADO', 'No se encontró');
+      x.comentario = String(p_texto || '').trim().slice(0, 1000) || null;
     },
     // ---- 10_quien_cobro.sql ----
     marcar_quien_recibio({ p_recibio, p_pago_id, p_reserva_id }) {

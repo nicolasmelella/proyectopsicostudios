@@ -108,6 +108,23 @@ function conectarRecibio(id) {
 }
 const faltaRecibio = (elegido) => quienesCobran().length > 0 && !elegido;
 
+// Comentarios del equipo ("algo a tener en cuenta"); solo los ve el equipo
+function bloqueComentario(texto, ayuda) {
+  return `<form class="bloque" id="form-coment">
+    <label for="coment"><strong>📝 Comentarios</strong></label>
+    <textarea id="coment" rows="2" maxlength="1000" placeholder="Algo a tener en cuenta (solo lo ve el equipo)">${esc(texto || '')}</textarea>
+    ${ayuda ? `<div class="ayuda">${ayuda}</div>` : ''}
+    <button class="btn btn-borde btn-chico" style="margin-top:6px">Guardar comentario</button>
+  </form>`;
+}
+function conectarComentario(params) {
+  $('#form-coment')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await llamar('guardar_comentario', { p_texto: $('#coment').value, ...params }, 'Comentario guardado'); refrescar(); }
+    catch (err) { errorEn(null, err); }
+  });
+}
+
 // ================================================================ sesión
 let temporizador = null;
 function reiniciarInactividad() {
@@ -290,7 +307,7 @@ function celdaHTML(f, span) {
   else { estado = 'Bloqueado'; }
   const nombre = f.tipo === 'liberado' ? f.nombre : f.nombre;
   return `<button class="celda ${clase}" data-k="${f.consultorio_id}|${f.hora}" style="min-height:${52 * span}px">
-    <span class="n">${esc(nombre)}</span><span class="e">${esc(estado)}</span></button>`;
+    <span class="n">${esc(nombre)}</span><span class="e">${esc(estado)}${f.tipo !== 'liberado' && f.detalle ? ' · 📝 ' + esc(f.detalle) : ''}</span></button>`;
 }
 
 
@@ -358,9 +375,10 @@ async function pintarSemana() {
         let span = 1;
         while (h + span <= horas[horas.length - 1] && idDe(mapa.get(`${d}|${c.id}|${h + span}`)) === idDe(f)) { salto.add(`${d}|${c.id}|${h + span}`); span++; }
         const [clase, estado] = claseSemana(f);
+        const coment = f.tipo !== 'liberado' && f.detalle ? ` · 📝 ${f.detalle}` : '';
         html += `<td class="${td}" rowspan="${span}"><button class="sc ${clase}" data-ver="${k}" style="min-height:${40 * span}px"
-          title="${esc(f.nombre || '')} · ${esc(estado)}" aria-label="${esc(etiqueta)}: ${esc(f.nombre || '')}, ${esc(estado)}">
-          <span class="n">${esc(f.nombre || '')}</span><span class="e">${esc(estado)}</span></button></td>`;
+          title="${esc(f.nombre || '')} · ${esc(estado)}${esc(coment)}" aria-label="${esc(etiqueta)}: ${esc(f.nombre || '')}, ${esc(estado)}${esc(coment)}">
+          <span class="n">${esc(f.nombre || '')}</span><span class="e">${esc(estado)}${coment ? ' 📝' : ''}</span></button></td>`;
       });
     }
     html += '</tr>';
@@ -447,6 +465,8 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
         ${campoRecibio('a-recibio')}
         <div class="campo"><label for="a-medio">¿Cómo pagó?</label><select id="a-medio">${medioOpts('transferencia')}</select></div>
       </div>
+      <div class="campo"><label for="a-coment">Comentario (opcional)</label>
+        <textarea id="a-coment" rows="2" maxlength="1000" placeholder="Algo a tener en cuenta (ej: necesita camilla)"></textarea></div>
       <div id="a-error" class="aviso aviso-error oculto" role="alert"></div>
       <button class="btn btn-acento btn-bloque" id="a-guardar" style="min-height:56px;font-size:1.1rem">Anotar</button>
     </form>`);
@@ -505,6 +525,10 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
         p_nombre: nombre, p_whatsapp: whatsapp, p_consultorio: consultorio, p_fecha: fecha,
         p_horas: horas, p_monto_pagado: monto, p_medio: $('#a-medio').value,
       });
+      if ($('#a-coment').value.trim()) {
+        try { await llamar('guardar_comentario', { p_texto: $('#a-coment').value, p_reserva_id: id }); }
+        catch (err) { toast('Se anotó, pero no se guardó el comentario: ' + mensajeError(err)); }
+      }
       if (monto > 0 && recibio()) {
         try { await llamar('marcar_quien_recibio', { p_recibio: recibio(), p_reserva_id: id }); }
         catch (err) { toast('Se anotó, pero no se guardó a quién le pagaron: ' + mensajeError(err)); }
@@ -535,7 +559,7 @@ function bajarSemanaExcel() {
   for (const h of horasDelDia()) {
     lineas.push([`${h} hs`, ...dias.flatMap((d) => cons.map((c) => {
       const f = datosSemana.mapa.get(`${d}|${c.id}|${h}`);
-      return f ? `${f.nombre || ''} (${claseSemana(f)[1]})` : '';
+      return f ? `${f.nombre || ''} (${claseSemana(f)[1]})${f.tipo !== 'liberado' && f.detalle ? ' - ' + f.detalle : ''}` : '';
     }))].map(celda).join(';'));
   }
   lineas.push('');
@@ -591,6 +615,7 @@ async function detalleReserva(id) {
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel' + (st.equipo.find((e) => e.user_id === r.creado_por) ? ' por ' + esc(st.equipo.find((e) => e.user_id === r.creado_por).nombre) : '')}</span></li>
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
+    ${bloqueComentario(r.comentario)}
     ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.recibio ? ` · le pagaron a ${esc(p.recibio)}` : ''}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
       <span>${pesos(p.monto)} ${!p.anulado ? `<button class="btn btn-peligro btn-chico" data-anular="${p.id}" style="margin-left:6px">Anular</button>` : ''}</span></li>`).join('')}</ul>` : ''}
     ${vigente && falta > 0 ? `
@@ -616,6 +641,7 @@ async function detalleReserva(id) {
 
   const errEl = $('#det-error');
   $$('[data-monto]').forEach((b) => (b.onclick = () => { $('#pg-monto').value = b.dataset.monto; }));
+  conectarComentario({ p_reserva_id: r.id });
   const recibioPago = conectarRecibio('pg-recibio');
   $('#form-pago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -688,6 +714,7 @@ async function detalleFijo(id, fecha, liberado) {
       ${esSolicitud && f.expira_en ? `<li><span>Se libera en</span><span>${faltan(f.expira_en)}</span></li>` : ''}
       ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(f.precio_semanal * veces)} (${veces} semanas)</span></li>` : ''}
     </ul>
+    ${bloqueComentario(f.comentario, 'Vale para todas las semanas de este fijo.')}
     <div id="det-error" class="aviso aviso-error oculto" role="alert"></div>
     ${esSolicitud ? `<div class="grupo-btn"><button class="btn btn-acento" id="btn-aprobar">Aprobar</button><button class="btn btn-peligro" id="btn-rechazar">Rechazar</button></div>` : ''}
     ${f.estado === 'activo' ? `
@@ -726,6 +753,7 @@ async function detalleFijo(id, fecha, liberado) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return errorEn(errEl, 'La fecha tiene que tener el formato AAAA-MM-DD');
     act('dar_baja_fijo', { p_fijo_id: f.id, p_desde: desde }, 'Fijo dado de baja');
   });
+  conectarComentario({ p_fijo_id: f.id });
   const recibioFijo = conectarRecibio('pf-recibio');
   $('#form-pago-fijo')?.addEventListener('submit', async (e) => {
     e.preventDefault();

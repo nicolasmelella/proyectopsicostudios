@@ -98,6 +98,9 @@ Si después se suma alguien al equipo, se crea su usuario y se vuelve a correr e
 Y `supabase/10_quien_cobro.sql` → **Run** → *"Listo: los pagos ahora guardan a quién le pagaron …"*.
 (Cada pago cargado a mano dice **a quién le pagaron**. La lista se cambia en el panel → Precios y ajustes.)
 
+Y `supabase/11_comentarios.sql` → **Run** → *"Listo: comentarios en reservas y fijos"*.
+(Un comentario del equipo en cada reserva o fijo, "algo a tener en cuenta". Solo lo ve el equipo.)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**
