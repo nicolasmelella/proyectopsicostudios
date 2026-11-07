@@ -36,6 +36,7 @@ export function crearClienteDemo() {
       { id: 4, nombre: 'Diego Álvarez', whatsapp: '1174567890', profesion: 'Psicólogo/a', origen: 'Google', email: null, notas: null },
     ],
     reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [], pedidos: [], comprobantes: [], archivos: [],
+    equipo: [], notas_semana: [],
     ocupaciones: new Map(), // "cons|fecha|hora" → {reserva_id|fijo_id|bloqueo_id}
   };
   const cfg = (k) => Number(db.config.find((c) => c.clave === k)?.valor);
@@ -104,6 +105,13 @@ export function crearClienteDemo() {
     precio_semanal: 2 * 8500, estado: 'solicitud', desde: proximo(3), hasta: null, expira_en: ahoraISO(60 * 30), origen: 'web' };
   db.fijos.push(f1, f2);
   ocuparFijo(f1); ocuparFijo(f2);
+  // Otros fijos de ejemplo, repartidos en la semana (como en el Excel)
+  [[4, 1, 1, [9, 10, 11]], [3, 3, 2, [15, 16, 17]], [1, 6, 4, [18, 19]], [2, 2, 5, [10]], [3, 5, 6, [9, 10]], [4, 4, 3, [17, 18]]]
+    .forEach(([prof, cons, dia, horas]) => {
+      const f = { id: nuevoId(), profesional_id: prof, consultorio_id: cons, dia_semana: dia, horas,
+        precio_semanal: horas.reduce((s, h) => s + precioHora('fijo', h, hoy), 0), estado: 'activo', desde: proximo(dia), hasta: null, expira_en: null, origen: 'panel' };
+      if (fechasFijo(f).every((d) => libre(cons, d, horas))) { db.fijos.push(f); ocuparFijo(f); }
+    });
   db.pagos_a_revisar.push({ id: nuevoId(), reserva_id: null, mp_payment_id: '123456789', monto: 4250, resuelto: false, creado_en: ahoraISO(-90),
     motivo: 'Pagó después del vencimiento y el horario ya no está libre' });
   db.pagos.push({ id: nuevoId(), reserva_id: null, fijo_id: f1.id, periodo: hoy.slice(0, 7), monto: 106600, medio: 'efectivo', pagado_en: hoy, anulado: false, creado_en: ahoraISO(-600) });
@@ -438,7 +446,7 @@ export function crearClienteDemo() {
       if (!libre(p_consultorio, p_fecha, p_horas)) return err('SIN_LUGAR', 'Alguna de esas horas ya está ocupada');
       const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, null, 'Carga manual');
       const r = agregarReserva(prof, p_consultorio, p_fecha, p_horas, 'pendiente', 0, 0);
-      r.origen = 'panel';
+      r.origen = 'panel'; r.creado_por = sesion?.user.id || null; r.creado_en = ahoraISO();
       if (p_monto_pagado > 0) rpcs.registrar_pago({ p_monto: p_monto_pagado, p_medio: p_medio || 'efectivo', p_reserva_id: r.id });
       return r.id;
     },
@@ -478,6 +486,23 @@ export function crearClienteDemo() {
       cons.forEach((c) => horas.forEach((h) => db.ocupaciones.set(key(c.id, p_fecha, h), { bloqueo_id: b.id })));
       return b.id;
     },
+    // ---- 09_semana.sql ----
+    agregar_nota({ p_semana, p_texto }) {
+      if (!String(p_texto || '').trim()) return err('NOTA_VACIA', 'Escribí la nota');
+      const n = { id: nuevoId(), semana: sumarDias(p_semana, 1 - diaSemana(p_semana)), texto: String(p_texto).trim().slice(0, 1000),
+        autor: sesion?.user.id, autor_nombre: db.equipo.find((e) => e.user_id === sesion?.user.id)?.nombre || null, creado_en: ahoraISO() };
+      db.notas_semana.push(n); return n.id;
+    },
+    borrar_nota({ p_id }) { db.notas_semana = db.notas_semana.filter((n) => n.id !== p_id); },
+    deshacer_carga({ p_reserva_id }) {
+      const r = db.reservas.find((x) => x.id === p_reserva_id);
+      if (!r || r.origen !== 'panel' || r.creado_por !== sesion?.user.id || Date.now() - new Date(r.creado_en) > 15 * 60000 || !['pendiente', 'confirmada'].includes(r.estado)) {
+        return err('NO_SE_PUEDE_DESHACER', 'Solo se puede deshacer lo que cargaste vos en los últimos 15 minutos. Abrí la reserva y usá "Cancelar reserva".');
+      }
+      db.pagos = db.pagos.filter((p) => p.reserva_id !== r.id);
+      db.reservas = db.reservas.filter((x) => x.id !== r.id);
+      for (const [k, o] of db.ocupaciones) if (o.reserva_id === r.id) db.ocupaciones.delete(k);
+    },
     borrar_bloqueo({ p_bloqueo_id }) {
       for (const [k, o] of db.ocupaciones) if (o.bloqueo_id === p_bloqueo_id) db.ocupaciones.delete(k);
       db.bloqueos = db.bloqueos.filter((b) => b.id !== p_bloqueo_id);
@@ -489,7 +514,12 @@ export function crearClienteDemo() {
   const oyentes = [];
   const auth = {
     async signInWithPassword({ email }) {
-      sesion = { user: { id: 'demo', email } };
+      const local = email.split('@')[0] || 'equipo';
+      sesion = { user: { id: 'demo-' + local, email } };
+      if (!db.equipo.some((e) => e.user_id === sesion.user.id)) {
+        db.equipo.push({ user_id: sesion.user.id, nombre: local[0].toUpperCase() + local.slice(1), rol: 'equipo' });
+        guardar();
+      }
       oyentes.forEach((fn) => fn('SIGNED_IN', sesion));
       return { data: { session: sesion }, error: null };
     },

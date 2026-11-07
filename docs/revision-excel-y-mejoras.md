@@ -46,8 +46,10 @@ Análisis del Excel con el que hoy se maneja la agenda, para que el panel lo ree
 
 ## Mejoras para el PANEL (lo que se ve en el Excel y falta)
 
-1. **Vista de la semana completa** (6 días × 6 espacios), como el Excel. Hoy el panel muestra un día por vez.
-2. **Notas del día / de la semana** ("Notas del día", avisos del equipo).
+1. ✅ **Vista de la semana completa** (6 días × 6 espacios), como el Excel: pestaña **Semana** del panel, con los mismos
+   colores, "Anotar" tocando un casillero (nombre que se completa solo, horas y si pagó), **Deshacer**, **Bajar en Excel**,
+   **Imprimir** y **Letra grande**.
+2. ✅ **Notas de la semana** (abajo de la grilla, con quién la escribió).
 3. **Tipo de uso**: pericias, privado, psicotécnico… con su color.
 4. **Necesidades**: con camilla, con o sin escritorio. Qué consultorio tiene camilla o escritorio.
 5. **Medias horas** (8:30 a 9:30, 15 a 17:30): hoy el sistema funciona por horas enteras.
@@ -55,6 +57,15 @@ Análisis del Excel con el que hoy se maneja la agenda, para que el panel lo ree
 7. **Historial por profesional**: cuántas horas usó, ausencias, pagos.
 8. **Pasar los fijos actuales al sistema**: se puede armar un borrador desde las últimas semanas del Excel
    para que el equipo lo revise y complete los WhatsApp.
+
+## Cómo se reemplaza el Excel (equipo de 3 personas)
+
+- **Cada una con su usuario** (gratis): queda registrado quién cargó cada reserva.
+- **Lo que más se hace** es anotar las horas que piden por WhatsApp → la pantalla principal es la semana y
+  anotar es tocar el casillero, escribir el nombre y elegir cuántas horas.
+- **Transición:** 2 semanas usando los dos en paralelo (el Excel manda), 2 semanas cargando en el panel con el
+  Excel de respaldo, y después el Excel solo para consultar lo viejo. "Bajar en Excel" sirve para tener una copia.
+- **Fijos actuales:** se arma un borrador desde las últimas semanas del Excel para revisarlo juntos antes de cargarlo.
 
 ## Preguntas para definir
 

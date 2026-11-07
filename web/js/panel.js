@@ -1,7 +1,7 @@
 // Panel del equipo (con login).
 import {
   crearCliente, esc, pesos, hoyAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
-  faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, preguntar,
+  faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, DIAS_CORTOS, preguntar,
 } from './comun.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -12,22 +12,37 @@ const DOMINIO_USUARIOS = 'psicostudios.local';
 const MINUTOS_INACTIVIDAD = 60;
 const MEDIOS = [['transferencia', 'Transferencia'], ['efectivo', 'Efectivo'], ['mercadopago', 'Mercado Pago'], ['otro', 'Otro']];
 
+// Lunes de la semana de una fecha (el domingo muestra la semana que empieza)
+const lunesDe = (f) => (diaSemana(f) === 7 ? sumarDias(f, 1) : sumarDias(f, 1 - diaSemana(f)));
+
 const st = {
   fecha: hoyAR(),
+  semana: lunesDe(hoyAR()),
   cfg: {},
   consultorios: [],
   profesionales: [],
-  tab: 'agenda',
+  equipo: [],
+  precios: [],
+  yo: null,
+  tab: 'semana',
 };
 
 // ================================================================ utilidades
-function toast(msg) {
+function toast(msg, accion) {
+  document.querySelectorAll('.toast').forEach((x) => x.remove());
   const t = document.createElement('div');
   t.className = 'toast';
   t.setAttribute('role', 'status');
   t.textContent = msg;
+  if (accion) {
+    const b = document.createElement('button');
+    b.className = 'deshacer';
+    b.textContent = accion.etiqueta;
+    b.onclick = () => { t.remove(); accion.fn(); };
+    t.appendChild(b);
+  }
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(() => t.remove(), accion ? 15000 : 3200);
 }
 
 async function llamar(fn, params, okMsg) {
@@ -126,22 +141,47 @@ async function entrar() {
 }
 
 async function cargarBase() {
-  const [c, k, p] = await Promise.all([
+  const [c, k, p, e, pr, s] = await Promise.all([
     sb.from('config').select('clave, valor, descripcion'),
     sb.from('consultorios').select('*').order('orden'),
     sb.from('profesionales').select('id, nombre, whatsapp, profesion').order('nombre'),
+    sb.from('equipo').select('user_id, nombre'),
+    sb.from('precios').select('*').order('vigente_desde', { ascending: false }),
+    sb.auth.getSession(),
   ]);
   st.cfg = Object.fromEntries((c.data || []).map((r) => [r.clave, r.valor]));
   st.consultorios = k.data || [];
   st.profesionales = p.data || [];
+  st.equipo = e.data || [];
+  st.precios = pr.data || [];
+  const uid = s.data?.session?.user?.id;
+  st.yo = st.equipo.find((x) => x.user_id === uid) || null;
+  $('#hola').textContent = st.yo ? `Hola, ${st.yo.nombre}` : '';
 }
+
+// Precio por hora suelta para un día y hora (el vigente en esa fecha)
+const precioSuelta = (fecha, h) => st.precios.find((p) => p.modalidad === 'suelta' && p.vigente_desde <= fecha
+  && p.franja === (h < Number(st.cfg.hora_fin_manana || 13) ? 'manana' : 'tarde'))?.valor || 0;
+
+// Letra grande (se recuerda en esta compu)
+function ponerLetra(grande) {
+  document.documentElement.classList.toggle('letra-grande', grande);
+  $('#btn-letra').setAttribute('aria-pressed', grande);
+  $('#btn-letra').innerHTML = grande ? 'A− <span class="largo">Letra normal</span>' : 'A+ <span class="largo">Letra grande</span>';
+}
+try { ponerLetra(localStorage.getItem('psico-letra') === 'grande'); } catch { ponerLetra(false); }
+$('#btn-letra').onclick = () => {
+  const grande = !document.documentElement.classList.contains('letra-grande');
+  ponerLetra(grande);
+  try { localStorage.setItem('psico-letra', grande ? 'grande' : 'normal'); } catch { /* nada */ }
+};
 
 // ================================================================ pestañas
 function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
+  ({ semana: pintarSemana, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -233,6 +273,252 @@ function celdaHTML(f, span) {
     <span class="n">${esc(nombre)}</span><span class="e">${esc(estado)}</span></button>`;
 }
 
+
+// ================================================================ SEMANA (como la hoja del Excel)
+$('#se-ant').onclick = () => { st.semana = sumarDias(st.semana, -7); pintarSemana(); };
+$('#se-sig').onclick = () => { st.semana = sumarDias(st.semana, 7); pintarSemana(); };
+$('#se-hoy').onclick = () => { st.semana = lunesDe(hoyAR()); pintarSemana(); };
+$('#se-imprimir').onclick = () => window.print();
+$('#se-excel').onclick = () => bajarSemanaExcel();
+
+let datosSemana = { filas: [], mapa: new Map(), notas: [] };
+const diasDeSemana = () => [0, 1, 2, 3, 4, 5].map((i) => sumarDias(st.semana, i));
+const consCorto = (c) => (c.id === 6 || /sal[oó]n/i.test(c.nombre) ? 'Salón' : 'C' + (c.nombre.match(/\d+/)?.[0] || c.id));
+
+// Cómo se ve cada casillero ocupado (colores como en el Excel)
+function claseSemana(f) {
+  if (f.tipo === 'fijo') return ['s-fijo', f.pagado ? 'fijo ✓' : 'fijo'];
+  if (f.tipo === 'solicitud') return ['s-sol', 'pidió fijo'];
+  if (f.tipo === 'liberado') return ['s-lib', 'no viene · libre'];
+  if (f.tipo === 'bloqueo') return ['s-bloq', 'bloqueado'];
+  if (f.estado === 'confirmada') return ['s-suelta', f.pagado ? 'pagó todo' : 'señada'];
+  return ['s-sinsena', 'sin seña'];
+}
+
+async function pintarSemana() {
+  const dias = diasDeSemana();
+  const hoy = hoyAR();
+  const [, m1, d1] = dias[0].split('-').map(Number);
+  const [, m6, d6] = dias[5].split('-').map(Number);
+  $('#se-titulo').textContent = `Semana del ${d1}/${m1} al ${d6}/${m6}` + (dias.includes(hoy) ? ' (esta semana)' : '');
+  const cont = $('#semana');
+  cont.innerHTML = '<div class="cargando" style="padding:1em">Cargando semana…</div>';
+  let filas, notas;
+  try {
+    [filas, notas] = await Promise.all([
+      llamar('agenda', { p_desde: dias[0], p_hasta: dias[5] }),
+      sb.from('notas_semana').select('*').eq('semana', st.semana).order('creado_en').then((r) => r.data || []),
+    ]);
+  } catch (err) { cont.innerHTML = ''; errorEn(null, err); return; }
+  // Si hay una ocupación real y un "fijo liberado" en la misma hora, manda la ocupación
+  const mapa = new Map();
+  for (const f of filas) {
+    const k = `${f.fecha}|${f.consultorio_id}|${f.hora}`;
+    if (!mapa.has(k) || mapa.get(k).tipo === 'liberado') mapa.set(k, f);
+  }
+  datosSemana = { filas, mapa, notas };
+
+  const cons = st.consultorios.filter((c) => c.activo);
+  const horas = horasDelDia();
+  const idDe = (f) => f && (f.reserva_id ? 'r' + f.reserva_id : f.bloqueo_id ? 'b' + f.bloqueo_id : (f.tipo === 'liberado' ? 'l' : 'f') + f.fijo_id);
+  const salto = new Set();
+  let html = `<table class="semana" style="--nc:${dias.length * cons.length}"><colgroup><col class="hcol">${dias.map(() => cons.map(() => '<col class="c">').join('')).join('')}</colgroup><thead><tr><th class="h" rowspan="2">Hora</th>`;
+  html += dias.map((d) => `<th colspan="${cons.length}" class="fin-dia ${d === hoy ? 'hoy' : ''}" scope="colgroup">${DIAS[diaSemana(d)]} ${fechaCorta(d)}${d === hoy ? ' · HOY' : ''}</th>`).join('');
+  html += '</tr><tr>' + dias.map((d) => cons.map((c, i) => `<th scope="col" title="${esc(c.nombre)}" class="${i === cons.length - 1 ? 'fin-dia' : ''} ${d === hoy ? 'hoy' : ''}">${esc(consCorto(c))}</th>`).join('')).join('') + '</tr></thead><tbody>';
+  for (const h of horas) {
+    html += `<tr><th class="h" scope="row">${h} hs</th>`;
+    for (const d of dias) {
+      cons.forEach((c, i) => {
+        const k = `${d}|${c.id}|${h}`;
+        if (salto.has(k)) return;
+        const td = `${i === cons.length - 1 ? 'fin-dia' : ''} ${d === hoy ? 'hoy-col' : ''}`;
+        const f = mapa.get(k);
+        const etiqueta = `${DIAS[diaSemana(d)]} ${fechaCorta(d)}, ${c.nombre}, ${h} hs`;
+        if (!f) { html += `<td class="${td}"><button class="sc vacia" data-anotar="${k}" aria-label="${esc(etiqueta)}: libre, anotar"></button></td>`; return; }
+        let span = 1;
+        while (h + span <= horas[horas.length - 1] && idDe(mapa.get(`${d}|${c.id}|${h + span}`)) === idDe(f)) { salto.add(`${d}|${c.id}|${h + span}`); span++; }
+        const [clase, estado] = claseSemana(f);
+        html += `<td class="${td}" rowspan="${span}"><button class="sc ${clase}" data-ver="${k}" style="min-height:${40 * span}px"
+          title="${esc(f.nombre || '')} · ${esc(estado)}" aria-label="${esc(etiqueta)}: ${esc(f.nombre || '')}, ${esc(estado)}">
+          <span class="n">${esc(f.nombre || '')}</span><span class="e">${esc(estado)}</span></button></td>`;
+      });
+    }
+    html += '</tr>';
+  }
+  cont.innerHTML = html + '</tbody></table>';
+
+  $$('[data-anotar]', cont).forEach((b) => (b.onclick = () => {
+    const [d, c, h] = b.dataset.anotar.split('|');
+    modalAnotar({ fecha: d, consultorio: Number(c), hora: Number(h) });
+  }));
+  $$('[data-ver]', cont).forEach((b) => (b.onclick = () => {
+    const f = mapa.get(b.dataset.ver);
+    if (f.tipo === 'liberado') return modalAnotar({ fecha: f.fecha, consultorio: f.consultorio_id, hora: f.hora, liberado: f });
+    abrirDetalle(f);
+  }));
+  // Llevar la vista al día de hoy
+  const iHoy = dias.indexOf(hoy);
+  if (iHoy > 0) $('#se-wrap').scrollLeft = Math.max(0, cont.querySelector('thead th.hoy')?.offsetLeft - 60 || 0);
+  pintarNotas();
+}
+
+// ---------- Notas de la semana ----------
+function pintarNotas() {
+  const ul = $('#se-notas');
+  const notas = datosSemana.notas;
+  ul.innerHTML = notas.length ? notas.map((n) => `<li><p>${esc(n.texto)}<small>${esc(n.autor_nombre || 'Equipo')} · ${fechaCorta(n.creado_en.slice(0, 10))} ${new Date(n.creado_en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' })}</small></p>
+    <button class="btn btn-borde btn-chico" data-borrar-nota="${n.id}" aria-label="Borrar nota">Borrar</button></li>`).join('')
+    : '<li class="suave">Todavía no hay notas para esta semana.</li>';
+  $$('[data-borrar-nota]', ul).forEach((b) => (b.onclick = async () => {
+    if (await preguntar({ titulo: '¿Borrar esta nota?', aceptar: 'Borrar', peligro: true }) === null) return;
+    try { await llamar('borrar_nota', { p_id: Number(b.dataset.borrarNota) }, 'Nota borrada'); pintarSemana(); } catch (err) { errorEn(null, err); }
+  }));
+}
+$('#form-nota').onsubmit = async (e) => {
+  e.preventDefault();
+  const texto = $('#nota-texto').value.trim();
+  if (!texto) return $('#nota-texto').focus();
+  try {
+    await llamar('agregar_nota', { p_semana: st.semana, p_texto: texto }, 'Nota guardada');
+    $('#nota-texto').value = '';
+    pintarSemana();
+  } catch (err) { errorEn(null, err); }
+};
+
+// ---------- Anotar (lo que piden por WhatsApp) ----------
+const normal = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+function modalAnotar({ fecha, consultorio, hora, liberado }) {
+  const c = st.consultorios.find((x) => x.id === consultorio);
+  const cierre = Number(st.cfg.hora_cierre || 21);
+  const libreEn = (h) => h < cierre && (!datosSemana.mapa.get(`${fecha}|${consultorio}|${h}`) || datosSemana.mapa.get(`${fecha}|${consultorio}|${h}`).tipo === 'liberado');
+  const maxHoras = (() => { let n = 0; while (n < 6 && libreEn(hora + n)) n++; return n; })();
+  const nombres = [...new Set(st.profesionales.map((p) => p.nombre))];
+  abrirModal(`
+    <h2 id="modal-titulo">Anotar</h2>
+    <p class="contexto">${DIAS[diaSemana(fecha)]} ${fechaCorta(fecha)} · ${esc(c?.nombre || '')} · desde las ${hora} hs</p>
+    ${liberado ? `<p class="aviso aviso-info chico">Este horario es del fijo de <strong>${esc(liberado.nombre)}</strong>, que esta semana no viene${liberado.detalle ? ` (${esc(liberado.detalle)})` : ''}. Podés anotar a otra persona.</p>` : ''}
+    <form id="form-anotar" autocomplete="off">
+      <div class="campo">
+        <label for="a-nombre">¿Quién?</label>
+        <input id="a-nombre" list="dl-nombres" placeholder="Escribí el nombre" required>
+        <datalist id="dl-nombres">${nombres.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+        <div class="ayuda" id="a-quien">Si ya vino antes, aparece solo mientras escribís.</div>
+      </div>
+      <div class="campo oculto" id="a-wa-campo">
+        <label for="a-wa">Su WhatsApp</label>
+        <input id="a-wa" inputmode="tel" placeholder="Ej: 11 4195 2323">
+        <div class="ayuda" id="a-wa-ayuda">Es alguien nuevo: con el WhatsApp queda guardado para la próxima.</div>
+      </div>
+      <div class="campo">
+        <label>¿Cuántas horas?</label>
+        <div class="grupo-grande" id="a-horas">${[1, 2, 3, 4].map((n) => `<button type="button" class="chip" data-n="${n}" aria-pressed="${n === 1}" ${n > maxHoras ? 'disabled title="Esas horas ya están ocupadas o es la hora de cierre"' : ''}>${n}</button>`).join('')}</div>
+        <div class="ayuda" id="a-rango"></div>
+      </div>
+      <div class="campo">
+        <label>¿Pagó?</label>
+        <div class="grupo-grande" id="a-pago">
+          <button type="button" class="chip" data-pago="nada" aria-pressed="true">Todavía no</button>
+          <button type="button" class="chip" data-pago="sena" aria-pressed="false">La seña<small id="a-sena"></small></button>
+          <button type="button" class="chip" data-pago="todo" aria-pressed="false">Todo<small id="a-todo"></small></button>
+        </div>
+      </div>
+      <div class="campo oculto" id="a-medio-campo"><label for="a-medio">¿Cómo pagó?</label><select id="a-medio">${medioOpts('transferencia')}</select></div>
+      <div id="a-error" class="aviso aviso-error oculto" role="alert"></div>
+      <button class="btn btn-acento btn-bloque" id="a-guardar" style="min-height:56px;font-size:1.1rem">Anotar</button>
+    </form>`);
+
+  let horasN = 1, pago = 'nada', persona = null;
+  const total = () => { let t = 0; for (let i = 0; i < horasN; i++) t += precioSuelta(fecha, hora + i); return t; };
+  const actualizar = () => {
+    $('#a-rango').textContent = `De ${hora} a ${hora + horasN} hs · Total ${pesos(total())}`;
+    $('#a-sena').textContent = pesos(sena(total()));
+    $('#a-todo').textContent = pesos(total());
+    $('#a-medio-campo').classList.toggle('oculto', pago === 'nada');
+  };
+  const buscarPersona = () => {
+    const q = normal($('#a-nombre').value);
+    const coinciden = q.length >= 2 ? st.profesionales.filter((p) => normal(p.nombre) === q) : [];
+    persona = coinciden.length === 1 ? coinciden[0] : null;
+    const nuevo = q.length >= 2 && !persona;
+    $('#a-wa-campo').classList.toggle('oculto', !nuevo);
+    $('#a-wa').required = nuevo;
+    $('#a-wa-ayuda').textContent = coinciden.length > 1 ? `Hay ${coinciden.length} personas con ese nombre: anotá su WhatsApp para saber cuál es.`
+      : 'Es alguien nuevo: con el WhatsApp queda guardado para la próxima.';
+    $('#a-quien').innerHTML = persona ? `<span class="quien-ok">✓ ${esc(persona.nombre)}</span> · WhatsApp ${esc(persona.whatsapp)}`
+      : nuevo ? 'No está en la lista: es alguien nuevo.' : 'Si ya vino antes, aparece solo mientras escribís.';
+  };
+  $('#a-nombre').addEventListener('input', buscarPersona);
+  $$('#a-horas .chip').forEach((b) => (b.onclick = () => {
+    horasN = Number(b.dataset.n);
+    $$('#a-horas .chip').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    actualizar();
+  }));
+  $$('#a-pago .chip').forEach((b) => (b.onclick = () => {
+    pago = b.dataset.pago;
+    $$('#a-pago .chip').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    actualizar();
+  }));
+  actualizar();
+  if (maxHoras === 0) errorEn($('#a-error'), 'Ese horario ya está ocupado.');
+
+  $('#form-anotar').onsubmit = async (e) => {
+    e.preventDefault();
+    buscarPersona();
+    const nombre = persona?.nombre || $('#a-nombre').value.trim();
+    const whatsapp = persona?.whatsapp || $('#a-wa').value;
+    if (nombre.length < 2) return errorEn($('#a-error'), 'Escribí el nombre.');
+    if (!persona && whatsapp.replace(/\D/g, '').length < 8) { $('#a-wa').focus(); return errorEn($('#a-error'), 'Anotá su WhatsApp (al menos 8 números).'); }
+    const t = total();
+    const monto = pago === 'todo' ? t : pago === 'sena' ? sena(t) : 0;
+    const horas = Array.from({ length: horasN }, (_, i) => hora + i);
+    const btn = $('#a-guardar');
+    btn.disabled = true; btn.textContent = 'Anotando…';
+    try {
+      const id = await llamar('cargar_reserva', {
+        p_nombre: nombre, p_whatsapp: whatsapp, p_consultorio: consultorio, p_fecha: fecha,
+        p_horas: horas, p_monto_pagado: monto, p_medio: $('#a-medio').value,
+      });
+      cerrarModal();
+      await cargarBase();
+      refrescar();
+      toast(`Anotado: ${nombre.split(' ')[0]}, ${DIAS_CORTOS[diaSemana(fecha)]} ${fechaCorta(fecha)} de ${hora} a ${hora + horasN} hs`, {
+        etiqueta: 'Deshacer',
+        fn: async () => {
+          try { await llamar('deshacer_carga', { p_reserva_id: id }, 'Listo, se deshizo'); refrescar(); } catch (err) { errorEn(null, err); }
+        },
+      });
+    } catch (err) {
+      errorEn($('#a-error'), err);
+      btn.disabled = false; btn.textContent = 'Anotar';
+    }
+  };
+}
+
+// ---------- Bajar la semana para abrir en Excel ----------
+function bajarSemanaExcel() {
+  const dias = diasDeSemana();
+  const cons = st.consultorios.filter((c) => c.activo);
+  const celda = (t) => `"${String(t ?? '').replace(/"/g, '""')}"`;
+  const lineas = [];
+  lineas.push(['Hora', ...dias.flatMap((d) => cons.map((c) => `${DIAS[diaSemana(d)]} ${fechaCorta(d)} - ${c.nombre}`))].map(celda).join(';'));
+  for (const h of horasDelDia()) {
+    lineas.push([`${h} hs`, ...dias.flatMap((d) => cons.map((c) => {
+      const f = datosSemana.mapa.get(`${d}|${c.id}|${h}`);
+      return f ? `${f.nombre || ''} (${claseSemana(f)[1]})` : '';
+    }))].map(celda).join(';'));
+  }
+  lineas.push('');
+  lineas.push(celda('Notas de la semana'));
+  datosSemana.notas.forEach((n) => lineas.push(celda(`${n.texto} — ${n.autor_nombre || 'Equipo'}`)));
+  const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `semana-${st.semana}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 // ================================================================ DETALLE
 async function abrirDetalle(f) {
   if (f.reserva_id) return detalleReserva(f.reserva_id);
@@ -272,7 +558,7 @@ async function detalleReserva(id) {
       <li><span>Saldo</span><span>${pesos(falta)}</span></li>
       ${r.estado === 'pendiente' && r.expira_en ? `<li><span>Vence en</span><span>${faltan(r.expira_en)}</span></li>` : ''}
       ${r.motivo_cancelacion ? `<li><span>Motivo</span><span>${esc(r.motivo_cancelacion)}</span></li>` : ''}
-      <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel'}</span></li>
+      <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel' + (st.equipo.find((e) => e.user_id === r.creado_por) ? ' por ' + esc(st.equipo.find((e) => e.user_id === r.creado_por).nombre) : '')}</span></li>
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
     ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.anulado ? ' · <s>anulado</s>' : ''}</span>

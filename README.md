@@ -67,6 +67,10 @@ En Supabase → **SQL Editor** → **New query**. Pegá el archivo entero y toc�
 
 En el panel se entra escribiendo solo `psicomel` como usuario (el `@psicostudios.local` se agrega solo).
 
+**Un usuario por persona (recomendado, sin costo):** repetí el punto 1 para cada persona del equipo,
+con el formato `nombre@psicostudios.local` (ej: `bianca@psicostudios.local`). Cada una entra con su nombre y
+su propia contraseña, y en cada reserva queda registrado **quién la cargó**. Se habilitan con `09_semana.sql` (paso 4).
+
 ### Paso 4 · Aplicar seña, seguridad y Mercado Pago
 SQL Editor → pegá `supabase/03_sena_y_seguridad.sql` → **Run**.
 Tiene que decir *"Listo: ajustes aplicados y usuario psicomel habilitado para el panel"*.
@@ -86,6 +90,10 @@ Y `supabase/07_comprobantes.sql` → **Run** → *"Comprobantes listos…"*.
 
 Y `supabase/08_avisos.sql` → **Run** → *"Avisos listos…"*.
 (Avisos automáticos por mail y WhatsApp. Arrancan apagados: se configuran con [`docs/avisos-mail-y-whatsapp.md`](docs/avisos-mail-y-whatsapp.md).)
+
+Y `supabase/09_semana.sql` → **Run** → *"Semana lista. Usuarios del panel: …"* (tienen que aparecer todos los nombres).
+(La vista **Semana** del panel, como la hoja del Excel: notas de la semana, "Deshacer" y un usuario por persona.
+Si después se suma alguien al equipo, se crea su usuario y se vuelve a correr este archivo.)
 
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:

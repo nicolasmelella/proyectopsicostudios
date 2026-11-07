@@ -98,6 +98,75 @@
                 background: #eef2f8; color: var(--azul); font-weight: 700; text-decoration: none; margin-bottom: .6em; }
     .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--azul); color: var(--crema);
              padding: .8em 1.3em; border-radius: 999px; font-weight: 600; z-index: 80; box-shadow: var(--sombra); max-width: 90vw; }
+    /* ---------- Semana (como el Excel) ---------- */
+    .topbar .hola { font-size: .9rem; opacity: .85; }
+    .como-usar { background: #fff8e1; border: 1px solid #f0dfa6; border-radius: 10px; padding: .6em .9em; margin: 0 0 12px; font-size: .95rem; }
+    table.semana { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: calc(58px + var(--nc) * 88px); }
+    html.letra-grande table.semana { width: calc(58px + var(--nc) * 104px); }
+    .semana th, .semana td { border-bottom: 1px solid var(--borde); border-right: 1px solid var(--borde); padding: 0; }
+    .semana col.c { width: 88px; }
+    .semana col.hcol { width: 58px; }
+    .semana thead th { background: var(--azul); color: var(--crema); font-size: .82rem; padding: .45em .2em; position: sticky; z-index: 2; }
+    .semana thead tr:first-child th { top: 0; font-size: .95rem; }
+    .semana thead tr:nth-child(2) th { top: 34px; background: #23397a; font-weight: 600; }
+    .semana thead th.hoy { background: var(--terracota); }
+    .semana th.h { background: var(--crema); color: var(--texto); font-weight: 700; font-size: .9rem; position: sticky; left: 0; z-index: 1; text-align: center; }
+    .semana thead th.h { background: var(--azul); color: var(--crema); z-index: 3; }
+    .semana .fin-dia { border-right: 3px solid var(--azul); }
+    .semana td.hoy-col { background: rgba(192,106,70,.05); }
+    .sc { display: block; width: 100%; height: 100%; min-height: 40px; border: 0; background: transparent; cursor: pointer; font: inherit;
+          text-align: left; padding: .25em .35em; color: var(--texto); overflow: hidden; }
+    .sc.vacia:hover, .sc.vacia:focus-visible { background: rgba(111,143,184,.18); }
+    .sc.vacia:hover::after { content: "+ anotar"; font-size: .72rem; color: var(--azul); font-weight: 700; }
+    .sc .n { display: block; font-weight: 700; font-size: .8rem; line-height: 1.15; overflow-wrap: anywhere; hyphens: auto; }
+    .sc .e { display: block; font-size: .68rem; margin-top: .1em; opacity: .85; }
+    .s-fijo { background: #cfe8c4; }
+    .s-suelta { background: #fbe7a1; }
+    .s-sinsena { background: #fff6d6; box-shadow: inset 0 0 0 2px #e0b52c; }
+    .s-lib { background: #fbd9bf; }
+    .s-sol { background: repeating-linear-gradient(135deg, #e3f1dc, #e3f1dc 6px, #d2e7c8 6px, #d2e7c8 12px); }
+    .s-bloq { background: repeating-linear-gradient(135deg, #ebebeb, #ebebeb 6px, #dedede 6px, #dedede 12px); color: #555; }
+    .leyenda-se { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: .85rem; }
+    .leyenda-se span::before { content: ""; display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.12); }
+    .leyenda-se .l-fijo::before { background: #cfe8c4; } .leyenda-se .l-suelta::before { background: #fbe7a1; }
+    .leyenda-se .l-sinsena::before { background: #fff6d6; border: 2px solid #e0b52c; } .leyenda-se .l-lib::before { background: #fbd9bf; }
+    .leyenda-se .l-sol::before { background: #d2e7c8; } .leyenda-se .l-bloq::before { background: #dedede; }
+    .notas-semana { margin-top: 22px; background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem; max-width: 900px; }
+    .notas-semana ul { list-style: none; margin: .5em 0 1em; padding: 0; }
+    .notas-semana li { display: flex; gap: 10px; align-items: flex-start; padding: .55em 0; border-bottom: 1px dashed var(--borde); }
+    .notas-semana li p { margin: 0; flex: 1; white-space: pre-wrap; }
+    .notas-semana li small { display: block; color: var(--texto-suave); margin-top: .2em; }
+    .notas-semana form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .notas-semana textarea { flex: 1; min-width: 220px; }
+    .oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    /* Ventana "Anotar" */
+    .contexto { background: #eef2f8; border-radius: 10px; padding: .6em .9em; font-weight: 700; color: var(--azul); }
+    .grupo-grande { display: flex; flex-wrap: wrap; gap: 8px; }
+    .grupo-grande .chip { min-height: 52px; min-width: 64px; font-size: 1.05rem; font-weight: 700; padding: .4em .9em; }
+    .grupo-grande .chip small { text-transform: none; letter-spacing: 0; font-size: .78rem; font-weight: 600; }
+    .grupo-grande .chip:disabled { opacity: .35; cursor: not-allowed; }
+    .quien-ok { color: var(--ok); font-weight: 700; }
+    .toast .deshacer { margin-left: 12px; background: var(--crema); color: var(--azul); border: 0; border-radius: 999px; font: inherit;
+                       font-weight: 800; padding: .3em .9em; cursor: pointer; }
+    /* Letra grande */
+    html.letra-grande { font-size: 118%; }
+    html.letra-grande .semana col.c { width: 104px; }
+    html.letra-grande .sc .n { font-size: .85rem; }
+    @media print {
+      .topbar, .barra-herr, .como-usar, #form-nota, .notas-semana li button, .demo-banda { display: none !important; }
+      main { padding: 0; max-width: none; }
+      .grilla-wrap { overflow: visible; border: 0; }
+      table.semana { width: 100% !important; } .semana col.c { width: auto; } .semana col.hcol { width: 34px; }
+      .sc { min-height: 18px; } .sc .n { font-size: 7pt; } .sc .e { display: none; }
+      .semana thead th { position: static; font-size: 7pt; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: A4 landscape; margin: 8mm; }
+    }
+    @media (max-width: 600px) {
+      .topbar .hola, .topbar strong { display: none; }
+      .topbar-in { gap: 8px; }
+      #btn-letra .largo { display: none; }
+    }
     @media (max-width: 600px) { .fila2 { grid-template-columns: 1fr; } .barra-herr .der { margin-left: 0; } }
   </style>
 </head>
@@ -127,10 +196,13 @@
       <div class="topbar-in">
         <img src="img/logo-crema.png" alt="Psico Studios" width="61" height="34">
         <strong>Panel</strong>
-        <button class="btn btn-borde btn-chico salir" id="btn-salir">Cerrar sesión</button>
+        <span class="hola" id="hola"></span>
+        <button class="btn btn-borde btn-chico salir" id="btn-letra" aria-pressed="false" title="Agrandar o achicar la letra">A+ <span class="largo">Letra grande</span></button>
+        <button class="btn btn-borde btn-chico" id="btn-salir" style="color:var(--crema);border-color:rgba(243,238,220,.5)">Cerrar sesión</button>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="agenda" aria-selected="true">Agenda</button>
+        <button role="tab" data-tab="semana" aria-selected="true">Semana</button>
+        <button role="tab" data-tab="agenda" aria-selected="false">Día</button>
         <button role="tab" data-tab="pendientes" aria-selected="false">Pendientes <span class="badge oculto" id="badge-pend"></span></button>
         <button role="tab" data-tab="fijos" aria-selected="false">Fijos</button>
         <button role="tab" data-tab="profesionales" aria-selected="false">Profesionales</button>
@@ -139,8 +211,37 @@
     </header>
 
     <main>
-      <!-- AGENDA -->
-      <section data-vista="agenda">
+      <!-- SEMANA (como la hoja del Excel) -->
+      <section data-vista="semana">
+        <div class="barra-herr">
+          <button class="btn btn-borde btn-chico" id="se-ant" aria-label="Semana anterior">◀</button>
+          <button class="btn btn-borde btn-chico" id="se-hoy">Esta semana</button>
+          <button class="btn btn-borde btn-chico" id="se-sig" aria-label="Semana siguiente">▶</button>
+          <span class="fecha-actual" id="se-titulo"></span>
+          <div class="der">
+            <button class="btn btn-borde btn-chico" id="se-excel">Bajar en Excel</button>
+            <button class="btn btn-borde btn-chico" id="se-imprimir">Imprimir</button>
+          </div>
+        </div>
+        <p class="como-usar">👉 Tocá un casillero <strong>vacío</strong> para anotar a alguien. Tocá un <strong>nombre</strong> para cobrar, liberar o cancelar.</p>
+        <div class="grilla-wrap" id="se-wrap"><div id="semana"><div class="cargando" style="padding:1em">Cargando semana…</div></div></div>
+        <div class="leyenda-se">
+          <span class="l-fijo">Fijo</span><span class="l-suelta">Horas sueltas (señada)</span><span class="l-sinsena">Sin seña</span>
+          <span class="l-lib">Fijo que no viene (libre)</span><span class="l-sol">Pidió fijo (falta aprobar)</span><span class="l-bloq">Bloqueado</span>
+        </div>
+        <div class="notas-semana">
+          <h2>Notas de la semana</h2>
+          <ul id="se-notas"></ul>
+          <form id="form-nota">
+            <label for="nota-texto" class="oculto-visual">Nueva nota</label>
+            <textarea id="nota-texto" rows="2" maxlength="1000" placeholder="Ej: Ana avisó que el jueves no viene · Martín ya abonó octubre"></textarea>
+            <button class="btn btn-primario">Agregar nota</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- AGENDA (un día) -->
+      <section data-vista="agenda" class="oculto">
         <div class="barra-herr">
           <button class="btn btn-borde btn-chico" id="ag-ant" aria-label="Día anterior">◀</button>
           <button class="btn btn-borde btn-chico" id="ag-hoy">Hoy</button>
