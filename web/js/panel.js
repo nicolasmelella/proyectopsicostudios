@@ -291,7 +291,7 @@ function claseSemana(f) {
   if (f.tipo === 'solicitud') return ['s-sol', 'pidió fijo'];
   if (f.tipo === 'liberado') return ['s-lib', 'no viene · libre'];
   if (f.tipo === 'bloqueo') return ['s-bloq', 'bloqueado'];
-  if (f.estado === 'confirmada') return ['s-suelta', f.pagado ? 'pagó todo' : 'señada'];
+  if (f.estado === 'confirmada') return ['s-suelta', f.pagado ? 'pagó todo' : f.monto_pagado ? 'señada' : 'anotada'];
   return ['s-sinsena', 'sin seña'];
 }
 
@@ -440,12 +440,13 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
     const q = normal($('#a-nombre').value);
     const coinciden = q.length >= 2 ? st.profesionales.filter((p) => normal(p.nombre) === q) : [];
     persona = coinciden.length === 1 ? coinciden[0] : null;
-    const nuevo = q.length >= 2 && !persona;
+    const nuevo = q.length >= 2 && (!persona || !persona.whatsapp);
     $('#a-wa-campo').classList.toggle('oculto', !nuevo);
     $('#a-wa').required = nuevo;
     $('#a-wa-ayuda').textContent = coinciden.length > 1 ? `Hay ${coinciden.length} personas con ese nombre: anotá su WhatsApp para saber cuál es.`
+      : persona ? 'Todavía no tenemos su WhatsApp: anotalo una vez y queda guardado.'
       : 'Es alguien nuevo: con el WhatsApp queda guardado para la próxima.';
-    $('#a-quien').innerHTML = persona ? `<span class="quien-ok">✓ ${esc(persona.nombre)}</span> · WhatsApp ${esc(persona.whatsapp)}`
+    $('#a-quien').innerHTML = persona ? `<span class="quien-ok">✓ ${esc(persona.nombre)}</span>${persona.whatsapp ? ' · WhatsApp ' + esc(persona.whatsapp) : ''}`
       : nuevo ? 'No está en la lista: es alguien nuevo.' : 'Si ya vino antes, aparece solo mientras escribís.';
   };
   $('#a-nombre').addEventListener('input', buscarPersona);
@@ -468,7 +469,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
     const nombre = persona?.nombre || $('#a-nombre').value.trim();
     const whatsapp = persona?.whatsapp || $('#a-wa').value;
     if (nombre.length < 2) return errorEn($('#a-error'), 'Escribí el nombre.');
-    if (!persona && whatsapp.replace(/\D/g, '').length < 8) { $('#a-wa').focus(); return errorEn($('#a-error'), 'Anotá su WhatsApp (al menos 8 números).'); }
+    if (!persona?.whatsapp && whatsapp.replace(/\D/g, '').length < 8) { $('#a-wa').focus(); return errorEn($('#a-error'), 'Anotá su WhatsApp (al menos 8 números).'); }
     const t = total();
     const monto = pago === 'todo' ? t : pago === 'sena' ? sena(t) : 0;
     const horas = Array.from({ length: horasN }, (_, i) => hora + i);

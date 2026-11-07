@@ -19,7 +19,7 @@ export async function crearCliente({ sesionTemporal = false } = {}) {
     document.body.insertAdjacentHTML('afterbegin', `
       <div class="demo-banda" role="region" aria-label="Simulador">
         <div class="demo-linea">
-          <span><strong>SIMULADOR</strong> · datos de prueba</span>
+          <span><strong>SIMULADOR</strong> · ${globalThis.PSICO_EXCEL ? 'semanas del Excel' : 'datos de prueba'}</span>
           <button type="button" class="demo-btn" data-demo="menu" aria-expanded="false" aria-controls="demo-panel">Herramientas ▾</button>
         </div>
         <div class="demo-panel" id="demo-panel" hidden>

@@ -2,7 +2,8 @@
 // Sirve para ver y probar las pantallas sin tener la base conectada.
 // Las reglas de verdad están en supabase/*.sql; esto es una copia simplificada.
 // Los datos se guardan en este navegador, así la web y el panel comparten las reservas.
-const CLAVE_GUARDADO = 'psicostudios-demo-v1';
+// Si la copia privada del simulador trae datos del Excel, se guardan aparte de los de prueba
+const CLAVE_GUARDADO = globalThis.PSICO_EXCEL ? 'psicostudios-demo-excel-v1' : 'psicostudios-demo-v1';
 import { hoyAR, horaAR, sumarDias, diaSemana } from './comun.js';
 
 export function crearClienteDemo() {
@@ -115,6 +116,31 @@ export function crearClienteDemo() {
   db.pagos_a_revisar.push({ id: nuevoId(), reserva_id: null, mp_payment_id: '123456789', monto: 4250, resuelto: false, creado_en: ahoraISO(-90),
     motivo: 'Pagó después del vencimiento y el horario ya no está libre' });
   db.pagos.push({ id: nuevoId(), reserva_id: null, fijo_id: f1.id, periodo: hoy.slice(0, 7), monto: 106600, medio: 'efectivo', pagado_en: hoy, anulado: false, creado_en: ahoraISO(-600) });
+
+  // ---- datos reales del Excel: SOLO en la copia privada del simulador (este repositorio no los tiene) ----
+  const EXCEL = globalThis.PSICO_EXCEL;
+  if (EXCEL) {
+    Object.assign(db, { reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [], pedidos: [], comprobantes: [], notas_semana: [] });
+    db.ocupaciones = new Map();
+    const idPersona = new Map();
+    db.profesionales = EXCEL.personas.map((p) => {
+      const id = nuevoId(); idPersona.set(p.clave, id);
+      return { id, nombre: p.nombre, whatsapp: '', profesion: null, origen: 'Excel', email: null, notas: null };
+    });
+    for (const f of EXCEL.fijos) {
+      const fj = { id: nuevoId(), profesional_id: idPersona.get(f.clave), consultorio_id: f.cons, dia_semana: f.dia, horas: f.horas,
+        precio_semanal: f.horas.reduce((s, h) => s + precioHora('fijo', h, f.desde), 0), estado: 'activo', desde: f.desde, hasta: null, expira_en: null, origen: 'panel' };
+      db.fijos.push(fj);
+      f.no_viene.forEach((fecha) => db.fijo_excepciones.push({ fijo_id: fj.id, fecha, motivo: 'Así figura en el Excel' }));
+      ocuparFijo(fj);
+    }
+    for (const s of EXCEL.sueltas) {
+      if (s.fecha < hoy || !libre(s.cons, s.fecha, s.horas)) continue;
+      const r = agregarReserva(idPersona.get(s.clave), s.cons, s.fecha, s.horas, 'confirmada', 0, 0);
+      r.origen = 'panel';
+    }
+    EXCEL.notas.forEach((n) => db.notas_semana.push({ id: nuevoId(), semana: n.semana, texto: n.texto, autor: null, autor_nombre: 'Excel', creado_en: ahoraISO() }));
+  }
 
   // ---- datos guardados en este navegador (si hay) ----
   try {
@@ -248,6 +274,9 @@ export function crearClienteDemo() {
     },
     obtenerProfesional(nombre, whatsapp, profesion, origen, email = null) {
       let p = db.profesionales.find((x) => x.whatsapp === whatsapp);
+      // Persona pasada del Excel sin WhatsApp: se le completa la primera vez que se anota
+      if (!p) p = db.profesionales.find((x) => !x.whatsapp && x.nombre.toLowerCase() === String(nombre).trim().toLowerCase());
+      if (p && !p.whatsapp) p.whatsapp = whatsapp;
       if (!p) { p = { id: nuevoId(), nombre, whatsapp, profesion, origen, email, notas: null }; db.profesionales.push(p); }
       else { p.profesion = p.profesion || profesion; p.email = p.email || email; }
       return p.id;
