@@ -55,7 +55,7 @@ select pg_temp.ok((select count(*) from public.config) > 0, 'anon puede leer con
 
 -- Reserva web: 10 y 11 hs (mañana: 8500 c/u) → total 17000, seña 8500
 create temp table r1 as
-select public.crear_reserva('Ana Pérez', '11 4195-2323', 'Psicóloga',
+select public.crear_reserva('Ana Pérez', '11 2345-6789', 'Psicóloga',
                             (select martes from t), array[10, 11]::smallint[]) as j;
 grant select on r1 to authenticated;
 select pg_temp.ok((select (j->>'total')::int = 17000 and (j->>'sena')::int = 8500 from r1), 'reserva web: total 17000, seña 8500');
@@ -69,8 +69,8 @@ select pg_temp.espera_error(format($$select public.crear_reserva('X', '117777666
                             (select martes from t) + 5), 'DOMINGO');
 
 -- Límite de pendientes por WhatsApp (2)
-select public.crear_reserva('Ana Pérez', '1141952323', null, (select martes from t), array[15]::smallint[]);
-select pg_temp.espera_error(format($$select public.crear_reserva('Ana Pérez', '1141952323', null, %L, array[17]::smallint[])$$,
+select public.crear_reserva('Ana Pérez', '1123456789', null, (select martes from t), array[15]::smallint[]);
+select pg_temp.espera_error(format($$select public.crear_reserva('Ana Pérez', '1123456789', null, %L, array[17]::smallint[])$$,
                             (select martes from t)), 'DEMASIADAS_PENDIENTES');
 
 -- Fijo con bloque de 1 hora: no

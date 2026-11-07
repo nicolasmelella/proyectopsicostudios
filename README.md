@@ -126,7 +126,7 @@ update public.config set valor = '549XXXXXXXXXX'   where clave = 'whatsapp_conta
 select clave, valor from public.config where clave like '%transferencia' or clave = 'whatsapp_contacto';
 ```
 
-El WhatsApp va con `549` + código de área + número, sin espacios (ej: `5491141952323`).
+El WhatsApp va con `549` + código de área + número, sin espacios (ej: `5491123456789`).
 Para cambiarlos más adelante, lo mismo. Estos datos no se guardan en el código (este repositorio es público).
 
 ---

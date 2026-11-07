@@ -77,7 +77,7 @@ create table public.equipo (
 create table public.profesionales (
   id bigint generated always as identity primary key,
   nombre text not null,
-  whatsapp text not null unique,   -- solo números, ej: 1141952323
+  whatsapp text not null unique,   -- solo números, ej: 1123456789
   email text,
   profesion text,
   origen text,                     -- Meta Ads, Google, Recomendación, Universidad, Web, Otro

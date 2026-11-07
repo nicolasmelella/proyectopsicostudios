@@ -407,7 +407,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
       </div>
       <div class="campo oculto" id="a-wa-campo">
         <label for="a-wa">Su WhatsApp</label>
-        <input id="a-wa" inputmode="tel" placeholder="Ej: 11 4195 2323">
+        <input id="a-wa" inputmode="tel" placeholder="Ej: 11 2345 6789">
         <div class="ayuda" id="a-wa-ayuda">Es alguien nuevo: con el WhatsApp queda guardado para la próxima.</div>
       </div>
       <div class="campo">
@@ -704,7 +704,7 @@ function datalistProfesionales() {
 function camposPersona() {
   return `${datalistProfesionales()}
     <div class="fila2">
-      <div class="campo"><label for="n-wa">WhatsApp</label><input id="n-wa" list="dl-prof" inputmode="tel" required placeholder="1141952323">
+      <div class="campo"><label for="n-wa">WhatsApp</label><input id="n-wa" list="dl-prof" inputmode="tel" required placeholder="1123456789">
         <div class="ayuda">Si ya existe, se completa el nombre.</div></div>
       <div class="campo"><label for="n-nombre">Nombre</label><input id="n-nombre" required></div>
     </div>`;
