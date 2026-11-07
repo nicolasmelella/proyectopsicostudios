@@ -14,6 +14,8 @@ web/        → la web de reservas y el panel (lo que se publica)
 pruebas/    → pruebas automáticas de la base (no hace falta tocarlas)
 ```
 
+> 📄 Reglas del negocio (precios, seña, horas sueltas vs. fijo y reglas pendientes): [`docs/reglas-del-negocio.md`](docs/reglas-del-negocio.md)
+
 ---
 
 ## Cómo funciona
