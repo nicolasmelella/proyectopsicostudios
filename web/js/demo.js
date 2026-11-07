@@ -3,7 +3,8 @@
 // Las reglas de verdad están en supabase/*.sql; esto es una copia simplificada.
 // Los datos se guardan en este navegador, así la web y el panel comparten las reservas.
 // Si la copia privada del simulador trae datos del Excel, se guardan aparte de los de prueba
-const CLAVE_GUARDADO = globalThis.PSICO_EXCEL ? 'psicostudios-demo-excel-v1' : 'psicostudios-demo-v1';
+// (cada versión de los datos del Excel se guarda aparte, así una lectura nueva no queda tapada por pruebas viejas)
+const CLAVE_GUARDADO = globalThis.PSICO_EXCEL ? 'psicostudios-demo-excel-' + (globalThis.PSICO_EXCEL.version || 'v1') : 'psicostudios-demo-v1';
 import { hoyAR, horaAR, sumarDias, diaSemana } from './comun.js';
 
 export function crearClienteDemo() {
