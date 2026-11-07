@@ -162,10 +162,23 @@ en cualquier momento: panel → "Cobrar la seña con Mercado Pago" → **No** (l
 
 ---
 
-## Ver la web sin Supabase (modo demo)
-Mientras `config.js` diga `COMPLETAR`, todo funciona con **datos de prueba** (aparece una banda
-naranja arriba que dice MODO DEMO). En el panel demo entra cualquier usuario y contraseña.
-Ya conectado, se puede volver a ver la demo agregando `?demo` al final de la dirección.
+## Simulador (probar todo sin Supabase ni Mercado Pago)
+Mientras `config.js` diga `COMPLETAR`, la web funciona como **simulador** con datos de prueba
+(banda naranja arriba). Ya conectado, se abre agregando `?demo` al final de la dirección.
+
+- La web y el panel **comparten los datos** (quedan guardados en ese navegador, del día).
+- "Pagar seña con Mercado Pago" abre un **simulador de pago** (no es Mercado Pago) con cuatro opciones:
+  aprobado, aprobado pero tarde, rechazado y volver sin pagar.
+- Barra de arriba: **Ir al panel / Ir a la web**, **⏩ Pasaron 2 horas** (vencen las reservas sin seña)
+  y **↺ Reiniciar** (vuelve a los datos de ejemplo).
+- En el panel del simulador entra cualquier usuario y contraseña.
+
+Recorridos para probar:
+1. Reservar → pagar → aprobado → ver en el panel la reserva confirmada con el pago "Mercado Pago".
+2. Reservar → pagar → rechazado → reintentar → aprobado.
+3. Reservar sin pagar → ⏩ Pasaron 2 horas → en el panel el horario quedó libre.
+4. Reservar → pagar → aprobado pero tarde → la reserva se recupera.
+5. Panel: registrar una seña a mano, cancelar una reserva, cargar un fijo, bloquear un horario.
 
 ## Seguridad
 - Las personas de afuera **solo pueden**: ver horarios libres (sin nombres), ver precios y crear reservas/solicitudes.

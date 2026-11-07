@@ -130,6 +130,15 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .chip:focus-visib
 
 /* ---------- Marca de modo demo ---------- */
 .demo-banda {
-  background: var(--terracota); color: var(--crema); text-align: center;
-  font-size: .8rem; font-weight: 700; padding: .35em 1em; letter-spacing: .03em;
+  background: var(--terracota); color: var(--crema);
+  font-size: .8rem; padding: .4em 16px; letter-spacing: .02em;
+  display: flex; flex-wrap: wrap; gap: .4em 1em; align-items: center; justify-content: center;
 }
+.demo-acciones { display: flex; flex-wrap: wrap; gap: .4em; justify-content: center; }
+.demo-acciones a, .demo-acciones button {
+  font: inherit; font-weight: 700; color: var(--terracota-osc); background: var(--crema);
+  border: 0; border-radius: 999px; padding: .35em .9em; cursor: pointer; text-decoration: none; min-height: 32px;
+  display: inline-flex; align-items: center;
+}
+.btn-peligro-lleno { background: var(--error); color: #fff; }
+.btn-peligro-lleno:hover:not(:disabled) { background: #8f1e18; }

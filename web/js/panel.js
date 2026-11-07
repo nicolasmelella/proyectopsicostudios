@@ -1,7 +1,7 @@
 // Panel del equipo (con login).
 import {
   crearCliente, esc, pesos, hoyAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
-  faltan, mensajeError, linkWhatsApp, waArgentina, DIAS,
+  faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, preguntar,
 } from './comun.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -301,14 +301,14 @@ async function detalleReserva(id) {
     } catch (err) { errorEn(errEl, err); }
   });
   $$('[data-anular]').forEach((b) => (b.onclick = async () => {
-    if (!confirm('¿Anular este pago?')) return;
+    if (await preguntar({ titulo: '¿Anular este pago?', texto: 'Deja de contar para la reserva. Si era la seña, la reserva vuelve a quedar sin seña.', aceptar: 'Anular pago', peligro: true }) === null) return;
     try { await llamar('anular_pago', { p_pago_id: Number(b.dataset.anular) }, 'Pago anulado'); detalleReserva(id); refrescar(); } catch (err) { errorEn(errEl, err); }
   }));
   $('#btn-extender')?.addEventListener('click', async () => {
     try { await llamar('extender_reserva', { p_reserva_id: r.id, p_minutos: 60 }, 'Se dio 1 hora más'); detalleReserva(id); refrescar(); } catch (err) { errorEn(errEl, err); }
   });
   $('#btn-cancelar')?.addEventListener('click', async () => {
-    const motivo = prompt('Motivo de la cancelación (opcional):');
+    const motivo = await preguntar({ titulo: '¿Cancelar la reserva?', texto: 'El horario se libera y cualquiera lo puede reservar.', campo: { etiqueta: 'Motivo (opcional)', placeholder: 'Ej: avisó que no viene' }, aceptar: 'Cancelar reserva', peligro: true });
     if (motivo === null) return;
     try { await llamar('cancelar_reserva', { p_reserva_id: r.id, p_motivo: motivo || null }, 'Reserva cancelada'); cerrarModal(); refrescar(); } catch (err) { errorEn(errEl, err); }
   });
@@ -385,14 +385,16 @@ async function detalleFijo(id, fecha, liberado) {
     try { await llamar(fn, params, msg); cerrarModal(); refrescar(); } catch (err) { errorEn(errEl, err); }
   };
   $('#btn-aprobar')?.addEventListener('click', () => act('aprobar_fijo', { p_fijo_id: f.id }, 'Fijo aprobado'));
-  $('#btn-rechazar')?.addEventListener('click', () => confirm('¿Rechazar la solicitud? Se liberan los horarios.') && act('rechazar_fijo', { p_fijo_id: f.id }, 'Solicitud rechazada'));
-  $('#btn-liberar')?.addEventListener('click', () => {
-    const motivo = prompt('Motivo (opcional), ej: vacaciones');
+  $('#btn-rechazar')?.addEventListener('click', async () => {
+    if (await preguntar({ titulo: '¿Rechazar la solicitud?', texto: 'Se liberan los horarios de todas las semanas.', aceptar: 'Rechazar', peligro: true }) !== null) act('rechazar_fijo', { p_fijo_id: f.id }, 'Solicitud rechazada');
+  });
+  $('#btn-liberar')?.addEventListener('click', async () => {
+    const motivo = await preguntar({ titulo: `¿Liberar el ${fechaCorta(fecha)}?`, texto: 'Esa semana el horario queda libre para otra persona. Las demás semanas siguen siendo suyas.', campo: { etiqueta: 'Motivo (opcional)', placeholder: 'Ej: vacaciones' }, aceptar: 'Liberar' });
     if (motivo !== null) act('liberar_fijo_fecha', { p_fijo_id: f.id, p_fecha: fecha, p_motivo: motivo || null }, 'Semana liberada');
   });
   $('#btn-rebloquear')?.addEventListener('click', () => act('volver_a_bloquear_fijo', { p_fijo_id: f.id, p_fecha: fecha }, 'Horario recuperado'));
-  $('#btn-baja')?.addEventListener('click', () => {
-    const desde = prompt('¿Desde qué fecha deja de venir? (AAAA-MM-DD)', fecha || hoyAR());
+  $('#btn-baja')?.addEventListener('click', async () => {
+    const desde = await preguntar({ titulo: '¿Dar de baja el horario fijo?', texto: 'Desde esa fecha los horarios quedan libres.', campo: { etiqueta: 'Deja de venir desde', tipo: 'date', valor: fecha || hoyAR() }, aceptar: 'Dar de baja', peligro: true });
     if (!desde) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return errorEn(errEl, 'La fecha tiene que tener el formato AAAA-MM-DD');
     act('dar_baja_fijo', { p_fijo_id: f.id, p_desde: desde }, 'Fijo dado de baja');
@@ -569,7 +571,7 @@ async function pintarPagosRevisar() {
     </div>`).join('');
   $$('[data-ver-reserva]').forEach((b) => (b.onclick = () => detalleReserva(Number(b.dataset.verReserva))));
   $$('[data-resolver]').forEach((b) => (b.onclick = async () => {
-    const nota = prompt('¿Cómo se resolvió? (ej: devuelto desde Mercado Pago, reubicado al jueves 10 hs)');
+    const nota = await preguntar({ titulo: '¿Cómo se resolvió?', campo: { etiqueta: 'Nota', placeholder: 'Ej: devuelto desde Mercado Pago, reubicado al jueves 10 hs' }, aceptar: 'Marcar como resuelto' });
     if (nota === null) return;
     try { await llamar('resolver_pago_revisar', { p_id: Number(b.dataset.resolver), p_nota: nota || null }, 'Marcado como resuelto'); refrescar(); }
     catch (err) { errorEn(null, err); }

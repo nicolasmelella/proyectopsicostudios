@@ -14,9 +14,25 @@ export const esDemo = () =>
 export async function crearCliente({ sesionTemporal = false } = {}) {
   if (esDemo()) {
     const { crearClienteDemo } = await import('./demo.js');
-    document.body.insertAdjacentHTML('afterbegin',
-      '<div class="demo-banda">MODO DEMO · datos de prueba, nada se guarda de verdad</div>');
-    return crearClienteDemo();
+    const cliente = crearClienteDemo();
+    const enPanel = /panel(\.html)?$/.test(location.pathname);
+    document.body.insertAdjacentHTML('afterbegin', `
+      <div class="demo-banda" role="region" aria-label="Herramientas del simulador">
+        <span><strong>SIMULADOR</strong> · datos de prueba, nada es real</span>
+        <span class="demo-acciones">
+          <a href="${enPanel ? 'index.html' : 'panel.html'}">${enPanel ? '→ Ir a la web' : '→ Ir al panel del equipo'}</a>
+          <button type="button" data-demo="adelantar">⏩ Pasaron 2 horas</button>
+          <button type="button" data-demo="reiniciar">↺ Reiniciar</button>
+        </span>
+      </div>`);
+    document.querySelector('[data-demo="adelantar"]').onclick = () => { cliente.demo.adelantar(120); location.reload(); };
+    document.querySelector('[data-demo="reiniciar"]').onclick = () => {
+      preguntar({ titulo: '¿Empezar de cero?', texto: 'Se borra todo lo que hiciste en el simulador y vuelven los datos de ejemplo.', aceptar: 'Reiniciar', peligro: true })
+        .then((ok) => { if (ok === null) return; cliente.demo.reiniciar(); location.href = location.pathname; });
+    };
+    document.querySelector('#form-login h1')?.insertAdjacentHTML('afterend',
+      '<p class="aviso aviso-info chico">Simulador: entrá con cualquier usuario y contraseña.</p>');
+    return cliente;
   }
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -119,4 +135,38 @@ export function waArgentina(numero) {
   if (n.startsWith('54')) return n;
   if (n.startsWith('0')) n = n.slice(1);
   return '549' + n;
+}
+
+// Cuadro para confirmar o pedir un dato, con el diseño de la marca.
+// (Reemplaza confirm()/prompt() del navegador, que en celulares se ven mal y en algunos lugares no aparecen.)
+// Devuelve: null si se cancela; '' al confirmar sin campo; el texto escrito si hay campo.
+export function preguntar({ titulo, texto = '', campo = null, aceptar = 'Aceptar', peligro = false }) {
+  return new Promise((resolver) => {
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-fondo';
+    fondo.style.zIndex = '70';
+    fondo.setAttribute('role', 'dialog');
+    fondo.setAttribute('aria-modal', 'true');
+    fondo.setAttribute('aria-labelledby', 'preg-titulo');
+    fondo.innerHTML = `<form class="modal" style="max-width:440px" novalidate>
+      <h2 id="preg-titulo">${esc(titulo)}</h2>
+      ${texto ? `<p class="suave">${esc(texto)}</p>` : ''}
+      ${campo ? `<div class="campo"><label for="preg-campo">${esc(campo.etiqueta)}</label>
+        <input id="preg-campo" type="${campo.tipo || 'text'}" value="${esc(campo.valor ?? '')}" placeholder="${esc(campo.placeholder ?? '')}"></div>` : ''}
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" class="btn btn-borde" data-preg-no>Volver</button>
+        <button type="submit" class="btn ${peligro ? 'btn-peligro-lleno' : 'btn-primario'}">${esc(aceptar)}</button>
+      </div></form>`;
+    const cerrar = (valor) => { fondo.remove(); document.removeEventListener('keydown', tecla, true); resolver(valor); };
+    const tecla = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(null); } };
+    document.addEventListener('keydown', tecla, true);
+    fondo.querySelector('[data-preg-no]').onclick = () => cerrar(null);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(null); });
+    fondo.querySelector('form').onsubmit = (e) => {
+      e.preventDefault();
+      cerrar(campo ? fondo.querySelector('#preg-campo').value.trim() : '');
+    };
+    document.body.appendChild(fondo);
+    setTimeout(() => (fondo.querySelector('#preg-campo') || fondo.querySelector('[type=submit]')).focus(), 30);
+  });
 }

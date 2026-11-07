@@ -1,6 +1,8 @@
 // MODO DEMO: imita a Supabase en el navegador con datos de prueba.
 // Sirve para ver y probar las pantallas sin tener la base conectada.
 // Las reglas de verdad están en supabase/*.sql; esto es una copia simplificada.
+// Los datos se guardan en este navegador, así la web y el panel comparten las reservas.
+const CLAVE_GUARDADO = 'psicostudios-demo-v1';
 import { hoyAR, horaAR, sumarDias, diaSemana } from './comun.js';
 
 export function crearClienteDemo() {
@@ -97,6 +99,58 @@ export function crearClienteDemo() {
     motivo: 'Pagó después del vencimiento y el horario ya no está libre' });
   db.pagos.push({ id: nuevoId(), reserva_id: null, fijo_id: f1.id, periodo: hoy.slice(0, 7), monto: 106600, medio: 'efectivo', pagado_en: hoy, anulado: false, creado_en: ahoraISO(-600) });
 
+  // ---- datos guardados en este navegador (si hay) ----
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_GUARDADO) || 'null');
+    if (guardado && guardado.dia === hoy) {
+      Object.assign(db, guardado.db);
+      db.ocupaciones = new Map(guardado.ocupaciones);
+      seq = guardado.seq;
+    }
+  } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
+  const guardar = () => {
+    try {
+      const { ocupaciones, ...resto } = db;
+      localStorage.setItem(CLAVE_GUARDADO, JSON.stringify({ dia: hoy, seq, db: resto, ocupaciones: [...ocupaciones] }));
+    } catch { /* sin almacenamiento */ }
+  };
+  const liberarVencidas = () => {
+    const ahora = Date.now();
+    for (const r of db.reservas) {
+      if (r.estado === 'pendiente' && r.expira_en && new Date(r.expira_en) < ahora) {
+        r.estado = 'vencida';
+        for (const [k, o] of db.ocupaciones) if (o.reserva_id === r.id) db.ocupaciones.delete(k);
+      }
+    }
+    for (const f of db.fijos) {
+      if (f.estado === 'solicitud' && f.expira_en && new Date(f.expira_en) < ahora) {
+        f.estado = 'vencido';
+        for (const [k, o] of db.ocupaciones) if (o.fijo_id === f.id) db.ocupaciones.delete(k);
+      }
+    }
+  };
+  liberarVencidas();
+
+  // Copia de registrar_pago_mp (04_mercadopago.sql): lo que hace el servidor cuando Mercado Pago aprueba
+  const registrarPagoMP = (reservaId, mpId, monto) => {
+    const r = db.reservas.find((x) => x.id === reservaId);
+    const aRevisar = (motivo) => { db.pagos_a_revisar.push({ id: nuevoId(), reserva_id: r?.id ?? null, mp_payment_id: mpId, monto, motivo, resuelto: false, creado_en: ahoraISO() }); return 'A_REVISAR'; };
+    if (!r) return aRevisar(`Pago para la reserva #${reservaId}, que no existe`);
+    if (r.estado === 'vencida' || r.estado === 'cancelada') {
+      const futuro = r.fecha > hoy || (r.fecha === hoy && Math.min(...r.horas) > horaAR());
+      if (r.estado === 'vencida' && futuro && libre(r.consultorio_id, r.fecha, r.horas)) {
+        r.horas.forEach((h) => db.ocupaciones.set(key(r.consultorio_id, r.fecha, h), { reserva_id: r.id }));
+        r.estado = 'pendiente'; r.expira_en = null;
+      } else {
+        return aRevisar(r.estado === 'cancelada' ? 'Pagó una reserva que estaba cancelada' : 'Pagó después del vencimiento y el horario ya no está libre');
+      }
+    }
+    if (pagado(r.id) + monto > r.precio_total) return aRevisar(`Pagó $${monto} pero el saldo era $${r.precio_total - pagado(r.id)}`);
+    db.pagos.push({ id: nuevoId(), reserva_id: r.id, fijo_id: null, periodo: null, monto, medio: 'mercadopago', mp_payment_id: mpId, pagado_en: hoy, anulado: false, creado_en: ahoraISO() });
+    if (pagado(r.id) >= sena(r.precio_total)) { r.estado = 'confirmada'; r.expira_en = null; return 'CONFIRMADA'; }
+    return 'PAGO_PARCIAL';
+  };
+
   const conJoins = (tabla, fila) => {
     if (tabla === 'reservas' || tabla === 'fijos') {
       const p = db.profesionales.find((x) => x.id === fila.profesional_id);
@@ -119,7 +173,7 @@ export function crearClienteDemo() {
     limit(n) { this.lim = n; return this; }
     update(v) { this.modo = 'update'; this.valores = v; return this; }
     insert(v) { this.modo = 'insert'; this.valores = Array.isArray(v) ? v : [v]; return this; }
-    then(ok, mal) { return Promise.resolve(this.ejecutar()).then(ok, mal); }
+    then(ok, mal) { const res = this.ejecutar(); if (this.modo !== 'select') guardar(); return Promise.resolve(res).then(ok, mal); }
     ejecutar() {
       const tabla = db[this.tabla];
       if (!Array.isArray(tabla)) return err('tabla desconocida');
@@ -326,21 +380,45 @@ export function crearClienteDemo() {
       const fn = rpcs[nombre];
       if (!fn) return err('Función desconocida: ' + nombre);
       try {
+        liberarVencidas();
         const res = fn(params);
+        guardar();
         return res && res.error !== undefined && res.data === null ? res : { data: res ?? null, error: null };
       } catch (e) { return err(e.message); }
     },
     auth,
-    // Mercado Pago simulado: el pago se aprueba al instante
+    // Mercado Pago simulado: lleva a la pantalla "simulador-pago.html"
     functions: {
       async invoke(nombre, { body }) {
         await new Promise((r) => setTimeout(r, 400));
+        liberarVencidas();
         const r = db.reservas.find((x) => x.id === body.reserva_id && x.token_pago === body.token);
         if (nombre !== 'mp-crear-pago' || !r) return { data: null, error: { message: 'NO_ENCONTRADO', hint: 'No encontramos esa reserva' } };
-        const falta = sena(r.precio_total) - pagado(r.id);
-        if (falta > 0) rpcs.registrar_pago({ p_monto: falta, p_medio: 'mercadopago', p_reserva_id: r.id });
-        return { data: { demo: true }, error: null };
+        if (r.estado === 'confirmada') return { data: null, error: { message: 'YA_CONFIRMADA', hint: 'Esta reserva ya tiene la seña paga.' } };
+        if (r.estado !== 'pendiente') return { data: null, error: { message: 'RESERVA_NO_VIGENTE', hint: 'Se venció el tiempo para pagar y el horario se liberó. Hacé una reserva nueva.' } };
+        return { data: { url: `simulador-pago.html?reserva=${r.id}&t=${r.token_pago}` }, error: null };
       },
+    },
+    // Herramientas del simulador
+    demo: {
+      // Lo que pasa cuando Mercado Pago aprueba el pago
+      pagoAprobado(reservaId, token) {
+        const r = db.reservas.find((x) => x.id === reservaId && x.token_pago === token);
+        if (!r) return 'NO_ENCONTRADO';
+        const monto = Math.max(1, sena(r.precio_total) - pagado(r.id));
+        const res = registrarPagoMP(reservaId, String(Date.now()), monto);
+        guardar();
+        return res;
+      },
+      // Adelanta el reloj: lo que vencía en ese tiempo, vence
+      adelantar(minutos) {
+        const ms = minutos * 60000;
+        for (const r of db.reservas) if (r.estado === 'pendiente' && r.expira_en) r.expira_en = new Date(new Date(r.expira_en).getTime() - ms).toISOString();
+        for (const f of db.fijos) if (f.estado === 'solicitud' && f.expira_en) f.expira_en = new Date(new Date(f.expira_en).getTime() - ms).toISOString();
+        liberarVencidas();
+        guardar();
+      },
+      reiniciar() { try { localStorage.removeItem(CLAVE_GUARDADO); } catch { /* nada */ } },
     },
   };
 }
