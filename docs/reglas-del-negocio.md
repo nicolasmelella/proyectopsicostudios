@@ -36,7 +36,7 @@ Los precios y horarios se cambian desde el panel → **Precios y ajustes**.
 - Con Mercado Pago la reserva se confirma sola. Por transferencia, el equipo registra la seña en el panel.
 - Pagos tardíos o de más quedan en el panel como **"Pagos de Mercado Pago a revisar"**.
 
-## 4. Saldo (el 50% restante) 🕓 PENDIENTE — reglas decididas
+## 4. Saldo (el 50% restante) 🕓 PENDIENTE — todas las reglas decididas
 
 > Definido por el equipo, **todavía no programado**. Hoy la web dice que el saldo
 > "se abona el día de cada turno": cuando se programe, hay que cambiar ese texto.
@@ -58,16 +58,15 @@ Los precios y horarios se cambian desde el panel → **Precios y ajustes**.
 - Miércoles 11/11 hasta las 22:00: plazo para pagarlo.
 - Miércoles 11/11 después de las 22:00, sin pago: el panel la marca "saldo vencido" y el equipo decide.
 
-**Falta decidir (ver ejemplo):** en un **pedido de varios días**, ¿el saldo se maneja **por cada día** o **todo junto**?
+7. **Pedidos de varios días: el saldo se maneja por cada día** (decidido). Cada día tiene su propio recordatorio,
+   su propio plazo y su propio saldo. Si no se paga el de un día, solo ese día queda con "saldo vencido"; los demás
+   siguen en pie.
 
-> Pedido: lunes 16/11 (Consultorio 1, 2 horas, $17.000) + jueves 19/11 (Consultorio 3, 1 hora, $9.000).
-> Seña pagada al reservar: $13.000. Saldo: $8.500 del lunes + $4.500 del jueves.
->
-> - **Opción A, por cada día (recomendada):** sábado 14/11 llega el aviso por el saldo del lunes ($8.500, hasta el
->   domingo 15/11 a las 22:00). Martes 17/11 llega el aviso por el saldo del jueves ($4.500, hasta el miércoles 18/11
->   a las 22:00). Si no paga el lunes, se cancela solo el lunes; el jueves sigue en pie.
-> - **Opción B, todo junto:** sábado 14/11 llega un solo aviso por todo el saldo ($13.000, hasta el domingo a las 22:00).
->   Si no paga, se cancelan los dos días, aunque el jueves faltara casi una semana.
+> Ejemplo: pedido con lunes 16/11 (Consultorio 1, 2 horas, $17.000) + jueves 19/11 (Consultorio 3, 1 hora, $9.000).
+> Seña pagada al reservar: $13.000.
+> - Sábado 14/11: aviso por el saldo del lunes ($8.500), hasta el domingo 15/11 a las 22:00.
+> - Martes 17/11: aviso por el saldo del jueves ($4.500), hasta el miércoles 18/11 a las 22:00.
+> - Si no paga el del lunes, solo el lunes queda con "saldo vencido"; el jueves sigue en pie.
 
 **Qué habría que programar (referencia técnica):**
 - Base: plazo de saldo por reserva y una tarea automática que cada día marque los recordatorios a enviar y, a las
