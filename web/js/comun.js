@@ -17,26 +17,31 @@ export async function crearCliente({ sesionTemporal = false } = {}) {
     const cliente = crearClienteDemo();
     const enPanel = /panel(\.html)?$/.test(location.pathname);
     document.body.insertAdjacentHTML('afterbegin', `
-      <div class="demo-banda" role="region" aria-label="Herramientas del simulador">
-        <span><strong>SIMULADOR</strong> · datos de prueba, nada es real</span>
-        <span class="demo-acciones">
-          <a href="${enPanel ? 'index.html' : 'panel.html'}">${enPanel ? '→ Ver la web (profesionales)' : '→ Ver el panel (equipo)'}</a>
-          <button type="button" data-demo="adelantar">⏩ Adelantar el reloj 2 horas</button>
-          <button type="button" data-demo="reiniciar">↺ Borrar mis pruebas</button>
-          <button type="button" data-demo="ayuda" aria-expanded="false">¿Qué es esto?</button>
-        </span>
-        <span class="demo-explica" hidden>
-          <strong>Adelantar el reloj 2 horas:</strong> las reservas que no pagan la seña se liberan solas a las 2 horas.
-          Este botón simula que ya pasó ese tiempo, para que veas qué pasa sin esperar.<br>
-          <strong>Borrar mis pruebas:</strong> borra todas las reservas y pagos que hiciste en el simulador y vuelve a los datos de ejemplo.
-        </span>
-        <span class="demo-aviso" role="status"></span>
+      <div class="demo-banda" role="region" aria-label="Simulador">
+        <div class="demo-linea">
+          <span><strong>SIMULADOR</strong> · datos de prueba</span>
+          <button type="button" class="demo-btn" data-demo="menu" aria-expanded="false" aria-controls="demo-panel">Herramientas ▾</button>
+        </div>
+        <div class="demo-panel" id="demo-panel" hidden>
+          <p class="demo-nota">Esta barra existe solo en el simulador: en la web real no aparece.</p>
+          <a class="demo-opcion" href="${enPanel ? 'index.html' : 'panel.html'}">
+            <strong>${enPanel ? '→ Ver la web' : '→ Ver el panel del equipo'}</strong>
+            <small>${enPanel ? 'Lo que ven los profesionales al reservar.' : 'Lo que ve el equipo, con las reservas que hiciste acá.'}</small></a>
+          <button type="button" class="demo-opcion" data-demo="adelantar">
+            <strong>⏩ Adelantar el reloj 2 horas</strong>
+            <small>Las reservas sin seña se liberan solas a las 2 horas. Esto simula que ya pasó ese tiempo.</small></button>
+          <button type="button" class="demo-opcion" data-demo="reiniciar">
+            <strong>↺ Borrar mis pruebas</strong>
+            <small>Borra lo que reservaste y pagaste acá y vuelve a los datos de ejemplo.</small></button>
+        </div>
+        <div class="demo-aviso" role="status"></div>
       </div>`);
-    const ayuda = document.querySelector('[data-demo="ayuda"]');
-    ayuda.onclick = () => {
-      const exp = document.querySelector('.demo-explica');
-      exp.hidden = !exp.hidden;
-      ayuda.setAttribute('aria-expanded', !exp.hidden);
+    const menu = document.querySelector('[data-demo="menu"]');
+    menu.onclick = () => {
+      const panel = document.getElementById('demo-panel');
+      panel.hidden = !panel.hidden;
+      menu.setAttribute('aria-expanded', !panel.hidden);
+      menu.textContent = panel.hidden ? 'Herramientas ▾' : 'Cerrar ▴';
     };
     try {
       const aviso = sessionStorage.getItem('psicostudios-demo-aviso');

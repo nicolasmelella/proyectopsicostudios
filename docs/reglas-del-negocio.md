@@ -36,47 +36,59 @@ Los precios y horarios se cambian desde el panel → **Precios y ajustes**.
 - Con Mercado Pago la reserva se confirma sola. Por transferencia, el equipo registra la seña en el panel.
 - Pagos tardíos o de más quedan en el panel como **"Pagos de Mercado Pago a revisar"**.
 
-## 4. Saldo (el 50% restante) 🕓 PENDIENTE
+## 4. Saldo (el 50% restante) 🕓 PENDIENTE — reglas decididas
 
-> Regla definida por el equipo, **todavía no programada**. Hoy la web dice que el saldo
-> "se abona el día de cada turno": cuando se programe esta regla, hay que cambiar ese texto.
+> Definido por el equipo, **todavía no programado**. Hoy la web dice que el saldo
+> "se abona el día de cada turno": cuando se programe, hay que cambiar ese texto.
 
-**Regla:**
-1. **Recordatorio 2 días antes** de cada fecha reservada: se le avisa a la persona que tiene que
-   pagar el **50% restante**.
-2. En ese mismo aviso se informa que, **si no paga el saldo hasta 1 día antes**, la reserva
-   **se cancela y la seña no se devuelve**.
-3. Si llega el plazo sin el pago completo: se cancela la reserva, se libera el horario y la seña queda
-   para Psico Studios.
+**Reglas decididas:**
+1. **Recordatorio 2 días antes** de la fecha reservada, **por mail y por WhatsApp automático**: hay que pagar el
+   **50% restante**.
+2. El aviso informa que, si el saldo **no se paga hasta las 22:00 del día anterior**, la reserva **se cancela y
+   la seña no se devuelve**.
+3. Pasado ese horario sin el pago completo, el panel marca la reserva como **"saldo vencido"** y **el equipo decide**
+   si la cancela (botón "Cancelar sin devolución") o hace una excepción. No se cancela sola.
+4. **Reservas hechas con menos de 2 días de anticipación:** se cobra el **100% al reservar** (no hay seña + saldo).
+5. **El saldo se paga por Mercado Pago o por transferencia.**
+6. **La condición se acepta al reservar:** la casilla "Entiendo que…" suma "si no pago el saldo hasta las 22:00 del día
+   anterior, la reserva se cancela sin devolución de la seña".
 
 **Ejemplo:** reserva para el jueves 12/11.
-- Martes 10/11: llega el recordatorio para pagar el saldo.
-- Hasta el miércoles 11/11: plazo para pagarlo.
-- Si el jueves no está pagado: la reserva se cancela, sin devolución de la seña.
+- Martes 10/11: llega el recordatorio (mail + WhatsApp) para pagar el saldo.
+- Miércoles 11/11 hasta las 22:00: plazo para pagarlo.
+- Miércoles 11/11 después de las 22:00, sin pago: el panel la marca "saldo vencido" y el equipo decide.
 
-**A definir antes de programarlo:**
-- [ ] **Por dónde se avisa:** mail (ya pedimos el mail), WhatsApp automático (tiene costo por mensaje, vía la API de WhatsApp Business)
-      o una lista diaria en el panel para que el equipo mande el WhatsApp a mano.
-- [ ] **Hora exacta del corte:** "1 día antes" ¿hasta qué hora? (ej: 20:00 del día anterior).
-- [ ] **Reservas hechas con menos de 2 días de anticipación:** ¿se pide el 100% al reservar, o el
-      recordatorio sale enseguida?
-- [ ] **Pedidos de varios días:** ¿un recordatorio por cada día (2 días antes de cada uno)? Propuesta: sí,
-      y el saldo se paga día por día.
-- [ ] **¿Se cancela solo o lo decide el equipo?** Propuesta: el panel muestra "saldo vencido" y el equipo cancela
-      con un botón, para poder hacer excepciones.
-- [ ] **Cómo se paga el saldo:** link de Mercado Pago (como la seña) y/o transferencia.
-- [ ] **Texto legal:** sumar esta condición en la web, en el momento de reservar, para que la persona la acepte
-      antes de pagar la seña (hoy acepta solo la regla de las 2 horas).
+**Falta decidir (ver ejemplo):** en un **pedido de varios días**, ¿el saldo se maneja **por cada día** o **todo junto**?
+
+> Pedido: lunes 16/11 (Consultorio 1, 2 horas, $17.000) + jueves 19/11 (Consultorio 3, 1 hora, $9.000).
+> Seña pagada al reservar: $13.000. Saldo: $8.500 del lunes + $4.500 del jueves.
+>
+> - **Opción A, por cada día (recomendada):** sábado 14/11 llega el aviso por el saldo del lunes ($8.500, hasta el
+>   domingo 15/11 a las 22:00). Martes 17/11 llega el aviso por el saldo del jueves ($4.500, hasta el miércoles 18/11
+>   a las 22:00). Si no paga el lunes, se cancela solo el lunes; el jueves sigue en pie.
+> - **Opción B, todo junto:** sábado 14/11 llega un solo aviso por todo el saldo ($13.000, hasta el domingo a las 22:00).
+>   Si no paga, se cancelan los dos días, aunque el jueves faltara casi una semana.
 
 **Qué habría que programar (referencia técnica):**
-- Base: un plazo de saldo por reserva y una tarea automática diaria (como las de `02_tareas_automaticas.sql`)
-  que marque los recordatorios a enviar y las reservas con saldo vencido.
-- Envío: mail (con un servicio como Resend) o WhatsApp Business, desde una función del servidor.
-- Web: cambiar el texto del saldo y sumar la condición a la casilla "Entiendo que…".
-- Mercado Pago: permitir pagar el saldo con el mismo mecanismo que la seña.
-- Panel: lista "Saldos por vencer / vencidos" y botón de cancelar sin devolución.
+- Base: plazo de saldo por reserva y una tarea automática que cada día marque los recordatorios a enviar y, a las
+  22:00, las reservas con "saldo vencido".
+- Envío: mail (servicio como Resend) y WhatsApp automático (API oficial de WhatsApp Business de Meta: tiene costo
+  por mensaje y la plantilla del mensaje la tiene que aprobar Meta).
+- Web: cobrar el 100% si faltan menos de 2 días, cambiar el texto del saldo y sumar la condición a la casilla.
+- Mercado Pago: pagar el saldo con el mismo mecanismo que la seña (link en el recordatorio).
+- Panel: lista "Saldos por vencer / vencidos" y botón "Cancelar sin devolución".
 
-## 5. Datos de cobro y seguridad ✅
+## 5. Subir el comprobante de pago 🕓 PENDIENTE
+
+Para quien paga **por transferencia** (la seña o el saldo): en vez de mandar la captura por WhatsApp, la sube en la web.
+
+- Después de reservar (y desde el link del recordatorio) aparece **"Subir comprobante"**: foto o PDF del pago.
+- En el panel aparece **"Comprobantes para revisar"** con la imagen; el equipo la mira y toca **"Registrar pago"**.
+- Seguridad: los comprobantes se guardan en un espacio **privado** de Supabase. Solo se pueden subir con el código
+  secreto del pedido, y solo el equipo los puede ver. Máximo 5 MB, solo imágenes o PDF.
+- Mercado Pago no lo necesita: ahí la confirmación es automática.
+
+## 6. Datos de cobro y seguridad ✅
 
 - Alias, CVU, titular y WhatsApp **solo se cambian desde Supabase** (ver README, paso 7): ni con la
   contraseña del panel se pueden modificar.

@@ -157,6 +157,16 @@
     @keyframes resaltar { 0%, 60% { background: #f6dccd; } 100% { background: transparent; } }
     @media (prefers-reduced-motion: reduce) { .col-resaltada { animation: none; background: #f6dccd; } }
 
+    /* Cómo reservar en 3 pasos */
+    .como-funciona { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .como-funciona li { display: flex; gap: 10px; align-items: flex-start; background: var(--crema-claro); border: 1px solid var(--borde);
+                        border-radius: 12px; padding: 10px 12px; }
+    .como-funciona strong { display: block; font-size: .92rem; }
+    .como-funciona small { display: block; color: var(--texto-suave); font-size: .8rem; line-height: 1.35; }
+    .cf-num { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--azul); color: var(--crema);
+              display: grid; place-items: center; font-weight: 800; font-size: .85rem; }
+    @media (max-width: 640px) { .como-funciona { grid-template-columns: 1fr; gap: 6px; } .como-funciona li { padding: 8px 12px; } }
+
     .btn-mp { background: #007eb5; color: #fff; }
     .btn-mp:hover:not(:disabled) { background: #006a99; }
     .otra-forma { margin-top: 1em; text-align: left; }
@@ -176,6 +186,12 @@
   </header>
 
   <main class="contenedor">
+    <ol class="como-funciona" aria-label="Cómo reservar">
+      <li><span class="cf-num">1</span><span><strong>Elegí días y horarios</strong><small>Uno o varios días, en el consultorio que quieras.</small></span></li>
+      <li><span class="cf-num">2</span><span><strong>Dejá tus datos</strong><small>Nombre, profesión, celular y mail.</small></span></li>
+      <li><span class="cf-num">3</span><span><strong>Pagá la seña</strong><small>El <span data-cfg="porcentaje_sena">50</span>% con Mercado Pago o transferencia, y listo.</small></span></li>
+    </ol>
+
     <div class="modos" role="tablist" aria-label="Tipo de reserva">
       <button role="tab" id="tab-suelta" aria-selected="true" aria-controls="vista-suelta">Por horas</button>
       <button role="tab" id="tab-fijo" aria-selected="false" aria-controls="vista-fijo">Horario fijo semanal</button>
