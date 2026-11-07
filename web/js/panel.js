@@ -427,101 +427,161 @@ async function pintarSemana() {
 }
 
 // ================================================================ NÚMEROS (tablero)
-$('#nu-periodo').onchange = () => pintarNumeros();
 const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const pct = (n) => `${Math.round(n * 100)}%`;
-const finDeMes = (ini) => sumarDias(sumarDias(ini, 32).slice(0, 7) + '-01', -1);
+const finDeMes = (ini) => sumarDias(sumarDias(ini.slice(0, 8) + '01', 32).slice(0, 7) + '-01', -1);
+const may = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
+// Períodos: semana (lunes a sábado), quincena (1 al 15 / 16 a fin de mes) o mes
+function periodoDe(fecha, tipo) {
+  if (tipo === 'semana') { const l = sumarDias(fecha, 1 - diaSemana(fecha)); return { tipo, ini: l, fin: sumarDias(l, 5) }; }  // lunes de esa misma semana
+  const mes = fecha.slice(0, 8);
+  if (tipo === 'quincena') return Number(fecha.slice(8)) <= 15 ? { tipo, ini: mes + '01', fin: mes + '15' } : { tipo, ini: mes + '16', fin: finDeMes(fecha) };
+  return { tipo, ini: mes + '01', fin: finDeMes(fecha) };
+}
+const periodoAnterior = (p) => periodoDe(sumarDias(p.ini, -1), p.tipo);
+const periodoSiguiente = (p) => periodoDe(sumarDias(p.fin, p.tipo === 'semana' ? 2 : 1), p.tipo);
+function nombrePeriodo(p, corto = false) {
+  const mes = MESES_LARGOS[Number(p.ini.slice(5, 7)) - 1];
+  const anio = p.ini.slice(0, 4);
+  if (p.tipo === 'semana') return corto ? fechaCorta(p.ini) : `Semana del ${fechaCorta(p.ini)} al ${fechaCorta(p.fin)}`;
+  if (p.tipo === 'quincena') {
+    const q = p.ini.endsWith('-01') ? '1ª' : '2ª';
+    return corto ? `${q} ${mes.slice(0, 3)}` : `${q} quincena de ${mes} ${anio}`;
+  }
+  return corto ? may(mes.slice(0, 3)) : `${may(mes)} ${anio}`;
+}
+// Horas posibles en un período (lunes a sábado)
+function capacidad(p) {
+  const nCons = st.consultorios.filter((c) => c.activo).length;
+  const horasDia = Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8);
+  let dias = 0;
+  for (let d = p.ini; d <= p.fin; d = sumarDias(d, 1)) if (diaSemana(d) !== 7) dias++;
+  return dias * nCons * horasDia;
+}
+
+const nu = { tipo: 'mes', sel: null, comp: 'anterior' };
+try { nu.tipo = localStorage.getItem('psico-nu-tipo') || 'mes'; } catch { /* nada */ }
+$$('[data-gran]').forEach((b) => (b.onclick = () => {
+  nu.tipo = b.dataset.gran;
+  try { localStorage.setItem('psico-nu-tipo', nu.tipo); } catch { /* nada */ }
+  nu.sel = null; nu.comp = 'anterior';
+  pintarNumeros();
+}));
+$('#nu-ant').onclick = () => { nu.sel = periodoAnterior(nu.sel); nu.comp = 'anterior'; pintarNumeros(); };
+$('#nu-sig').onclick = () => { nu.sel = periodoSiguiente(nu.sel); nu.comp = 'anterior'; pintarNumeros(); };
+$('#nu-hoy').onclick = () => { nu.sel = null; nu.comp = 'anterior'; pintarNumeros(); };
+$('#nu-comp').onchange = (e) => { nu.comp = e.target.value; pintarNumeros(); };
 
 async function pintarNumeros() {
   const hoy = hoyAR();
-  const lunesHoy = lunesDe(hoy);
-  const nCons = st.consultorios.filter((c) => c.activo).length;
-  const horasDia = Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8);
-  const capDia = nCons * horasDia;          // horas posibles en un día
-  const capSemana = capDia * 6;              // lunes a sábado
-  const per = $('#nu-periodo').value;
-  const desde = per === 'anio' ? lunesDe(hoy.slice(0, 4) + '-01-01') : sumarDias(lunesHoy, -7 * (Number(per) - 1));
-  const hasta = sumarDias(lunesHoy, 5);
-  const mesIni = hoy.slice(0, 8) + '01';
-  const mesAntIni = sumarDias(mesIni, -1).slice(0, 8) + '01';
-  const nombreMes = (f) => MESES_LARGOS[Number(f.slice(5, 7)) - 1];
-  let T, M, MA, P;
+  if (!nu.sel || nu.sel.tipo !== nu.tipo) nu.sel = periodoDe(hoy, nu.tipo);
+  const sel = nu.sel;
+  $$('[data-gran]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.gran === nu.tipo));
+  $('#nu-titulo').textContent = nombrePeriodo(sel);
+
+  // Opciones para comparar: el anterior y los 24 de antes
+  const previos = [];
+  for (let p = periodoAnterior(sel), i = 0; i < 24; p = periodoAnterior(p), i++) previos.push(p);
+  $('#nu-comp').innerHTML = previos.map((p, i) => `<option value="${p.ini}" ${(nu.comp === 'anterior' ? i === 0 : nu.comp === p.ini) ? 'selected' : ''}>${i === 0 ? 'el período anterior · ' : ''}${nombrePeriodo(p)}</option>`).join('');
+  const comp = previos.find((p) => p.ini === (nu.comp === 'anterior' ? previos[0].ini : nu.comp)) || previos[0];
+
+  // Evolución: los 12 períodos que terminan en el elegido
+  const evo = [sel];
+  while (evo.length < 12) evo.unshift(periodoAnterior(evo[0]));
+  const enCurso = sel.ini <= hoy && hoy <= sel.fin;
+  const futuro = sel.ini > hoy;
+  $('#nu-aviso').classList.toggle('oculto', !enCurso && !futuro);
+  $('#nu-aviso').textContent = futuro ? 'Período que todavía no empezó: muestra lo que ya está reservado.'
+    : enCurso ? `Período en curso: cuenta lo que ya pasó y lo que ya está reservado hasta el ${fechaCorta(sel.fin)}.` : '';
+
+  let S, C, E, P;
   try {
-    [T, M, MA, P] = await Promise.all([
-      llamar('tablero', { p_desde: desde, p_hasta: hasta }),
-      llamar('tablero', { p_desde: mesIni, p_hasta: finDeMes(mesIni) }),
-      llamar('tablero', { p_desde: mesAntIni, p_hasta: finDeMes(mesAntIni) }),
+    [S, C, E, P] = await Promise.all([
+      llamar('tablero', { p_desde: sel.ini, p_hasta: sel.fin }),
+      llamar('tablero', { p_desde: comp.ini, p_hasta: comp.fin }),
+      llamar('tablero', { p_desde: evo[0].ini, p_hasta: sel.fin }),
       llamar('pendientes_cobro', {}),
     ]);
   } catch (err) { $('#nu-kpis').innerHTML = ''; errorEn(null, err); return; }
 
-  // ---- números grandes ----
-  const horasSem = (l) => T.por_semana.find((x) => x.lunes === l)?.horas || 0;
-  const ocAct = horasSem(lunesHoy) / capSemana;
-  const ocAnt = horasSem(sumarDias(lunesHoy, -7)) / capSemana;
-  const dif = Math.round((ocAct - ocAnt) * 100);
-  const difMes = MA.horas ? Math.round(((M.horas - MA.horas) / MA.horas) * 100) : null;
-  const flecha = (n, txt) => (n > 0 ? `<span class="sube">▲ ${txt}</span>` : n < 0 ? `<span class="baja">▼ ${txt}</span>` : 'igual');
+  // ---- números grandes: elegido vs. comparación ----
+  const ocS = S.horas / capacidad(sel), ocC = C.horas / capacidad(comp);
+  const flecha = (n, txt) => (n > 0 ? `<span class="sube">▲ ${txt}</span>` : n < 0 ? `<span class="baja">▼ ${txt}</span>` : '<span>= igual</span>');
+  const varPct = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null);
+  const vs = `vs. ${nombrePeriodo(comp)}`;
+  const difH = varPct(S.horas, C.horas), difCob = varPct(S.cobrado, C.cobrado), difP = S.n_profesionales - C.n_profesionales;
+  const difOc = Math.round((ocS - ocC) * 100);
   $('#nu-kpis').innerHTML = `
-    <div class="kpi"><div class="t">Ocupación de esta semana</div><div class="v">${pct(ocAct)}</div>
-      <div class="d">${horasSem(lunesHoy)} de ${capSemana} horas · ${flecha(dif, Math.abs(dif) + ' puntos')} vs. la semana pasada (${pct(ocAnt)})</div></div>
-    <div class="kpi"><div class="t">Horas reservadas en ${nombreMes(mesIni)}</div><div class="v">${M.horas.toLocaleString('es-AR')}</div>
-      <div class="d">${difMes === null ? '' : flecha(difMes, Math.abs(difMes) + '%') + ` vs. ${nombreMes(mesAntIni)} (${MA.horas.toLocaleString('es-AR')})`}</div></div>
-    <div class="kpi"><div class="t">Cobrado en ${nombreMes(mesIni)}</div><div class="v">${pesos(M.cobrado)}</div>
-      <div class="d">${M.cobros_por_persona.length ? M.cobros_por_persona.map((x) => `${esc(x.recibio)} <strong>${pesos(x.monto)}</strong>`).join(' · ') : 'Todavía no hay pagos cargados este mes.'}</div></div>
-    <div class="kpi"><div class="t">Falta cobrar</div><div class="v">${pesos(P.total)}</div>
+    <div class="kpi"><div class="t">Ocupación</div><div class="v">${pct(ocS)}</div>
+      <div class="d">${flecha(difOc, Math.abs(difOc) + ' puntos')} ${vs} (${pct(ocC)})</div></div>
+    <div class="kpi"><div class="t">Horas usadas</div><div class="v">${S.horas.toLocaleString('es-AR')}</div>
+      <div class="d">${difH === null ? '' : flecha(difH, Math.abs(difH) + '%')} ${vs} (${C.horas.toLocaleString('es-AR')})</div></div>
+    <div class="kpi"><div class="t">Profesionales que vinieron</div><div class="v">${S.n_profesionales}</div>
+      <div class="d">${flecha(difP, Math.abs(difP))} ${vs} (${C.n_profesionales})</div></div>
+    <div class="kpi"><div class="t">Cobrado</div><div class="v">${pesos(S.cobrado)}</div>
+      <div class="d">${S.cobros_por_persona.length ? S.cobros_por_persona.map((x) => `${esc(x.recibio)} <strong>${pesos(x.monto)}</strong>`).join(' · ') : 'Sin pagos cargados en el período.'}
+        ${difCob === null ? '' : `<br>${flecha(difCob, Math.abs(difCob) + '%')} ${vs}`}</div></div>
+    <div class="kpi"><div class="t">Falta cobrar (hoy)</div><div class="v">${pesos(P.total)}</div>
       <div class="d">${P.items.length} ${P.items.length === 1 ? 'pendiente' : 'pendientes'} (lista abajo)</div></div>`;
 
-  // ---- ocupación por semana ----
-  const semanas = [];
-  for (let l = lunesDe(desde); l <= lunesHoy; l = sumarDias(l, 7)) semanas.push(l);
-  const maxSem = Math.max(...semanas.map(horasSem), 1);
-  const mejor = semanas.reduce((a, l) => (horasSem(l) > horasSem(a) ? l : a), semanas[0]);
-  $('#nu-semanas').innerHTML = `<div class="barras-v">${semanas.map((l) => {
-    const h = horasSem(l);
-    const etiqueta = l === lunesHoy || l === mejor ? `<span class="val" style="bottom:${(h / maxSem) * 100}%">${pct(h / capSemana)}</span>` : '';
-    return `<div class="col ${l === lunesHoy ? 'actual' : ''}" title="Semana del ${fechaCorta(l)}: ${h} horas (${pct(h / capSemana)})">
-      ${etiqueta}<div class="bar" style="height:${(h / maxSem) * 100}%"></div></div>`;
-  }).join('')}</div>
-  <div class="ejes-v">${semanas.map((l, i) => `<span>${semanas.length <= 14 || i % Math.ceil(semanas.length / 12) === 0 ? fechaCorta(l) : ''}</span>`).join('')}</div>
-  <p class="suave chico" style="margin:.6em 0 0">En naranja, esta semana. Pasá el mouse por una barra para ver el detalle. Mejor semana: ${fechaCorta(mejor)} (${pct(horasSem(mejor) / capSemana)}).</p>`;
+  // ---- evolución ----
+  const horasDe = (p) => E.por_fecha.filter((x) => x.fecha >= p.ini && x.fecha <= p.fin).reduce((s, x) => s + x.horas, 0);
+  const valores = evo.map((p) => ({ p, oc: horasDe(p) / capacidad(p), h: horasDe(p) }));
+  const compH = { p: comp, oc: ocC, h: C.horas };
+  const enEvo = valores.some((v) => v.p.ini === comp.ini);
+  const max = Math.max(...valores.map((v) => v.oc), ocC, 0.01);
+  $('#nu-evo-titulo').textContent = `Ocupación por ${nu.tipo === 'mes' ? 'mes' : nu.tipo === 'quincena' ? 'quincena' : 'semana'}`;
+  const barra = (v, clase) => `<div class="col ${clase}" data-ir="${v.p.ini}" title="${nombrePeriodo(v.p)}: ${v.h} horas (${pct(v.oc)})">
+      ${clase ? `<span class="val" style="bottom:${(v.oc / max) * 100}%">${pct(v.oc)}</span>` : ''}<div class="bar" style="height:${(v.oc / max) * 100}%"></div></div>`;
+  $('#nu-evo').innerHTML = `
+    <div class="ley"><span style="--c:var(--terracota)">${esc(nombrePeriodo(sel))}</span><span style="--c:var(--azul)">${esc(nombrePeriodo(comp))} (comparación)</span><span style="--c:var(--celeste)">Otros</span></div>
+    <div class="barras-v">${!enEvo ? barra(compH, 'comp') + '<div style="width:10px"></div>' : ''}${valores.map((v) => barra(v, v.p.ini === sel.ini ? 'actual' : v.p.ini === comp.ini ? 'comp' : '')).join('')}</div>
+    <div class="ejes-v">${!enEvo ? `<span>${esc(nombrePeriodo(comp, true))}</span><span style="flex:0 0 10px"></span>` : ''}${valores.map((v) => `<span>${esc(nombrePeriodo(v.p, true))}</span>`).join('')}</div>`;
+  $$('#nu-evo [data-ir]').forEach((c) => (c.onclick = () => { nu.sel = periodoDe(c.dataset.ir, nu.tipo); nu.comp = 'anterior'; pintarNumeros(); }));
 
-  // ---- días ----
-  const cuantos = (dia) => { let n = 0; for (let d = desde; d <= hasta; d = sumarDias(d, 1)) if (diaSemana(d) === dia) n++; return n; };
-  const dias = [1, 2, 3, 4, 5, 6].map((dia) => ({ dia, oc: (T.por_dia.find((x) => x.dia === dia)?.horas || 0) / (cuantos(dia) * capDia || 1) }));
-  const maxDia = Math.max(...dias.map((x) => x.oc), 0.01);
-  $('#nu-dias').innerHTML = `<div class="barras-h">${dias.map((x) => `
-    <span class="et">${DIAS[x.dia]}</span><div class="pista" title="${DIAS[x.dia]}: ${pct(x.oc)} ocupado en promedio"><div class="bar" style="width:${(x.oc / maxDia) * 100}%"></div></div>
-    <span class="num"><strong>${pct(x.oc)}</strong></span>`).join('')}</div>`;
+  // ---- días: elegido vs. comparación ----
+  const capDia = st.consultorios.filter((c) => c.activo).length * (Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8));
+  const cuantos = (p, dia) => { let n = 0; for (let d = p.ini; d <= p.fin; d = sumarDias(d, 1)) if (diaSemana(d) === dia) n++; return n; };
+  const ocDia = (T, p, dia) => (T.por_dia.find((x) => x.dia === dia)?.horas || 0) / ((cuantos(p, dia) * capDia) || 1);
+  const dias = [1, 2, 3, 4, 5, 6].map((dia) => ({ dia, s: ocDia(S, sel, dia), c: ocDia(C, comp, dia) }));
+  const maxD = Math.max(...dias.flatMap((x) => [x.s, x.c]), 0.01);
+  $('#nu-dias').innerHTML = `<div class="ley"><span style="--c:var(--azul)">${esc(nombrePeriodo(sel))}</span><span style="--c:#b9c3d6">${esc(nombrePeriodo(comp))}</span></div>
+    <div class="barras-h">${dias.map((x) => `
+    <span class="et">${DIAS[x.dia]}</span>
+    <div class="dos" title="${DIAS[x.dia]}: ${pct(x.s)} (${nombrePeriodo(sel)}) · ${pct(x.c)} (${nombrePeriodo(comp)})">
+      <div class="pista"><div class="bar" style="width:${(x.s / maxD) * 100}%"></div></div>
+      <div class="bar c" style="width:${(x.c / maxD) * 100}%"></div></div>
+    <span class="num"><strong>${pct(x.s)}</strong> ${Math.round((x.s - x.c) * 100) > 0 ? `<span class="sube">▲${Math.round((x.s - x.c) * 100)}</span>` : Math.round((x.s - x.c) * 100) < 0 ? `<span class="baja">▼${Math.round((x.c - x.s) * 100)}</span>` : ''}</span>`).join('')}</div>
+    <p class="suave chico" style="margin:.6em 0 0">▲▼ = puntos de diferencia con la comparación.</p>`;
 
-  // ---- mapa de calor ----
-  const calor = new Map(T.calor.map((x) => [`${x.dia}|${x.hora}`, x.horas]));
-  const horas = horasDelDia();
+  // ---- mapa de calor (período elegido) ----
+  const nCons = st.consultorios.filter((c) => c.activo).length;
+  const calor = new Map(S.calor.map((x) => [`${x.dia}|${x.hora}`, x.horas]));
   $('#nu-calor').innerHTML = `<table class="calor"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map((d) => `<th>${DIAS_CORTOS[d]}</th>`).join('')}</tr></thead><tbody>
-    ${horas.map((h) => `<tr><th>${h} hs</th>${[1, 2, 3, 4, 5, 6].map((d) => {
-      const v = (calor.get(`${d}|${h}`) || 0) / (cuantos(d) * nCons || 1);
+    ${horasDelDia().map((h) => `<tr><th>${h} hs</th>${[1, 2, 3, 4, 5, 6].map((d) => {
+      const v = (calor.get(`${d}|${h}`) || 0) / ((cuantos(sel, d) * nCons) || 1);
       return `<td class="${v > 0.55 ? 'osc' : ''}" style="background:rgba(18,39,90,${(0.06 + v * 0.94).toFixed(2)})" title="${DIAS[d]} ${h} hs: ${pct(v)} ocupado">${Math.round(v * 100)}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table>
-    <p class="suave chico" style="margin:.5em 0 0">Los números son el % de consultorios ocupados a esa hora.</p>`;
+    <p class="suave chico" style="margin:.5em 0 0">% de consultorios ocupados a esa hora · ${esc(nombrePeriodo(sel))}.</p>`;
 
-  // ---- ranking del mes ----
-  $('#nu-mes-rank').textContent = `· ${nombreMes(mesIni)}`;
-  const antes = new Map(MA.ranking.map((x) => [x.profesional_id, x.horas]));
-  const top = M.ranking.slice(0, 10);
+  // ---- ranking ----
+  const antes = new Map(C.ranking.map((x) => [x.profesional_id, x.horas]));
+  const top = S.ranking.slice(0, 10);
   const maxR = Math.max(...top.map((x) => x.horas), 1);
   $('#nu-ranking').innerHTML = top.length ? `<div class="barras-h">${top.map((x) => {
     const a = antes.get(x.profesional_id) || 0;
     const d = x.horas - a;
     return `<span class="et" title="${esc(x.nombre)}">${esc(x.nombre)}</span>
-      <div class="pista" title="${esc(x.nombre)}: ${x.horas} h (${x.horas_fijo} de fijo) · ${nombreMes(mesAntIni)}: ${a} h"><div class="bar" style="width:${(x.horas / maxR) * 100}%"></div></div>
+      <div class="pista" title="${esc(x.nombre)}: ${x.horas} h (${x.horas_fijo} de fijo) · ${nombrePeriodo(comp)}: ${a} h"><div class="bar" style="width:${(x.horas / maxR) * 100}%"></div></div>
       <span class="num"><strong>${x.horas} h</strong> ${d > 0 ? `<span class="sube">▲${d}</span>` : d < 0 ? `<span class="baja">▼${-d}</span>` : ''}</span>`;
-  }).join('')}</div><p class="suave chico" style="margin:.6em 0 0">▲▼ = diferencia con ${nombreMes(mesAntIni)}.</p>`
-    : '<p class="suave">Todavía no hay horas este mes.</p>';
+  }).join('')}</div><p class="suave chico" style="margin:.6em 0 0">${esc(nombrePeriodo(sel))} · ▲▼ = horas de diferencia con ${esc(nombrePeriodo(comp))}.</p>`
+    : '<p class="suave">No hay horas en este período.</p>';
 
   // ---- falta cobrar ----
   $('#nu-pendientes').innerHTML = P.items.length ? `<ul class="pend-lista">${P.items.map((x, i) => `<li ${i >= 8 ? 'class="oculto" data-mas' : ''}><button data-pend="${i}">
       <span><strong>${esc(x.nombre)}</strong><small>${x.tipo === 'fijo'
-        ? `Fijo de los ${DIAS[x.detalle.dia_semana].toLowerCase()} ${rangos(x.detalle.horas)} · mes de ${nombreMes(P.mes + '-01')}`
+        ? `Fijo de los ${DIAS[x.detalle.dia_semana].toLowerCase()} ${rangos(x.detalle.horas)} · mes de ${MESES_LARGOS[Number(P.mes.slice(5, 7)) - 1]}`
         : `${fechaLarga(x.detalle.fecha)} · ${rangos(x.detalle.horas)}`}</small></span>
       <strong>${pesos(x.falta)}</strong></button></li>`).join('')}</ul>
     ${P.items.length > 8 ? `<button class="btn btn-borde btn-chico" id="pend-mas" style="margin-top:8px">Ver los ${P.items.length - 8} restantes</button>` : ''}`

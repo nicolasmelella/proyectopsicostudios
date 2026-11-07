@@ -97,6 +97,9 @@ begin
   )
   select jsonb_build_object(
     'horas', (select count(*) from oc),
+    'n_profesionales', (select count(distinct prof) from oc where prof is not null),
+    'por_fecha', coalesce((select jsonb_agg(jsonb_build_object('fecha', fecha, 'horas', horas) order by fecha) from (
+        select fecha, count(*) as horas from oc group by 1) x), '[]'),
     'por_semana', coalesce((select jsonb_agg(jsonb_build_object('lunes', lunes, 'horas', horas) order by lunes) from (
         select (fecha - (extract(isodow from fecha)::int - 1))::date as lunes, count(*) as horas from oc group by 1) x), '[]'),
     'por_dia', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'horas', horas) order by dia) from (

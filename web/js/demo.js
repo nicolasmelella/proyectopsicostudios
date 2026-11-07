@@ -556,6 +556,8 @@ export function crearClienteDemo() {
         .map(([v, monto]) => ({ [k]: v, monto })).sort((a, b) => b.monto - a.monto);
       return {
         horas: oc.length,
+        n_profesionales: new Set(oc.filter((x) => x.prof).map((x) => x.prof)).size,
+        por_fecha: [...contar((x) => x.fecha)].map(([fecha, horas]) => ({ fecha, horas })).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)),
         por_semana: [...contar((x) => lunes(x.fecha))].map(([l, horas]) => ({ lunes: l, horas })).sort((a, b) => (a.lunes < b.lunes ? -1 : 1)),
         por_dia: [...contar((x) => diaSemana(x.fecha))].map(([dia, horas]) => ({ dia, horas })).sort((a, b) => a.dia - b.dia),
         calor: [...contar((x) => diaSemana(x.fecha) + '|' + x.hora)].map(([k, horas]) => ({ dia: Number(k.split('|')[0]), hora: Number(k.split('|')[1]), horas })),

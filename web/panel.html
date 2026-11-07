@@ -155,6 +155,24 @@
     .kpi .v { font-size: 2rem; font-weight: 800; color: var(--azul); line-height: 1.15; margin: .15em 0; }
     .kpi .d { font-size: .85rem; color: var(--texto-suave); }
     .kpi .sube { color: var(--ok); font-weight: 700; } .kpi .baja { color: var(--error); font-weight: 700; }
+    .nu-filtros { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
+    .nu-nav { display: flex; gap: 6px; align-items: center; }
+    .nu-nav strong { font-size: 1.1rem; min-width: 190px; text-align: center; }
+    .nu-comp { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+    .nu-comp select { width: auto; min-height: 40px; }
+    .ley { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82rem; margin-bottom: 8px; }
+    .ley span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+    .barras-v .col { cursor: pointer; }
+    .barras-v .col.comp .bar { background: var(--azul); }
+    .dos { display: grid; gap: 2px; }
+    .dos .bar.c { background: #b9c3d6; height: 8px; }
+    @media (max-width: 600px) {
+      .nu-comp { margin-left: 0; width: 100%; }
+      .nu-comp select { flex: 1; min-width: 0; max-width: 100%; }
+      .nu-nav { width: 100%; }
+      .nu-nav strong { min-width: 0; flex: 1; font-size: 1rem; }
+      .nu-grid { grid-template-columns: minmax(0, 1fr); }
+    }
     .nu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
     .nu-card { background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem 1.1rem; min-width: 0; }
     .nu-card h3 { margin: 0 0 .2em; }
@@ -292,30 +310,36 @@
 
       <!-- NÚMEROS (tablero) -->
       <section data-vista="numeros" class="oculto">
-        <div class="barra-herr">
+        <div class="nu-filtros">
           <h2 style="margin:0">Números</h2>
-          <div class="der">
-            <label for="nu-periodo" class="suave chico" style="align-self:center">Gráficos de</label>
-            <select id="nu-periodo" style="width:auto;min-height:40px">
-              <option value="12">las últimas 12 semanas</option>
-              <option value="4">las últimas 4 semanas</option>
-              <option value="26">los últimos 6 meses</option>
-              <option value="anio">todo el año</option>
-            </select>
+          <div class="zoom" role="group" aria-label="Ver por">
+            <span class="suave chico">Ver por:</span>
+            <button class="chip" data-gran="semana" aria-pressed="false">Semana</button>
+            <button class="chip" data-gran="quincena" aria-pressed="false">Quincena</button>
+            <button class="chip" data-gran="mes" aria-pressed="false">Mes</button>
+          </div>
+          <div class="nu-nav">
+            <button class="btn btn-borde btn-chico" id="nu-ant" aria-label="Período anterior">◀</button>
+            <strong id="nu-titulo"></strong>
+            <button class="btn btn-borde btn-chico" id="nu-sig" aria-label="Período siguiente">▶</button>
+            <button class="btn btn-borde btn-chico" id="nu-hoy">Actual</button>
+          </div>
+          <div class="nu-comp">
+            <label for="nu-comp" class="suave chico">Comparar con</label>
+            <select id="nu-comp"></select>
           </div>
         </div>
+        <p class="aviso aviso-info chico oculto" id="nu-aviso"></p>
         <div class="kpis" id="nu-kpis"><div class="cargando">Calculando…</div></div>
         <div class="nu-grid">
-          <article class="nu-card nu-ancha"><h3>Ocupación por semana</h3>
-            <p class="suave chico">Qué parte de las horas disponibles se usó cada semana (6 espacios × 13 horas × 6 días).</p>
-            <div id="nu-semanas"></div></article>
-          <article class="nu-card"><h3>Días con más ocupación</h3>
-            <p class="suave chico">Promedio del período elegido.</p><div id="nu-dias"></div></article>
+          <article class="nu-card nu-ancha"><h3 id="nu-evo-titulo">Ocupación</h3>
+            <p class="suave chico">Qué parte de las horas disponibles se usó (6 espacios × 13 horas, de lunes a sábado). Tocá una barra para verla.</p>
+            <div id="nu-evo"></div></article>
+          <article class="nu-card"><h3>Días con más ocupación</h3><div id="nu-dias"></div></article>
           <article class="nu-card"><h3>¿A qué hora se llena?</h3>
-            <p class="suave chico">Más oscuro = más lleno. Promedio del período elegido.</p><div id="nu-calor"></div></article>
-          <article class="nu-card"><h3>Profesionales con más horas <span class="suave chico" id="nu-mes-rank"></span></h3>
-            <div id="nu-ranking"></div></article>
-          <article class="nu-card"><h3>Falta cobrar</h3>
+            <p class="suave chico">Más oscuro = más lleno.</p><div id="nu-calor"></div></article>
+          <article class="nu-card"><h3>Profesionales con más horas</h3><div id="nu-ranking"></div></article>
+          <article class="nu-card"><h3>Falta cobrar <span class="suave chico">(hoy)</span></h3>
             <p class="suave chico">Turnos ya usados con saldo, y lo que falta del mes de cada fijo. Tocá para cobrar.</p>
             <div id="nu-pendientes"></div></article>
         </div>
