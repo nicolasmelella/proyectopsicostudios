@@ -9,12 +9,12 @@ const $ = (s) => document.querySelector(s);
 
 // Fotos (en img/consultorios). El número es el id del consultorio en la base.
 const FOTOS = {
-  1: { fotos: ['c1-a', 'c1-b'], texto: 'Escritorio y sillas, con luz natural. Aire acondicionado y calefacción.' },
-  2: { fotos: ['c2-a', 'c2-b'], texto: 'Sofá y sillones, ambiente cálido. Aire acondicionado y calefacción.' },
-  3: { fotos: ['c3-a', 'c3-b'], texto: 'Amplio, con sofá, sillones y ventanales.' },
-  4: { fotos: ['c4-a', 'c4-b'], texto: 'Sillones enfrentados y ventanales. Aire acondicionado y calefacción.' },
-  5: { fotos: ['c5-a', 'c5-b'], texto: 'Escritorio y sillones. Aire acondicionado y calefacción.' },
-  6: { fotos: ['c6-a', 'c6-b'], texto: 'Mesa redonda y escritorio: ideal para grupos, talleres o supervisiones.' },
+  1: { fotos: ['c1-a', 'c1-b'], texto: 'Con escritorio y sillas.' },
+  2: { fotos: ['c2-a', 'c2-b'], texto: 'Con sofá y sillones.' },
+  3: { fotos: ['c3-a', 'c3-b'], texto: 'Con sofá, sillones y ventanales.' },
+  4: { fotos: ['c4-a', 'c4-b'], texto: 'Con sillones enfrentados y ventanales.' },
+  5: { fotos: ['c5-a', 'c5-b'], texto: 'Con escritorio y sillones.' },
+  6: { fotos: ['c6-a', 'c6-b'], texto: 'Con mesa redonda y escritorio: ideal para grupos, talleres o supervisiones.' },
 };
 const ESPACIOS = { nombre: 'Espacios comunes', fotos: ['espacio-a', 'espacio-c', 'espacio-b'], texto: 'Recepción y sala de espera, en un edificio de pleno Microcentro.' };
 const rutaFoto = (f, chica) => `img/consultorios/${f}${chica ? '-chica' : ''}.jpg`;
@@ -296,7 +296,7 @@ function abrirFotos(id) {
     $('#fotos-minis').querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-current', j === i));
   };
   $('#fotos-titulo').textContent = datos.nombre;
-  $('#fotos-texto').textContent = datos.texto;
+  $('#fotos-texto').textContent = id === 'espacios' ? datos.texto : `${datos.texto} Amplio, luminoso y con aire acondicionado.`;
   $('#fotos-minis').innerHTML = datos.fotos.map((f, j) =>
     `<button type="button" aria-label="Foto ${j + 1}"><img src="${rutaFoto(f, true)}" alt=""></button>`).join('');
   $('#fotos-minis').querySelectorAll('button').forEach((b, j) => (b.onclick = () => { i = j; mostrar(); }));
