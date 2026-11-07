@@ -60,12 +60,17 @@
     .dato-pago { background: var(--blanco); border: 1.5px dashed var(--celeste); border-radius: 12px; padding: 1em;
                  margin: 1em 0; text-align: left; }
     .dato-pago .fila { display: flex; justify-content: space-between; align-items: center; gap: .5em; padding: .3em 0; }
-    .dato-pago .valor { font-weight: 700; word-break: break-all; }
+    .dato-pago .valor { font-weight: 700; white-space: nowrap; text-align: right; }
+    .dato-pago .valor-largo { white-space: normal; overflow-wrap: anywhere; }
     .cuenta { font-size: 1.6rem; font-weight: 800; color: var(--terracota-osc); }
     .resumen-lista { list-style: none; padding: 0; margin: 0 0 1em; text-align: left; }
     .resumen-lista li { display: flex; justify-content: space-between; gap: 1em; padding: .4em 0; border-bottom: 1px solid var(--borde); }
     .resumen-lista li span:last-child { font-weight: 700; text-align: right; }
 
+    .btn-mp { background: #007eb5; color: #fff; }
+    .btn-mp:hover:not(:disabled) { background: #006a99; }
+    .otra-forma { margin-top: 1em; text-align: left; }
+    .otra-forma summary { cursor: pointer; font-weight: 600; color: var(--azul); padding: .6em 0; min-height: 44px; }
     .wa-flotante { position: fixed; right: 16px; bottom: 96px; z-index: 15; width: 56px; height: 56px; border-radius: 50%;
                    background: #1f8f4e; display: grid; place-items: center; box-shadow: var(--sombra); }
     .wa-flotante svg { width: 30px; height: 30px; fill: #fff; }

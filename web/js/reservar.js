@@ -362,33 +362,48 @@ function mostrarResultadoSuelta(r, nombre) {
   const horas = [...estado.horas];
   const alias = estado.cfg.alias_transferencia;
   const titular = estado.cfg.titular_transferencia;
+  const cvu = estado.cfg.cvu_transferencia;
   const wa = estado.cfg.whatsapp_contacto;
   const configurado = (v) => v && v !== 'COMPLETAR';
   const textoWa = `Hola! Soy ${nombre}. Te paso el comprobante de la seña de la reserva #${r.id}: ` +
     `${fechaLarga(estado.fecha)}, ${rangos(horas)}, ${r.consultorio}. Seña: ${pesos(r.sena)}.`;
 
+  const conMP = mpActivo() && r.token;
+  const transferencia = `
+    <div class="dato-pago">
+      <div class="fila"><span>Seña a transferir</span><span class="valor" style="font-size:1.2rem">${pesos(r.sena)}</span></div>
+      <div class="fila"><span>Total de la reserva</span><span class="valor">${pesos(r.total)}</span></div>
+      ${configurado(alias) ? `<div class="fila"><span>Alias</span><span class="valor valor-largo">${esc(alias)}</span>
+        <button class="btn btn-borde btn-chico" id="copiar-alias">Copiar</button></div>` : ''}
+      ${configurado(cvu) ? `<div class="fila"><span>CVU</span><span class="valor valor-largo">${esc(cvu)}</span>
+        <button class="btn btn-borde btn-chico" data-copiar="${esc(cvu)}">Copiar</button></div>` : ''}
+      ${configurado(titular) ? `<div class="fila"><span>Titular</span><span class="valor valor-largo">${esc(titular)}</span></div>` : ''}
+    </div>
+    ${configurado(wa) ? `<a class="btn btn-wa btn-bloque" target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Enviar comprobante por WhatsApp</a>` :
+      '<p class="aviso aviso-info">Mandanos el comprobante por WhatsApp indicando el número de reserva.</p>'}`;
+
   $('#contenido-resultado').innerHTML = `
     <div class="icono" aria-hidden="true">✓</div>
     <h2 id="titulo-resultado">¡Tu horario está guardado!</h2>
     <p>Reserva <strong>#${esc(r.id)}</strong> · ${esc(fechaLarga(estado.fecha))}, ${esc(rangos(horas))} · <strong>${esc(r.consultorio)}</strong></p>
-    <p class="suave chico" style="margin-bottom:.25em">Para confirmarla, pagá la seña antes de que termine este tiempo:</p>
+    <p class="suave chico" style="margin-bottom:.25em">Para confirmarla, pagá la seña de <strong>${pesos(r.sena)}</strong> antes de que termine este tiempo:</p>
     <div class="cuenta" id="cuenta" aria-live="polite">${faltan(r.expira_en)}</div>
-    <div class="dato-pago">
-      <div class="fila"><span>Seña a transferir</span><span class="valor" style="font-size:1.2rem">${pesos(r.sena)}</span></div>
-      <div class="fila"><span>Total de la reserva</span><span class="valor">${pesos(r.total)}</span></div>
-      ${configurado(alias) ? `<div class="fila"><span>Alias</span><span class="valor">${esc(alias)}</span>
-        <button class="btn btn-borde btn-chico" id="copiar-alias">Copiar</button></div>` : ''}
-      ${configurado(titular) ? `<div class="fila"><span>Titular</span><span class="valor">${esc(titular)}</span></div>` : ''}
-    </div>
-    ${configurado(wa) ? `<a class="btn btn-wa btn-bloque" target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Enviar comprobante por WhatsApp</a>` :
-      '<p class="aviso aviso-info">Mandanos el comprobante por WhatsApp indicando el número de reserva.</p>'}
+    ${conMP ? `
+      <button class="btn btn-mp btn-bloque" id="pagar-mp" style="margin-top:1em">Pagar seña con Mercado Pago</button>
+      <p class="ayuda">Tarjeta de débito, crédito o dinero en cuenta. Se confirma al instante.</p>
+      <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
+      <details class="otra-forma"><summary>¿Preferís transferir?</summary>${transferencia}</details>` : transferencia}
     <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de la reserva. Si la seña no llega a tiempo, el horario se libera automáticamente.</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Hacer otra reserva</button>`;
   abrir('#modal-resultado');
 
+  $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(r.id, r.token, e.currentTarget, $('#aviso-mp')));
   $('#copiar-alias')?.addEventListener('click', async (e) => {
     try { await navigator.clipboard.writeText(alias); e.target.textContent = '¡Copiado!'; } catch { /* sin permiso */ }
   });
+  document.querySelectorAll('[data-copiar]').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copiar); b.textContent = '¡Copiado!'; } catch { /* sin permiso */ }
+  }));
   clearInterval(reloj);
   reloj = setInterval(() => { const el = $('#cuenta'); if (el) el.textContent = faltan(r.expira_en); }, 15000);
   $('#nueva-reserva').onclick = () => { clearInterval(reloj); cerrar('#modal-resultado'); elegirFecha(estado.fecha); };
@@ -416,12 +431,94 @@ function mostrarResultadoFijo(r, nombre) {
   $('#nueva-reserva').onclick = () => { cerrar('#modal-resultado'); elegirInicioFijo(estado.desde); };
 }
 
+// ================================================================ MERCADO PAGO
+const mpActivo = () => estado.cfg.mercadopago_activo === 'si';
+
+// Pide al servidor el link de pago y lleva a la persona a Mercado Pago
+async function pagarConMP(id, token, boton, aviso) {
+  const texto = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = 'Abriendo Mercado Pago…';
+  aviso?.classList.add('oculto');
+  try {
+    const { data, error } = await sb.functions.invoke('mp-crear-pago', { body: { reserva_id: id, token } });
+    if (error) {
+      const detalle = await error.context?.json?.().catch(() => null);
+      throw detalle || error;
+    }
+    if (data.demo) { mostrarRetorno(id, token, 'ok'); return; }
+    location.href = data.url;
+  } catch (err) {
+    if (aviso) { aviso.textContent = mensajeError(err); aviso.classList.remove('oculto'); } else mostrarError(mensajeError(err));
+    boton.disabled = false;
+    boton.textContent = texto;
+  }
+}
+
+// Pantalla al volver de Mercado Pago (?pago=ok|error|pendiente&reserva=ID&t=CODIGO)
+async function mostrarRetorno(id, token, resultado) {
+  clearInterval(reloj);
+  cerrar('#modal-datos');
+  const caja = $('#contenido-resultado');
+  caja.innerHTML = '<h2 id="titulo-resultado">Verificando el pago…</h2><div class="cargando" style="justify-content:center">Esto tarda unos segundos</div>';
+  abrir('#modal-resultado');
+
+  let r = null;
+  for (let intento = 0; intento < 10; intento++) {
+    const { data, error } = await sb.rpc('estado_pago_reserva', { p_reserva_id: id, p_token: token });
+    if (error) { caja.innerHTML = `<h2 id="titulo-resultado">No encontramos la reserva</h2><p>${esc(mensajeError(error))}</p>${botonVolver()}`; conectarVolver(); return; }
+    r = data;
+    if (r.estado === 'confirmada' || resultado !== 'ok') break;
+    await new Promise((ok) => setTimeout(ok, 3000));
+  }
+
+  const detalle = `<p>Reserva <strong>#${esc(r.id)}</strong> · ${esc(fechaLarga(r.fecha))}, ${esc(rangos(r.horas))} · <strong>${esc(r.consultorio)}</strong></p>`;
+  if (r.estado === 'confirmada') {
+    caja.innerHTML = `<div class="icono" aria-hidden="true">✓</div>
+      <h2 id="titulo-resultado">¡Seña pagada! Tu reserva está confirmada</h2>${detalle}
+      <div class="dato-pago">
+        <div class="fila"><span>Pagaste</span><span class="valor">${pesos(r.pagado)}</span></div>
+        <div class="fila"><span>Saldo (se abona el día de la reserva)</span><span class="valor">${pesos(r.total - r.pagado)}</span></div>
+      </div>
+      <p class="suave chico">Guardá el número de reserva. ¡Te esperamos!</p>${botonVolver()}`;
+  } else if (r.estado === 'pendiente' && resultado === 'ok') {
+    caja.innerHTML = `<div class="icono" aria-hidden="true">⏳</div>
+      <h2 id="titulo-resultado">Estamos acreditando tu pago</h2>${detalle}
+      <p>Mercado Pago todavía no nos confirmó el pago. Suele tardar un minuto: tu reserva se confirma sola. Si tenés dudas, escribinos por WhatsApp con el número de reserva.</p>
+      <button class="btn btn-primario btn-bloque" id="reverificar">Volver a verificar</button>${botonVolver()}`;
+    $('#reverificar').onclick = () => mostrarRetorno(id, token, 'ok');
+  } else if (r.estado === 'pendiente') {
+    caja.innerHTML = `<div class="icono" aria-hidden="true" style="background:var(--alerta-fondo);color:var(--alerta)">!</div>
+      <h2 id="titulo-resultado">El pago no se completó</h2>${detalle}
+      <p>Tu horario sigue guardado ${r.expira_en ? `<strong>${faltan(r.expira_en)}</strong> más` : ''}. Podés intentar de nuevo con otra tarjeta o medio de pago.</p>
+      <button class="btn btn-mp btn-bloque" id="pagar-mp">Intentar de nuevo · ${pesos(r.sena - r.pagado)}</button>
+      <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>${botonVolver()}`;
+    $('#pagar-mp').onclick = (e) => pagarConMP(id, token, e.currentTarget, $('#aviso-mp'));
+  } else {
+    caja.innerHTML = `<h2 id="titulo-resultado">La reserva ya no está vigente</h2>${detalle}
+      <p>Venció el tiempo para pagar la seña y el horario se liberó. Si llegaste a pagar, escribinos por WhatsApp con el número de reserva y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
+  }
+  conectarVolver();
+}
+const botonVolver = (t = 'Volver al inicio') => `<button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">${t}</button>`;
+function conectarVolver() {
+  const b = $('#nueva-reserva');
+  if (b) b.onclick = () => { cerrar('#modal-resultado'); if (estado.fecha) elegirFecha(estado.fecha); };
+}
+
 // ---------------------------------------------------------------- arranque
 try {
   await cargarBase();
   pintarDiasSuelta();
   pintarDiasFijo();
   elegirFecha(fechasDisponibles(1)[0]);
+  const q = new URLSearchParams(location.search);
+  if (q.has('pago') && q.has('reserva') && q.has('t')) {
+    const [resultado, id, token] = [q.get('pago'), Number(q.get('reserva')), q.get('t')];
+    q.delete('pago'); q.delete('reserva'); q.delete('t');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+    mostrarRetorno(id, token, resultado);
+  }
 } catch (err) {
   mostrarError(mensajeError(err));
 }

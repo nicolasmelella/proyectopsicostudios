@@ -14,8 +14,9 @@ export function crearClienteDemo() {
       ['hora_apertura', '8'], ['hora_cierre', '21'], ['retencion_suelta_minutos', '120'],
       ['retencion_fijo_horas', '48'], ['semanas_fijo', '12'], ['dias_reserva_maximo', '60'],
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
-      ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'],
+      ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
+      ['mercadopago_activo', 'si'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -32,7 +33,7 @@ export function crearClienteDemo() {
       { id: 3, nombre: 'Sofía Ruiz', whatsapp: '1163456789', profesion: 'Psicopedagogo/a', origen: 'Meta Ads', email: null, notas: null },
       { id: 4, nombre: 'Diego Álvarez', whatsapp: '1174567890', profesion: 'Psicólogo/a', origen: 'Google', email: null, notas: null },
     ],
-    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [],
+    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [],
     ocupaciones: new Map(), // "cons|fecha|hora" → {reserva_id|fijo_id|bloqueo_id}
   };
   const cfg = (k) => Number(db.config.find((c) => c.clave === k)?.valor);
@@ -69,7 +70,7 @@ export function crearClienteDemo() {
     const r = {
       id: nuevoId(), profesional_id: prof, consultorio_id: cons, fecha, horas, origen: 'web',
       precio_total: horas.reduce((s, h) => s + precioHora('suelta', h, fecha), 0),
-      estado: est, expira_en: minutos ? ahoraISO(minutos) : null, creado_en: ahoraISO(-30),
+      estado: est, expira_en: minutos ? ahoraISO(minutos) : null, creado_en: ahoraISO(-30), token_pago: crypto.randomUUID(),
     };
     db.reservas.push(r);
     horas.forEach((h) => db.ocupaciones.set(key(cons, fecha, h), { reserva_id: r.id }));
@@ -92,6 +93,8 @@ export function crearClienteDemo() {
     precio_semanal: 2 * 8500, estado: 'solicitud', desde: proximo(3), hasta: null, expira_en: ahoraISO(60 * 30), origen: 'web' };
   db.fijos.push(f1, f2);
   ocuparFijo(f1); ocuparFijo(f2);
+  db.pagos_a_revisar.push({ id: nuevoId(), reserva_id: null, mp_payment_id: '123456789', monto: 4250, resuelto: false, creado_en: ahoraISO(-90),
+    motivo: 'Pagó después del vencimiento y el horario ya no está libre' });
   db.pagos.push({ id: nuevoId(), reserva_id: null, fijo_id: f1.id, periodo: hoy.slice(0, 7), monto: 106600, medio: 'efectivo', pagado_en: hoy, anulado: false, creado_en: ahoraISO(-600) });
 
   const conJoins = (tabla, fila) => {
@@ -125,7 +128,7 @@ export function crearClienteDemo() {
         return { data: null, error: null };
       }
       let filas = tabla.filter((r) => this.filtros.every((f) => f(r)));
-      if (this.modo === 'update') { filas.forEach((r) => Object.assign(r, this.valores)); return { data: null, error: null }; }
+      if (this.modo === 'update') { filas.forEach((r) => Object.assign(r, this.valores)); return { data: filas.map((r) => ({ ...r })), error: null }; }
       filas = filas.map((r) => conJoins(this.tabla, r));
       for (const [c, asc] of [...this.orden].reverse()) {
         filas.sort((a, b) => (a[c] === b[c] ? 0 : (a[c] > b[c]) === asc ? 1 : -1));
@@ -174,7 +177,7 @@ export function crearClienteDemo() {
       if (!cons || !libre(cons, p_fecha, p_horas)) return err('SIN_LUGAR', 'Ese horario se acaba de ocupar. Elegí otro.');
       const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web');
       const r = agregarReserva(prof, cons, p_fecha, p_horas, 'pendiente', 0, cfg('retencion_suelta_minutos'));
-      return { id: r.id, consultorio: db.consultorios.find((c) => c.id === cons).nombre, total: r.precio_total, sena: sena(r.precio_total), expira_en: r.expira_en };
+      return { id: r.id, token: r.token_pago, consultorio: db.consultorios.find((c) => c.id === cons).nombre, total: r.precio_total, sena: sena(r.precio_total), expira_en: r.expira_en };
     },
     crear_solicitud_fijo({ p_nombre, p_whatsapp, p_profesion, p_dia, p_horas, p_desde }) {
       const disp = rpcs.disponibilidad_fijo({ p_dia, p_desde });
@@ -228,6 +231,15 @@ export function crearClienteDemo() {
       const r = p_reserva_id && db.reservas.find((x) => x.id === p_reserva_id);
       if (r && r.estado === 'pendiente' && pagado(r.id) >= sena(r.precio_total)) { r.estado = 'confirmada'; r.expira_en = null; }
       return id;
+    },
+    estado_pago_reserva({ p_reserva_id, p_token }) {
+      const r = db.reservas.find((x) => x.id === p_reserva_id && x.token_pago === p_token);
+      if (!r) return err('NO_ENCONTRADO', 'No encontramos esa reserva');
+      return { id: r.id, estado: r.estado, fecha: r.fecha, horas: r.horas, consultorio: db.consultorios.find((c) => c.id === r.consultorio_id).nombre,
+        total: r.precio_total, pagado: pagado(r.id), sena: sena(r.precio_total), expira_en: r.expira_en };
+    },
+    resolver_pago_revisar({ p_id, p_nota }) {
+      const x = db.pagos_a_revisar.find((y) => y.id === p_id); x.resuelto = true; x.nota = p_nota;
     },
     anular_pago({ p_pago_id }) {
       const p = db.pagos.find((x) => x.id === p_pago_id); p.anulado = true;
@@ -319,5 +331,16 @@ export function crearClienteDemo() {
       } catch (e) { return err(e.message); }
     },
     auth,
+    // Mercado Pago simulado: el pago se aprueba al instante
+    functions: {
+      async invoke(nombre, { body }) {
+        await new Promise((r) => setTimeout(r, 400));
+        const r = db.reservas.find((x) => x.id === body.reserva_id && x.token_pago === body.token);
+        if (nombre !== 'mp-crear-pago' || !r) return { data: null, error: { message: 'NO_ENCONTRADO', hint: 'No encontramos esa reserva' } };
+        const falta = sena(r.precio_total) - pagado(r.id);
+        if (falta > 0) rpcs.registrar_pago({ p_monto: falta, p_medio: 'mercadopago', p_reserva_id: r.id });
+        return { data: { demo: true }, error: null };
+      },
+    },
   };
 }

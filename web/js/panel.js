@@ -62,6 +62,7 @@ function errorEn(el, err) {
 
 const consNombre = (id) => st.consultorios.find((c) => c.id === id)?.nombre || `Consultorio ${id}`;
 const waLink = (num, texto) => linkWhatsApp(waArgentina(num), texto);
+const nombreMedio = (m) => MEDIOS.find(([v]) => v === m)?.[1] || m;
 const medioOpts = (sel) => MEDIOS.map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
 const consOpts = (sel) => st.consultorios.filter((c) => c.activo)
   .map((c) => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('');
@@ -150,11 +151,12 @@ async function refrescar() {
 }
 
 async function actualizarBadge() {
-  const [r, f] = await Promise.all([
+  const [r, f, m] = await Promise.all([
     sb.from('reservas').select('id').eq('estado', 'pendiente'),
     sb.from('fijos').select('id').eq('estado', 'solicitud'),
+    sb.from('pagos_a_revisar').select('id').eq('resuelto', false),
   ]);
-  const n = (r.data?.length || 0) + (f.data?.length || 0);
+  const n = (r.data?.length || 0) + (f.data?.length || 0) + (m.data?.length || 0);
   const b = $('#badge-pend');
   b.textContent = n;
   b.classList.toggle('oculto', !n);
@@ -267,7 +269,7 @@ async function detalleReserva(id) {
       ${r.motivo_cancelacion ? `<li><span>Motivo</span><span>${esc(r.motivo_cancelacion)}</span></li>` : ''}
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel'}</span></li>
     </ul>
-    ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(p.medio)}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
+    ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
       <span>${pesos(p.monto)} ${!p.anulado ? `<button class="btn btn-peligro btn-chico" data-anular="${p.id}" style="margin-left:6px">Anular</button>` : ''}</span></li>`).join('')}</ul>` : ''}
     ${vigente && falta > 0 ? `
     <form class="bloque" id="form-pago">
@@ -550,7 +552,32 @@ function modalBloqueo() {
 }
 
 // ================================================================ PENDIENTES
+async function pintarPagosRevisar() {
+  const { data, error } = await sb.from('pagos_a_revisar').select('*').eq('resuelto', false).order('creado_en');
+  const bloque = $('#bloque-revisar');
+  if (error || !data?.length) { bloque.classList.add('oculto'); return; }
+  bloque.classList.remove('oculto');
+  $('#lista-revisar').innerHTML = data.map((x) => `
+    <div class="item" style="border-color:var(--error)">
+      <h3>${pesos(x.monto)} <span class="pill pill-error">a revisar</span></h3>
+      <div>${esc(x.motivo)}</div>
+      <div class="suave chico" style="margin-top:.4em">Pago de Mercado Pago N° ${esc(x.mp_payment_id)}${x.reserva_id ? ` · Reserva #${x.reserva_id}` : ''}</div>
+      <div class="acciones">
+        ${x.reserva_id ? `<button class="btn btn-borde btn-chico" data-ver-reserva="${x.reserva_id}">Ver reserva</button>` : ''}
+        <button class="btn btn-primario btn-chico" data-resolver="${x.id}">Marcar como resuelto</button>
+      </div>
+    </div>`).join('');
+  $$('[data-ver-reserva]').forEach((b) => (b.onclick = () => detalleReserva(Number(b.dataset.verReserva))));
+  $$('[data-resolver]').forEach((b) => (b.onclick = async () => {
+    const nota = prompt('¿Cómo se resolvió? (ej: devuelto desde Mercado Pago, reubicado al jueves 10 hs)');
+    if (nota === null) return;
+    try { await llamar('resolver_pago_revisar', { p_id: Number(b.dataset.resolver), p_nota: nota || null }, 'Marcado como resuelto'); refrescar(); }
+    catch (err) { errorEn(null, err); }
+  }));
+}
+
 async function pintarPendientes() {
+  pintarPagosRevisar();
   const lp = $('#lista-pend'), ls = $('#lista-sol');
   lp.innerHTML = ls.innerHTML = '<div class="cargando">Cargando…</div>';
   const [r, f] = await Promise.all([
@@ -661,10 +688,15 @@ function editarProfesional(id) {
 }
 
 // ================================================================ AJUSTES
+// Datos de cobro: protegidos en la base, solo se cambian desde Supabase (SQL Editor)
+const CONFIG_PROTEGIDA = [
+  ['alias_transferencia', 'Alias'],
+  ['cvu_transferencia', 'CVU / CBU'],
+  ['titular_transferencia', 'Titular de la cuenta'],
+  ['whatsapp_contacto', 'WhatsApp del equipo'],
+];
 const CONFIG_VISIBLE = [
-  ['alias_transferencia', 'Alias o CBU para la seña', 'text'],
-  ['titular_transferencia', 'Titular de la cuenta', 'text'],
-  ['whatsapp_contacto', 'WhatsApp del equipo (con 549…)', 'tel'],
+  ['mercadopago_activo', 'Cobrar la seña con Mercado Pago', 'sino'],
   ['porcentaje_sena', 'Seña para confirmar (%)', 'number'],
   ['retencion_suelta_minutos', 'Minutos para pagar la seña', 'number'],
   ['retencion_fijo_horas', 'Horas para aprobar una solicitud de fijo', 'number'],
@@ -689,17 +721,28 @@ async function pintarAjustes() {
     ${futuros.length ? `<p class="aviso aviso-info chico" style="max-width:640px">Aumentos programados: ${futuros.map((p) =>
       `${p.modalidad === 'suelta' ? 'por horas' : 'fijo'} ${p.franja === 'manana' ? 'mañana' : 'tarde'} ${pesos(p.valor)} desde ${fechaCorta(p.vigente_desde)}`).join(' · ')}</p>` : ''}`;
 
-  $('#lista-config').innerHTML = `<div class="tarjeta" style="max-width:640px">${CONFIG_VISIBLE.map(([k, t, tipo]) => `
+  $('#lista-config').innerHTML = `
+    <div class="tarjeta" style="max-width:640px;margin-bottom:14px">
+      <h3>🔒 Datos de cobro</h3>
+      <p class="suave chico">Por seguridad, estos datos no se pueden cambiar desde el panel, ni siquiera con la contraseña.
+        Así nadie puede desviar los pagos a otra cuenta. Se cambian solo desde Supabase (ver README, paso 7).</p>
+      <ul class="datos">${CONFIG_PROTEGIDA.map(([k, t]) => `<li><span>${t}</span><span>${
+        !st.cfg[k] || st.cfg[k] === 'COMPLETAR' ? '<span class="pill pill-alerta">Sin cargar</span>' : esc(st.cfg[k])}</span></li>`).join('')}</ul>
+    </div>
+    <div class="tarjeta" style="max-width:640px">${CONFIG_VISIBLE.map(([k, t, tipo]) => `
     <form class="campo" data-cfg="${k}" style="display:flex;gap:8px;align-items:flex-end">
-      <div style="flex:1"><label for="c-${k}">${t}</label><input id="c-${k}" type="${tipo}" value="${esc(st.cfg[k] ?? '')}" required></div>
+      <div style="flex:1"><label for="c-${k}">${t}</label>${tipo === 'sino'
+        ? `<select id="c-${k}"><option value="si" ${st.cfg[k] === 'si' ? 'selected' : ''}>Sí</option><option value="no" ${st.cfg[k] !== 'si' ? 'selected' : ''}>No</option></select>`
+        : `<input id="c-${k}" type="${tipo}" value="${esc(st.cfg[k] ?? '')}" required>`}</div>
       <button class="btn btn-borde btn-chico" style="min-height:48px">Guardar</button>
     </form>`).join('')}</div>`;
   $$('form[data-cfg]').forEach((fm) => (fm.onsubmit = async (e) => {
     e.preventDefault();
     const k = fm.dataset.cfg;
-    const v = $('input', fm).value.trim();
-    const { error } = await sb.from('config').update({ valor: v }).eq('clave', k);
+    const v = $('input, select', fm).value.trim();
+    const { data, error } = await sb.from('config').update({ valor: v }).eq('clave', k).select();
     if (error) return errorEn(null, error);
+    if (!data?.length) return errorEn(null, 'No se pudo guardar: tu usuario no tiene permiso para cambiar este dato.');
     st.cfg[k] = v;
     toast('Guardado');
   }));
