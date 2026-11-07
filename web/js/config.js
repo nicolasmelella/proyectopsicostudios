@@ -10,3 +10,7 @@
 // =====================================================================
 export const SUPABASE_URL = 'COMPLETAR';
 export const SUPABASE_ANON_KEY = 'COMPLETAR';
+
+// WhatsApp de ayuda: botón "¿Tenés algún problema?", botón flotante y mensajes de error.
+// Solo números: 54 + 9 + código de área + número.
+export const WHATSAPP_AYUDA = '5491178224918';

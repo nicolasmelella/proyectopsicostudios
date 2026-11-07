@@ -3,8 +3,21 @@ import {
   crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos,
   faltan, precioHora, mensajeError, linkWhatsApp, DIAS, DIAS_CORTOS,
 } from './comun.js';
+import { WHATSAPP_AYUDA } from './config.js';
 
 const $ = (s) => document.querySelector(s);
+
+// Fotos (en img/consultorios). El número es el id del consultorio en la base.
+const FOTOS = {
+  1: { fotos: ['c1-a', 'c1-b'], texto: 'Escritorio y sillas, con luz natural. Aire acondicionado y calefacción.' },
+  2: { fotos: ['c2-a', 'c2-b'], texto: 'Sofá y sillones, ambiente cálido. Aire acondicionado y calefacción.' },
+  3: { fotos: ['c3-a', 'c3-b'], texto: 'Amplio, con sofá, sillones y ventanales.' },
+  4: { fotos: ['c4-a', 'c4-b'], texto: 'Sillones enfrentados y ventanales. Aire acondicionado y calefacción.' },
+  5: { fotos: ['c5-a', 'c5-b'], texto: 'Escritorio y sillones. Aire acondicionado y calefacción.' },
+  6: { fotos: ['c6-a', 'c6-b'], texto: 'Mesa redonda y escritorio: ideal para grupos, talleres o supervisiones.' },
+};
+const ESPACIOS = { nombre: 'Espacios comunes', fotos: ['espacio-a', 'espacio-c', 'espacio-b'], texto: 'Recepción y sala de espera, en un edificio de pleno Microcentro.' };
+const rutaFoto = (f, chica) => `img/consultorios/${f}${chica ? '-chica' : ''}.jpg`;
 const sb = await crearCliente();
 
 const estado = {
@@ -14,8 +27,12 @@ const estado = {
   consultorios: [],
   // por horas
   fecha: null,
+  mesVista: null,         // 'AAAA-MM' que muestra el calendario
+  resumen: new Map(),     // fecha → { libres, total }
   libres: new Map(),      // hora → Set(consultorio_id)
   horas: new Set(),
+  consultorio: null,      // null = cualquiera
+  vistaHoras: (() => { try { return localStorage.getItem('psicostudios-vista-horas') || 'grilla'; } catch { return 'grilla'; } })(),
   // fijo
   dia: null,
   desde: null,
@@ -40,12 +57,10 @@ async function cargarBase() {
     const v = estado.cfg[el.dataset.cfg];
     if (v) el.textContent = v;
   });
-  const wa = estado.cfg.whatsapp_contacto;
-  if (wa && /^\d{8,}$/.test(wa)) {
-    const a = $('#wa-flotante');
-    a.href = linkWhatsApp(wa, 'Hola! Tengo una consulta sobre los consultorios.');
-    a.classList.remove('oculto');
-  }
+  document.querySelectorAll('[data-ayuda]').forEach((a) => {
+    a.href = linkWhatsApp(WHATSAPP_AYUDA, 'Hola! Tengo una consulta sobre la reserva de consultorios de Psico Studios.');
+  });
+  $('#wa-flotante').classList.remove('oculto');
   pintarPrecios();
 }
 
@@ -60,7 +75,7 @@ function pintarPrecios() {
 
 const mostrarError = (msg) => {
   const el = $('#aviso-general');
-  el.textContent = msg;
+  el.innerHTML = msg ? `${esc(msg)} <a data-ayuda target="_blank" rel="noopener" href="${linkWhatsApp(WHATSAPP_AYUDA, 'Hola! Tengo un problema con la web de reservas: ' + msg)}">¿Necesitás ayuda? Escribinos</a>` : '';
   el.classList.toggle('oculto', !msg);
 };
 
@@ -78,47 +93,65 @@ $('#tab-suelta').onclick = () => cambiarModo('suelta');
 $('#tab-fijo').onclick = () => cambiarModo('fijo');
 
 // ================================================================ POR HORAS
-function fechasDisponibles(cantidad) {
-  const out = [];
-  let f = hoyAR();
-  const ultimaHora = Number(estado.cfg.hora_cierre) - 1;
-  if (horaAR() >= ultimaHora) f = sumarDias(f, 1);
-  while (out.length < cantidad) {
-    if (diaSemana(f) !== 7) out.push(f);
-    f = sumarDias(f, 1);
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const mesMover = (ym, n) => { const [a, m] = ym.split('-').map(Number); return new Date(Date.UTC(a, m - 1 + n, 1)).toISOString().slice(0, 7); };
+
+// Último día que se puede reservar: misma regla que la base (meses de calendario: 7/11 → 7/1)
+function fechaMaxima() {
+  const [a, m, d] = hoyAR().split('-').map(Number);
+  const destino = new Date(Date.UTC(a, m - 1 + Number(estado.cfg.meses_reserva_maximo || 2), 1));
+  const ultimoDelMes = new Date(Date.UTC(destino.getUTCFullYear(), destino.getUTCMonth() + 1, 0)).getUTCDate();
+  destino.setUTCDate(Math.min(d, ultimoDelMes));
+  return destino.toISOString().slice(0, 10);
+}
+
+// Cuántos lugares quedan cada día (para pintar el calendario)
+async function cargarResumen() {
+  const { data, error } = await sb.rpc('resumen_disponibilidad', { p_desde: hoyAR(), p_hasta: fechaMaxima() });
+  if (error) { mostrarError(mensajeError(error)); return; }
+  estado.resumen = new Map(data.map((r) => [r.fecha, r]));
+}
+function nivelDia(f) {
+  const r = estado.resumen.get(f);
+  if (!r) return null;
+  if (r.libres === 0) return 'lleno';
+  return r.libres / Math.max(1, r.total) < 0.25 ? 'poco' : 'mucho';
+}
+const primerDiaConLugar = () => [...estado.resumen.keys()].sort().find((f) => nivelDia(f) !== 'lleno');
+
+function pintarCalendario() {
+  const hoy = hoyAR(), max = fechaMaxima();
+  const [a, m] = estado.mesVista.split('-').map(Number);
+  $('#cal-mes').textContent = `${MESES_LARGOS[m - 1]} ${a}`;
+  $('#cal-ant').disabled = estado.mesVista <= hoy.slice(0, 7);
+  $('#cal-sig').disabled = estado.mesVista >= max.slice(0, 7);
+  $('#fecha-max').textContent = fechaLarga(max).toLowerCase();
+  const primero = `${estado.mesVista}-01`;
+  const diasMes = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  let html = '<span aria-hidden="true"></span>'.repeat(diaSemana(primero) - 1);
+  for (let d = 1; d <= diasMes; d++) {
+    const f = `${estado.mesVista}-${String(d).padStart(2, '0')}`;
+    const nivel = f < hoy || f > max ? null : nivelDia(f);
+    const estadoTxt = diaSemana(f) === 7 ? 'cerrado' : !nivel ? 'no disponible' : { mucho: 'hay lugar', poco: 'queda poco lugar', lleno: 'completo' }[nivel];
+    html += `<button type="button" class="cal-dia ${nivel ? 'n-' + nivel : 'fuera'}" data-f="${f}"
+      ${!nivel || nivel === 'lleno' ? 'disabled' : ''} aria-pressed="${f === estado.fecha}" aria-label="${fechaLarga(f)}: ${estadoTxt}">${d}</button>`;
   }
-  return out;
+  $('#cal-dias').innerHTML = html;
+  $('#cal-dias').querySelectorAll('.cal-dia:not(:disabled)').forEach((b) => (b.onclick = () => elegirFecha(b.dataset.f, true)));
 }
+$('#cal-ant').onclick = () => { estado.mesVista = mesMover(estado.mesVista, -1); pintarCalendario(); };
+$('#cal-sig').onclick = () => { estado.mesVista = mesMover(estado.mesVista, 1); pintarCalendario(); };
 
-function pintarDiasSuelta() {
-  const fechas = fechasDisponibles(18);
-  if (estado.fecha && !fechas.includes(estado.fecha)) fechas.push(estado.fecha);
-  const hoy = hoyAR();
-  $('#dias-suelta').innerHTML = fechas.map((f) => {
-    const [, , d] = f.split('-');
-    const etiqueta = f === hoy ? 'Hoy' : f === sumarDias(hoy, 1) ? 'Mañana' : DIAS_CORTOS[diaSemana(f)];
-    return `<button class="chip" data-fecha="${f}" aria-pressed="${f === estado.fecha}" aria-label="${fechaLarga(f)}">
-      <small>${etiqueta}</small><strong>${Number(d)}</strong></button>`;
-  }).join('');
-  $('#dias-suelta').querySelectorAll('.chip').forEach((b) => (b.onclick = () => elegirFecha(b.dataset.fecha)));
-  const otra = $('#fecha-otra');
-  otra.min = hoy;
-  otra.max = sumarDias(hoy, Number(estado.cfg.dias_reserva_maximo));
-}
-
-$('#fecha-otra').onchange = (e) => {
-  const f = e.target.value;
-  if (!f) return;
-  if (diaSemana(f) === 7) { mostrarError('Los domingos está cerrado. Elegí otro día.'); return; }
-  elegirFecha(f);
-};
-
-async function elegirFecha(f) {
+async function elegirFecha(f, desplazar = false) {
   estado.fecha = f;
   estado.horas.clear();
+  estado.consultorio = null;
+  estado.mesVista = f.slice(0, 7);
   mostrarError('');
-  pintarDiasSuelta();
+  pintarCalendario();
+  $('#dia-elegido').textContent = fechaLarga(f);
   $('#horas-suelta').innerHTML = '<div class="cargando">Buscando horarios libres…</div>';
+  if (desplazar) $('#paso-horas').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   const { data, error } = await sb.rpc('disponibilidad', { p_desde: f, p_hasta: f });
   if (error) { $('#horas-suelta').innerHTML = ''; mostrarError(mensajeError(error)); return; }
   estado.libres = new Map();
@@ -138,46 +171,147 @@ function consultoriosComunes(libres, horas) {
   }
   return set || new Set();
 }
+const libreEn = (h, c) => !!estado.libres.get(h)?.has(c);
+const nombreCons = (id) => estado.consultorios.find((c) => c.id === id)?.nombre || '';
+function horasVisibles() {
+  const out = [];
+  const hoy = hoyAR(), ahora = horaAR();
+  for (let h = Number(estado.cfg.hora_apertura); h < Number(estado.cfg.hora_cierre); h++) {
+    if (!(estado.fecha === hoy && h <= ahora)) out.push(h);
+  }
+  return out;
+}
+
+// Grilla o lista
+document.querySelectorAll('[data-vista-h]').forEach((b) => (b.onclick = () => {
+  estado.vistaHoras = b.dataset.vistaH;
+  try { localStorage.setItem('psicostudios-vista-horas', estado.vistaHoras); } catch { /* sin almacenamiento */ }
+  // la grilla siempre muestra un consultorio concreto
+  if (estado.vistaHoras === 'grilla' && estado.horas.size && !estado.consultorio) {
+    const comunes = [...consultoriosComunes(estado.libres, [...estado.horas])];
+    estado.consultorio = estado.consultorios.find((c) => comunes.includes(c.id) && c.nombre !== 'Salón')?.id ?? comunes[0] ?? null;
+  }
+  pintarHorasSuelta();
+}));
 
 function pintarHorasSuelta() {
-  const ini = Number(estado.cfg.hora_apertura), fin = Number(estado.cfg.hora_cierre);
-  const hoy = hoyAR(), ahora = horaAR();
-  let html = '';
-  let alguna = false;
-  for (let h = ini; h < fin; h++) {
-    if (estado.fecha === hoy && h <= ahora) continue;
+  document.querySelectorAll('[data-vista-h]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vistaH === estado.vistaHoras));
+  const hs = horasVisibles();
+  if (!hs.some((h) => estado.libres.get(h)?.size)) {
+    $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres este día. Elegí otro día en el calendario.</p>';
+  } else if (estado.vistaHoras === 'grilla') pintarGrilla(hs);
+  else pintarLista(hs);
+  pintarSeleccion();
+  actualizarBarra();
+}
+
+function pintarGrilla(hs) {
+  const cons = estado.consultorios;
+  const corto = (n) => n.replace(/^Consultorio\s*/i, 'Cons.<br>');
+  let html = `<div class="grilla-wrap"><table class="grilla-h"><caption class="oculto">Horarios libres por consultorio</caption>
+    <thead><tr><th scope="col"><span class="oculto">Hora</span></th>${cons.map((c) => `<th scope="col" class="${estado.resaltar === c.id ? 'col-resaltada' : ''}">${FOTOS[c.id]
+      ? `<button type="button" class="col-cons" data-fotos="${c.id}" aria-label="Ver fotos de ${esc(c.nombre)}">${corto(esc(c.nombre))}</button>` : corto(esc(c.nombre))}</th>`).join('')}</tr></thead><tbody>`;
+  for (const h of hs) {
+    html += `<tr><th scope="row">${horaTxt(h)}<small>${pesos(precioHora(estado.precios, estado.cfg, 'suelta', h, estado.fecha))}</small></th>`;
+    for (const c of cons) {
+      if (!libreEn(h, c.id)) { html += '<td><span class="celda-ocupada" role="img" aria-label="Ocupado"></span></td>'; continue; }
+      const elegida = estado.consultorio === c.id && estado.horas.has(h);
+      html += `<td><button type="button" class="celda-h" data-h="${h}" data-c="${c.id}" aria-pressed="${elegida}"
+        aria-label="${esc(c.nombre)}, ${horaTxt(h)}: libre">${elegida ? '✓' : ''}</button></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  $('#horas-suelta').innerHTML = html;
+  estado.resaltar = null;
+  $('#horas-suelta').querySelectorAll('[data-fotos]').forEach((b) => (b.onclick = () => abrirFotos(Number(b.dataset.fotos))));
+  $('#horas-suelta').querySelectorAll('.celda-h').forEach((b) => (b.onclick = () => {
+    const h = Number(b.dataset.h), c = Number(b.dataset.c);
+    if (estado.consultorio !== c) { estado.horas.clear(); estado.consultorio = c; }
+    estado.horas.has(h) ? estado.horas.delete(h) : estado.horas.add(h);
+    if (!estado.horas.size) estado.consultorio = null;
+    pintarHorasSuelta();
+  }));
+}
+
+function pintarLista(hs) {
+  const c = estado.consultorio;
+  let html = '<div class="horas">';
+  for (const h of hs) {
     const elegida = estado.horas.has(h);
-    const comunes = consultoriosComunes(estado.libres, [...estado.horas, h]);
-    const libresH = estado.libres.get(h)?.size || 0;
-    const posible = elegida || comunes.size > 0;
-    if (libresH > 0) alguna = true;
-    const precio = precioHora(estado.precios, estado.cfg, 'suelta', h, estado.fecha);
-    const sub = libresH === 0 ? 'Completo' : !posible ? 'No combina' : pesos(precio);
-    html += `<button class="hora" data-h="${h}" aria-pressed="${elegida}" ${posible && libresH ? '' : 'disabled'}
+    const libresH = c ? (libreEn(h, c) ? 1 : 0) : estado.libres.get(h)?.size || 0;
+    const posible = elegida || (c ? libreEn(h, c) : consultoriosComunes(estado.libres, [...estado.horas, h]).size > 0);
+    const sub = libresH === 0 ? (c ? 'Ocupado' : 'Completo') : !posible ? 'No combina' : pesos(precioHora(estado.precios, estado.cfg, 'suelta', h, estado.fecha));
+    html += `<button type="button" class="hora" data-h="${h}" aria-pressed="${elegida}" ${posible && libresH ? '' : 'disabled'}
       aria-label="${horaTxt(h)}, ${sub}"><strong>${horaTxt(h)}</strong><small>${sub}</small></button>`;
   }
-  $('#horas-suelta').innerHTML = alguna ? html : '<p class="aviso aviso-alerta">No quedan horarios libres este día. Probá con otro.</p>';
+  html += '</div>';
+  // Consultorio: siempre se puede volver a "cualquiera"
+  const comunes = estado.horas.size ? consultoriosComunes(estado.libres, [...estado.horas])
+    : new Set([...estado.libres.values()].flatMap((s) => [...s]));
+  const opciones = estado.consultorios.filter((x) => comunes.has(x.id) || x.id === c);
+  html += `<div class="campo" style="margin-top:14px;max-width:360px"><label for="consultorio-suelta">Consultorio</label>
+    <select id="consultorio-suelta"><option value="">Cualquiera (te asignamos uno)</option>
+    ${opciones.map((x) => `<option value="${x.id}" ${x.id === c ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></div>`;
+  $('#horas-suelta').innerHTML = html;
   $('#horas-suelta').querySelectorAll('.hora:not(:disabled)').forEach((b) => (b.onclick = () => {
     const h = Number(b.dataset.h);
     estado.horas.has(h) ? estado.horas.delete(h) : estado.horas.add(h);
     pintarHorasSuelta();
   }));
-  pintarConsultorios();
-  actualizarBarra();
+  $('#consultorio-suelta').onchange = (e) => {
+    estado.consultorio = e.target.value ? Number(e.target.value) : null;
+    // si alguna hora elegida no está libre en ese consultorio, se quita
+    if (estado.consultorio) for (const h of [...estado.horas]) if (!libreEn(h, estado.consultorio)) estado.horas.delete(h);
+    pintarHorasSuelta();
+  };
 }
 
-function pintarConsultorios() {
-  const paso = $('#paso-consultorio');
-  if (!estado.horas.size) { paso.classList.add('oculto'); return; }
-  const comunes = consultoriosComunes(estado.libres, [...estado.horas]);
-  const sel = $('#consultorio-suelta');
-  const previo = sel.value;
-  const opciones = estado.consultorios.filter((c) => comunes.has(c.id));
-  const hayAuto = opciones.some((c) => c.nombre !== 'Salón');
-  sel.innerHTML = (hayAuto ? '<option value="">Cualquiera (te asignamos uno)</option>' : '') +
-    opciones.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
-  if ([...sel.options].some((o) => o.value === previo)) sel.value = previo;
-  paso.classList.remove('oculto');
+function pintarSeleccion() {
+  const el = $('#seleccion');
+  if (!estado.horas.size) { el.classList.add('oculto'); return; }
+  el.classList.remove('oculto');
+  el.innerHTML = `<span>Elegiste: <strong>${esc(rangos(estado.horas))}</strong> · ${estado.consultorio ? esc(nombreCons(estado.consultorio)) : 'cualquier consultorio'}</span>
+    <button type="button" class="btn btn-borde btn-chico" id="borrar-seleccion">Borrar selección</button>`;
+  $('#borrar-seleccion').onclick = () => { estado.horas.clear(); estado.consultorio = null; pintarHorasSuelta(); };
+}
+
+// ================================================================ FOTOS
+function pintarGaleria() {
+  const items = estado.consultorios.filter((c) => FOTOS[c.id]).map((c) => ({ id: c.id, nombre: c.nombre, ...FOTOS[c.id] }));
+  items.push({ id: 'espacios', ...ESPACIOS });
+  $('#galeria').innerHTML = items.map((x) => `<button type="button" class="card-cons" data-fotos="${x.id}">
+      <img src="${rutaFoto(x.fotos[0], true)}" alt="" loading="lazy" width="640" height="427">
+      <span><strong>${esc(x.nombre)}</strong><small>${esc(x.texto)}</small></span></button>`).join('');
+  $('#galeria').querySelectorAll('[data-fotos]').forEach((b) => (b.onclick = () =>
+    abrirFotos(b.dataset.fotos === 'espacios' ? 'espacios' : Number(b.dataset.fotos))));
+}
+
+function abrirFotos(id) {
+  const datos = id === 'espacios' ? ESPACIOS : { ...FOTOS[id], nombre: nombreCons(id) };
+  let i = 0;
+  const mostrar = () => {
+    $('#fotos-img').src = rutaFoto(datos.fotos[i]);
+    $('#fotos-img').alt = `${datos.nombre}, foto ${i + 1} de ${datos.fotos.length}`;
+    $('#fotos-minis').querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-current', j === i));
+  };
+  $('#fotos-titulo').textContent = datos.nombre;
+  $('#fotos-texto').textContent = datos.texto;
+  $('#fotos-minis').innerHTML = datos.fotos.map((f, j) =>
+    `<button type="button" aria-label="Foto ${j + 1}"><img src="${rutaFoto(f, true)}" alt=""></button>`).join('');
+  $('#fotos-minis').querySelectorAll('button').forEach((b, j) => (b.onclick = () => { i = j; mostrar(); }));
+  $('#fotos-ant').onclick = () => { i = (i - 1 + datos.fotos.length) % datos.fotos.length; mostrar(); };
+  $('#fotos-sig').onclick = () => { i = (i + 1) % datos.fotos.length; mostrar(); };
+  $('#fotos-reservar').classList.toggle('oculto', id === 'espacios' || estado.modo !== 'suelta');
+  $('#fotos-reservar').onclick = () => {
+    cerrarVentanas();
+    estado.vistaHoras = 'grilla';
+    estado.resaltar = id;
+    pintarHorasSuelta();
+    $('#paso-horas').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  };
+  mostrar();
+  abrir('#modal-fotos');
 }
 
 // ================================================================ FIJO
@@ -195,7 +329,7 @@ function elegirDiaFijo(d) {
   // próximas 6 fechas que caen ese día (desde mañana, para dar tiempo a confirmar)
   const fechas = [];
   let f = sumarDias(hoyAR(), 1);
-  while (fechas.length < 6) { if (diaSemana(f) === d) fechas.push(f); f = sumarDias(f, 1); }
+  while (fechas.length < 6 && f <= fechaMaxima()) { if (diaSemana(f) === d) fechas.push(f); f = sumarDias(f, 1); }
   $('#inicio-fijo').innerHTML = fechas.map((x) => {
     const [, m, dd] = x.split('-');
     return `<button class="chip" data-f="${x}" aria-pressed="false" aria-label="${fechaLarga(x)}"><small>${DIAS_CORTOS[d]}</small><strong>${Number(dd)}/${Number(m)}</strong></button>`;
@@ -282,16 +416,30 @@ function actualizarBarra() {
 }
 
 // ================================================================ DATOS
-const abrir = (id) => { $(id).classList.remove('oculto'); document.body.style.overflow = 'hidden'; };
+const abrir = (id) => {
+  $(id).classList.remove('oculto');
+  document.body.style.overflow = 'hidden';
+  try { if (!history.state?.ventana) history.pushState({ ventana: true }, ''); } catch { /* sin historial */ }
+};
 const cerrar = (id) => { $(id).classList.add('oculto'); document.body.style.overflow = ''; };
-document.querySelectorAll('[data-cerrar]').forEach((b) => (b.onclick = () => cerrar('#modal-datos')));
-$('#modal-datos').addEventListener('click', (e) => { if (e.target.id === 'modal-datos') cerrar('#modal-datos'); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar('#modal-datos'); });
+// Cerrar a pedido de la persona: vuelve un paso en el historial (como el botón "atrás")
+const cerrarVentanas = () => {
+  if (history.state?.ventana) history.back();
+  else { cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos'); }
+};
+window.addEventListener('popstate', () => { cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos'); clearInterval(reloj); });
+document.querySelectorAll('[data-cerrar]').forEach((b) => (b.onclick = cerrarVentanas));
+['#modal-datos', '#modal-fotos'].forEach((id) => $(id).addEventListener('click', (e) => { if (e.target === $(id)) cerrarVentanas(); }));
+document.addEventListener('keydown', (e) => {
+  const fotos = !$('#modal-fotos').classList.contains('oculto');
+  if (e.key === 'Escape' && (fotos || !$('#modal-datos').classList.contains('oculto'))) cerrarVentanas();
+  if (fotos && e.key === 'ArrowLeft') $('#fotos-ant').click();
+  if (fotos && e.key === 'ArrowRight') $('#fotos-sig').click();
+});
 
 $('#btn-continuar').onclick = () => {
   const c = calculo();
-  const sel = $('#consultorio-suelta');
-  const consultorio = sel.value ? sel.options[sel.selectedIndex].text : 'Te asignamos uno';
+  const consultorio = estado.consultorio ? nombreCons(estado.consultorio) : 'Te asignamos uno';
   const filas = estado.modo === 'suelta'
     ? [['Día', fechaLarga(estado.fecha)], ['Horario', rangos(c.horas)], ['Consultorio', consultorio],
        ['Total', pesos(c.total)], ['Seña (' + (estado.cfg.porcentaje_sena || 50) + '%)', pesos(c.sena)]]
@@ -305,19 +453,46 @@ $('#btn-continuar').onclick = () => {
     : 'Entiendo que es una solicitud: el equipo me escribe por WhatsApp para confirmarla.';
   $('#btn-enviar').textContent = estado.modo === 'suelta' ? 'Reservar' : 'Enviar solicitud';
   $('#aviso-form').classList.add('oculto');
+  cargarMisDatos();
   abrir('#modal-datos');
   setTimeout(() => $('#f-nombre').focus(), 50);
+};
+
+// "Recordar mis datos": quedan solo en este navegador
+const CLAVE_DATOS = 'psicostudios-mis-datos';
+function cargarMisDatos() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(CLAVE_DATOS) || 'null'); } catch { /* sin almacenamiento */ }
+  if (!d) return;
+  for (const [id, v] of [['#f-nombre', d.nombre], ['#f-whatsapp', d.whatsapp], ['#f-email', d.email]]) if (!$(id).value && v) $(id).value = v;
+  if (!$('#f-profesion').value && d.profesion) {
+    const existe = [...$('#f-profesion').options].some((o) => o.value === d.profesion);
+    $('#f-profesion').value = existe ? d.profesion : 'Otra';
+    if (!existe) $('#f-profesion-otra').value = d.profesion;
+    $('#f-profesion-otra').classList.toggle('oculto', existe);
+  }
+}
+function guardarMisDatos(d) {
+  try { $('#f-recordar').checked ? localStorage.setItem(CLAVE_DATOS, JSON.stringify(d)) : localStorage.removeItem(CLAVE_DATOS); } catch { /* sin almacenamiento */ }
+}
+$('#f-profesion').onchange = (e) => {
+  const otra = e.target.value === 'Otra';
+  $('#f-profesion-otra').classList.toggle('oculto', !otra);
+  if (otra) $('#f-profesion-otra').focus();
 };
 
 $('#form-datos').onsubmit = async (e) => {
   e.preventDefault();
   const nombre = $('#f-nombre').value.trim();
   const whatsapp = $('#f-whatsapp').value.replace(/\D/g, '');
-  const profesion = $('#f-profesion').value;
+  const profesion = $('#f-profesion').value === 'Otra' ? $('#f-profesion-otra').value.trim() : $('#f-profesion').value;
+  const email = $('#f-email').value.trim().toLowerCase();
   const aviso = $('#aviso-form');
-  const falla = (m) => { aviso.textContent = m; aviso.classList.remove('oculto'); };
-  if (nombre.length < 2) return falla('Escribí tu nombre y apellido.');
-  if (whatsapp.length < 8) return falla('Revisá el WhatsApp: tiene que tener al menos 8 números.');
+  const falla = (m, campo) => { aviso.textContent = m; aviso.classList.remove('oculto'); campo && $(campo).focus(); };
+  if (nombre.length < 2) return falla('Escribí tu nombre y apellido.', '#f-nombre');
+  if (profesion.length < 2) return falla('Contanos tu profesión.', $('#f-profesion').value === 'Otra' ? '#f-profesion-otra' : '#f-profesion');
+  if (whatsapp.length < 8) return falla('Revisá el celular: tiene que tener al menos 8 números.', '#f-whatsapp');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return falla('Revisá el mail: tiene que ser del tipo nombre@ejemplo.com', '#f-email');
   if (!$('#f-acepto').checked) return falla('Tenés que aceptar las condiciones para seguir.');
   aviso.classList.add('oculto');
 
@@ -327,26 +502,27 @@ $('#form-datos').onsubmit = async (e) => {
   btn.textContent = 'Enviando…';
   try {
     if (estado.modo === 'suelta') {
-      const cons = $('#consultorio-suelta').value;
       const { data, error } = await sb.rpc('crear_reserva', {
-        p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion || null,
+        p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion, p_email: email,
         p_fecha: estado.fecha, p_horas: [...estado.horas].sort((a, b) => a - b),
-        p_consultorio: cons ? Number(cons) : null,
+        p_consultorio: estado.consultorio,
       });
       if (error) throw error;
+      guardarMisDatos({ nombre, whatsapp, profesion, email });
       mostrarResultadoSuelta(data, nombre);
     } else {
       const { data, error } = await sb.rpc('crear_solicitud_fijo', {
-        p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion || null,
+        p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion, p_email: email,
         p_dia: estado.dia, p_horas: [...estado.horasFijo].sort((a, b) => a - b), p_desde: estado.desde,
       });
       if (error) throw error;
+      guardarMisDatos({ nombre, whatsapp, profesion, email });
       mostrarResultadoFijo(data, nombre);
     }
   } catch (err) {
     falla(mensajeError(err));
     if (err?.message === 'SIN_LUGAR') {
-      if (estado.modo === 'suelta') elegirFecha(estado.fecha); else elegirInicioFijo(estado.desde);
+      if (estado.modo === 'suelta') { await cargarResumen(); elegirFecha(estado.fecha); } else elegirInicioFijo(estado.desde);
     }
   } finally {
     btn.disabled = false;
@@ -363,8 +539,8 @@ function mostrarResultadoSuelta(r, nombre) {
   const alias = estado.cfg.alias_transferencia;
   const titular = estado.cfg.titular_transferencia;
   const cvu = estado.cfg.cvu_transferencia;
-  const wa = estado.cfg.whatsapp_contacto;
   const configurado = (v) => v && v !== 'COMPLETAR';
+  const wa = configurado(estado.cfg.whatsapp_contacto) ? estado.cfg.whatsapp_contacto : WHATSAPP_AYUDA;
   const textoWa = `Hola! Soy ${nombre}. Te paso el comprobante de la seña de la reserva #${r.id}: ` +
     `${fechaLarga(estado.fecha)}, ${rangos(horas)}, ${r.consultorio}. Seña: ${pesos(r.sena)}.`;
 
@@ -406,13 +582,13 @@ function mostrarResultadoSuelta(r, nombre) {
   }));
   clearInterval(reloj);
   reloj = setInterval(() => { const el = $('#cuenta'); if (el) el.textContent = faltan(r.expira_en); }, 15000);
-  $('#nueva-reserva').onclick = () => { clearInterval(reloj); cerrar('#modal-resultado'); elegirFecha(estado.fecha); };
+  $('#nueva-reserva').onclick = async () => { clearInterval(reloj); cerrarVentanas(); await cargarResumen(); elegirFecha(estado.fecha); };
 }
 
 function mostrarResultadoFijo(r, nombre) {
   cerrar('#modal-datos');
   const horas = [...estado.horasFijo];
-  const wa = estado.cfg.whatsapp_contacto;
+  const wa = estado.cfg.whatsapp_contacto && estado.cfg.whatsapp_contacto !== 'COMPLETAR' ? estado.cfg.whatsapp_contacto : WHATSAPP_AYUDA;
   const textoWa = `Hola! Soy ${nombre}. Envié la solicitud de horario fijo #${r.id}: ` +
     `${DIAS[estado.dia].toLowerCase()} ${rangos(horas)} desde el ${fechaLarga(estado.desde)}.`;
   const horasRet = Number(estado.cfg.retencion_fijo_horas || 48);
@@ -428,7 +604,7 @@ function mostrarResultadoFijo(r, nombre) {
     ${wa && wa !== 'COMPLETAR' ? `<a class="btn btn-wa btn-bloque" target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Escribirnos por WhatsApp</a>` : ''}
     <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Volver</button>`;
   abrir('#modal-resultado');
-  $('#nueva-reserva').onclick = () => { cerrar('#modal-resultado'); elegirInicioFijo(estado.desde); };
+  $('#nueva-reserva').onclick = () => { cerrarVentanas(); elegirInicioFijo(estado.desde); };
 }
 
 // ================================================================ MERCADO PAGO
@@ -503,15 +679,19 @@ async function mostrarRetorno(id, token, resultado) {
 const botonVolver = (t = 'Volver al inicio') => `<button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">${t}</button>`;
 function conectarVolver() {
   const b = $('#nueva-reserva');
-  if (b) b.onclick = () => { cerrar('#modal-resultado'); if (estado.fecha) elegirFecha(estado.fecha); };
+  if (b) b.onclick = async () => { cerrarVentanas(); await cargarResumen(); if (estado.fecha) elegirFecha(estado.fecha); };
 }
 
 // ---------------------------------------------------------------- arranque
 try {
   await cargarBase();
-  pintarDiasSuelta();
+  await cargarResumen();
+  pintarGaleria();
   pintarDiasFijo();
-  elegirFecha(fechasDisponibles(1)[0]);
+  const primero = primerDiaConLugar();
+  estado.mesVista = (primero || hoyAR()).slice(0, 7);
+  if (primero) await elegirFecha(primero);
+  else { pintarCalendario(); $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres en los próximos meses. Escribinos por WhatsApp.</p>'; }
   const q = new URLSearchParams(location.search);
   if (q.has('pago') && q.has('reserva') && q.has('t')) {
     const [resultado, id, token] = [q.get('pago'), Number(q.get('reserva')), q.get('t')];

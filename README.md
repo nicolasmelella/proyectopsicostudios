@@ -68,6 +68,9 @@ Si dice que falta el usuario, hacé el paso 3 y volvé a correrlo (se puede corr
 Después, en una consulta nueva: `supabase/04_mercadopago.sql` → **Run** → *"Mercado Pago listo en la base"*.
 (Mercado Pago queda apagado hasta completar la sección de abajo.)
 
+Por último: `supabase/05_calendario.sql` → **Run** → *"Calendario listo: se puede reservar hasta el …"*.
+(Agenda abierta 2 meses de calendario, colores por día, y nombre, profesión, celular y mail obligatorios.)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**
@@ -169,14 +172,14 @@ Mientras `config.js` diga `COMPLETAR`, la web funciona como **simulador** con da
 - La web y el panel **comparten los datos** (quedan guardados en ese navegador, del día).
 - "Pagar seña con Mercado Pago" abre un **simulador de pago** (no es Mercado Pago) con cuatro opciones:
   aprobado, aprobado pero tarde, rechazado y volver sin pagar.
-- Barra de arriba: **Ir al panel / Ir a la web**, **⏩ Pasaron 2 horas** (vencen las reservas sin seña)
-  y **↺ Reiniciar** (vuelve a los datos de ejemplo).
+- Barra de arriba: **Ver el panel / Ver la web**, **⏩ Adelantar el reloj 2 horas** (simula que pasó el tiempo:
+  las reservas sin seña se liberan) y **↺ Borrar mis pruebas** (vuelve a los datos de ejemplo). **¿Qué es esto?** lo explica.
 - En el panel del simulador entra cualquier usuario y contraseña.
 
 Recorridos para probar:
 1. Reservar → pagar → aprobado → ver en el panel la reserva confirmada con el pago "Mercado Pago".
 2. Reservar → pagar → rechazado → reintentar → aprobado.
-3. Reservar sin pagar → ⏩ Pasaron 2 horas → en el panel el horario quedó libre.
+3. Reservar sin pagar → ⏩ Adelantar el reloj 2 horas → en el panel el horario quedó libre.
 4. Reservar → pagar → aprobado pero tarde → la reserva se recupera.
 5. Panel: registrar una seña a mano, cancelar una reserva, cargar un fijo, bloquear un horario.
 
@@ -223,3 +226,10 @@ PGHOST=... PGPORT=... PGUSER=postgres ./pruebas/correr_pruebas.sh
 ```
 Crea una base temporal en un PostgreSQL local, corre `01` + `03` + `04` y verifica reservas, seña, permisos, vencimientos,
 Mercado Pago y las funciones del servidor (con Mercado Pago simulado; necesita Node 22).
+
+## Fotos de los consultorios
+Están en `web/img/consultorios/` (optimizadas para celular y sin datos ocultos de la cámara, como la ubicación).
+Para cambiar una foto o el texto de un consultorio: `FOTOS` al principio de `web/js/reservar.js`.
+
+## WhatsApp de ayuda
+El botón "¿Tenés algún problema?" y el botón flotante usan el número de `WHATSAPP_AYUDA` en `web/js/config.js`.

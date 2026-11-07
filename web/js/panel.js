@@ -241,7 +241,7 @@ async function abrirDetalle(f) {
 
 async function detalleReserva(id) {
   const [{ data: rs, error }, { data: pagos }] = await Promise.all([
-    sb.from('reservas').select('*, profesionales(nombre, whatsapp, profesion), consultorios(nombre)').eq('id', id),
+    sb.from('reservas').select('*, profesionales(nombre, whatsapp, profesion, email), consultorios(nombre)').eq('id', id),
     sb.from('pagos').select('*').eq('reserva_id', id).order('creado_en'),
   ]);
   if (error || !rs?.length) return errorEn(null, error || 'No se encontró la reserva');
@@ -258,7 +258,9 @@ async function detalleReserva(id) {
     <h2 id="modal-titulo">Reserva #${r.id} <span class="pill ${pill}</span></h2>
     <ul class="datos">
       <li><span>Profesional</span><span>${esc(r.profesionales.nombre)}</span></li>
+      <li><span>Profesión</span><span>${esc(r.profesionales.profesion || '—')}</span></li>
       <li><span>WhatsApp</span><span><a href="${waLink(r.profesionales.whatsapp, textoRecordatorio)}" target="_blank" rel="noopener">${esc(r.profesionales.whatsapp)}</a></span></li>
+      <li><span>Mail</span><span>${r.profesionales.email ? `<a href="mailto:${esc(r.profesionales.email)}">${esc(r.profesionales.email)}</a>` : '—'}</span></li>
       <li><span>Día</span><span>${esc(fechaLarga(r.fecha))}</span></li>
       <li><span>Horario</span><span>${esc(rangos(r.horas))}</span></li>
       <li><span>Consultorio</span><span>${esc(r.consultorios.nombre)}</span></li>
@@ -649,11 +651,11 @@ async function pintarProfesionales() {
 }
 function filtrarProfesionales() {
   const q = $('#buscar-prof').value.trim().toLowerCase();
-  const lista = profesionalesCompletos.filter((p) => !q || p.nombre.toLowerCase().includes(q) || p.whatsapp.includes(q.replace(/\D/g, '') || '§'));
+  const lista = profesionalesCompletos.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q) || p.whatsapp.includes(q.replace(/\D/g, '') || '§'));
   $('#cant-prof').textContent = `${lista.length} de ${profesionalesCompletos.length}`;
-  $('#lista-prof').innerHTML = `<table class="tabla"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Profesión</th><th>Origen</th></tr></thead><tbody>
+  $('#lista-prof').innerHTML = `<table class="tabla"><thead><tr><th>Nombre</th><th>WhatsApp</th><th>Mail</th><th>Profesión</th><th>Origen</th></tr></thead><tbody>
     ${lista.map((p) => `<tr class="click" data-prof="${p.id}"><td><strong>${esc(p.nombre)}</strong></td><td>${esc(p.whatsapp)}</td>
-      <td>${esc(p.profesion || '—')}</td><td>${esc(p.origen || '—')}</td></tr>`).join('')}</tbody></table>`;
+      <td>${esc(p.email || '—')}</td><td>${esc(p.profesion || '—')}</td><td>${esc(p.origen || '—')}</td></tr>`).join('')}</tbody></table>`;
   $$('[data-prof]').forEach((tr) => (tr.onclick = () => editarProfesional(Number(tr.dataset.prof))));
 }
 $('#buscar-prof').oninput = filtrarProfesionales;
@@ -705,7 +707,7 @@ const CONFIG_VISIBLE = [
   ['hora_apertura', 'Hora de apertura', 'number'],
   ['hora_cierre', 'Hora de cierre', 'number'],
   ['hora_fin_manana', 'Desde qué hora rige precio de tarde', 'number'],
-  ['dias_reserva_maximo', 'Días hacia adelante que se puede reservar', 'number'],
+  ['meses_reserva_maximo', 'Meses hacia adelante que se puede reservar', 'number'],
   ['max_horas_por_reserva', 'Máximo de horas por reserva web', 'number'],
   ['max_pendientes_por_whatsapp', 'Reservas sin pagar por persona (web)', 'number'],
 ];

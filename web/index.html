@@ -67,6 +67,80 @@
     .resumen-lista li { display: flex; justify-content: space-between; gap: 1em; padding: .4em 0; border-bottom: 1px solid var(--borde); }
     .resumen-lista li span:last-child { font-weight: 700; text-align: right; }
 
+    /* Calendario */
+    .calendario { background: var(--crema-claro); border: 1px solid var(--borde); border-radius: var(--radius); padding: 12px; max-width: 440px; }
+    .cal-cabecera { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .cal-cabecera strong { text-transform: capitalize; font-size: 1.05rem; }
+    .cal-cabecera button { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--borde); background: var(--blanco);
+                           color: var(--azul); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+    .cal-cabecera button:disabled { opacity: .3; cursor: not-allowed; }
+    .cal-semana, .cal-dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .cal-semana span { font-size: .7rem; font-weight: 700; color: var(--texto-suave); text-transform: uppercase; padding: 4px 0; letter-spacing: .04em; }
+    .cal-dia { min-height: 44px; border-radius: 10px; border: 1.5px solid var(--borde); font: inherit; font-weight: 700;
+               cursor: pointer; position: relative; background: var(--blanco); color: var(--azul); padding: 0 0 8px; }
+    .cal-dia::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; }
+    .cal-dia.n-mucho::after { background: var(--ok); }
+    .cal-dia.n-poco::after { background: #d9a21b; }
+    .cal-dia.n-lleno { color: #a9aec0; text-decoration: line-through; background: transparent; border-color: transparent; cursor: not-allowed; }
+    .cal-dia.fuera { background: transparent; border-color: transparent; color: #bfc3cc; font-weight: 500; cursor: default; }
+    .cal-dia[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: var(--crema); }
+    .cal-dia:not(:disabled):hover { border-color: var(--celeste); }
+    .cal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: .75rem; color: var(--texto-suave); margin-top: 10px; }
+    .cal-leyenda span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+    .l-mucho::before { background: var(--ok); } .l-poco::before { background: #d9a21b; } .l-lleno::before { background: #c3c6cf; }
+
+    /* Grilla de horarios por consultorio */
+    .vista-toggle { display: inline-flex; background: var(--crema-claro); border: 1px solid var(--borde); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 12px; }
+    .vista-toggle button { font: inherit; font-weight: 600; font-size: .85rem; border: 0; border-radius: 999px; padding: .5em 1em;
+                           background: transparent; color: var(--azul); cursor: pointer; min-height: 40px; }
+    .vista-toggle button[aria-pressed="true"] { background: var(--azul); color: var(--crema); }
+    .grilla-wrap { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radius); background: var(--crema-claro); }
+    table.grilla-h { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 330px; }
+    .grilla-h thead th { font-size: .72rem; color: var(--texto-suave); font-weight: 700; padding: 4px 0; line-height: 1.15; }
+    .grilla-h tbody th { text-align: right; white-space: nowrap; padding-right: 6px; font-size: .82rem; color: var(--azul); width: 1%; }
+    .grilla-h tbody th small { display: block; font-weight: 500; color: var(--texto-suave); font-size: .68rem; }
+    .grilla-h td { padding: 0; }
+    .celda-h { display: block; width: 100%; height: 40px; border-radius: 8px; border: 1.5px solid var(--borde); background: var(--blanco);
+               cursor: pointer; font: inherit; color: var(--crema); font-weight: 800; }
+    .celda-h:hover { border-color: var(--celeste); background: #eef2f8; }
+    .celda-h[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); }
+    .celda-ocupada { display: block; height: 40px; border-radius: 8px;
+                     background: repeating-linear-gradient(135deg, #e6e2d6, #e6e2d6 5px, #dcd6c6 5px, #dcd6c6 10px); }
+    .mini { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid var(--borde); }
+    .mini-libre { background: var(--blanco); }
+    .mini-ocupado { background: repeating-linear-gradient(135deg, #e6e2d6, #e6e2d6 3px, #dcd6c6 3px, #dcd6c6 6px); border-color: transparent; }
+    .mini-elegido { background: var(--azul); border-color: var(--azul); }
+    .seleccion { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: #e6ecf5;
+                 color: var(--azul); border-radius: 10px; padding: .6em .9em; margin-top: 12px; font-size: .92rem; }
+    .ayuda-cta { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    #aviso-general a { color: inherit; font-weight: 700; }
+
+    /* Galería de consultorios */
+    .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+    @media (min-width: 700px) { .galeria { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; } }
+    .card-cons { display: block; text-align: left; font: inherit; color: var(--texto); background: var(--crema-claro); border: 1px solid var(--borde);
+                 border-radius: var(--radius); overflow: hidden; cursor: pointer; padding: 0; }
+    .card-cons:hover { border-color: var(--celeste); }
+    .card-cons img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: var(--borde); }
+    .card-cons span { display: block; padding: 10px 12px 12px; }
+    .card-cons strong { display: block; }
+    .card-cons small { color: var(--texto-suave); font-size: .82rem; line-height: 1.35; display: block; margin-top: 2px; }
+    .modal-fotos { max-width: 760px; }
+    .visor { position: relative; background: #1b2236; border-radius: 12px; overflow: hidden; }
+    .visor img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
+    .visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0;
+                    background: rgba(250, 247, 238, .92); color: var(--azul); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+    .visor-flecha.ant { left: 10px; } .visor-flecha.sig { right: 10px; }
+    .fotos-minis { display: flex; gap: 8px; overflow-x: auto; }
+    .fotos-minis button { flex: 0 0 84px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: none; }
+    .fotos-minis button[aria-current="true"] { border-color: var(--azul); }
+    .fotos-minis img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
+    .col-cons { font: inherit; font-size: .72rem; font-weight: 700; color: var(--azul); background: none; border: 0; cursor: pointer;
+                text-decoration: underline dotted; text-underline-offset: 3px; line-height: 1.15; padding: 2px; }
+    .col-resaltada { animation: resaltar 2.2s ease-out; border-radius: 8px; }
+    @keyframes resaltar { 0%, 60% { background: #f6dccd; } 100% { background: transparent; } }
+    @media (prefers-reduced-motion: reduce) { .col-resaltada { animation: none; background: #f6dccd; } }
+
     .btn-mp { background: #007eb5; color: #fff; }
     .btn-mp:hover:not(:disabled) { background: #006a99; }
     .otra-forma { margin-top: 1em; text-align: left; }
@@ -82,7 +156,7 @@
   <header class="marca">
     <img src="img/logo-azul.png" alt="Psico Studios" width="150" height="83">
     <h1>Reservá tu consultorio</h1>
-    <p>Consultorios en Microcentro para profesionales de la salud mental. Elegí el día y el horario, y confirmá con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
+    <p>Consultorios en Microcentro para profesionales de la salud mental. <a href="#consultorios">Ver fotos</a>. Elegí el día y el horario, y confirmá con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
   </header>
 
   <main class="contenedor">
@@ -97,21 +171,32 @@
     <section id="vista-suelta" role="tabpanel" aria-labelledby="tab-suelta">
       <div class="paso">
         <div class="paso-titulo"><span class="paso-num">1</span><h2>Elegí el día</h2></div>
-        <div class="chips" id="dias-suelta"></div>
-        <div class="ayuda">¿Buscás otra fecha? <label style="display:inline;font-weight:600"><input type="date" id="fecha-otra" style="display:inline-block;width:auto;min-height:36px;padding:.3em .5em"></label></div>
+        <div class="calendario">
+          <div class="cal-cabecera">
+            <button type="button" id="cal-ant" aria-label="Mes anterior">‹</button>
+            <strong id="cal-mes" aria-live="polite"></strong>
+            <button type="button" id="cal-sig" aria-label="Mes siguiente">›</button>
+          </div>
+          <div class="cal-semana" aria-hidden="true"><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span></div>
+          <div class="cal-dias" id="cal-dias"></div>
+          <div class="cal-leyenda"><span class="l-mucho">Hay lugar</span><span class="l-poco">Queda poco</span><span class="l-lleno">Completo o cerrado</span></div>
+        </div>
+        <p class="ayuda">Se puede reservar hasta el <strong id="fecha-max"></strong>.</p>
       </div>
 
-      <div class="paso">
-        <div class="paso-titulo"><span class="paso-num">2</span><h2>Elegí los horarios</h2></div>
-        <p class="suave chico" id="texto-horas">Podés elegir una o varias horas. Cada turno dura 1 hora.</p>
-        <div id="horas-suelta" class="horas"></div>
-        <div class="leyenda"><span>☀️ Mañana: hasta las <span data-cfg="hora_fin_manana">13</span> hs</span><span>🌙 Tarde: desde las <span data-cfg="hora_fin_manana">13</span> hs</span></div>
-      </div>
-
-      <div class="paso oculto" id="paso-consultorio">
-        <div class="paso-titulo"><span class="paso-num">3</span><h2>Consultorio</h2></div>
-        <select id="consultorio-suelta" aria-label="Consultorio"></select>
-        <p class="ayuda">Si no tenés preferencia, te asignamos uno libre.</p>
+      <div class="paso" id="paso-horas">
+        <div class="paso-titulo"><span class="paso-num">2</span><h2>Elegí horario y consultorio</h2></div>
+        <p style="margin-bottom:.6em"><strong id="dia-elegido"></strong></p>
+        <div class="vista-toggle" role="group" aria-label="Cómo ver los horarios">
+          <button type="button" data-vista-h="grilla" aria-pressed="true">Por consultorio</button>
+          <button type="button" data-vista-h="lista" aria-pressed="false">Solo horarios</button>
+        </div>
+        <div id="horas-suelta"></div>
+        <div class="leyenda">
+          <span><i class="mini mini-libre"></i>Libre: tocalo para elegir</span><span><i class="mini mini-ocupado"></i>Ocupado</span><span><i class="mini mini-elegido"></i>Elegido</span>
+          <span>☀️ Mañana hasta las <span data-cfg="hora_fin_manana">13</span> hs · 🌙 Tarde desde las <span data-cfg="hora_fin_manana">13</span> hs</span>
+        </div>
+        <div id="seleccion" class="seleccion oculto" aria-live="polite"></div>
       </div>
     </section>
 
@@ -134,6 +219,13 @@
       </div>
     </section>
 
+    <!-- ===================== CONSULTORIOS ===================== -->
+    <section id="consultorios" style="margin-top:28px" aria-labelledby="titulo-galeria">
+      <h2 id="titulo-galeria">Conocé los consultorios</h2>
+      <p class="suave" style="margin-top:-.2em">Tocá uno para ver sus fotos.</p>
+      <div class="galeria" id="galeria"></div>
+    </section>
+
     <!-- ===================== PRECIOS ===================== -->
     <section class="tarjeta" style="margin-top:28px" aria-labelledby="titulo-precios">
       <h2 id="titulo-precios">Precios por hora</h2>
@@ -142,6 +234,14 @@
         <tbody id="tabla-precios"><tr><td colspan="3"><div class="cargando">Cargando…</div></td></tr></tbody>
       </table>
       <p class="ayuda" style="margin-top:.8em">Abierto de lunes a sábado, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs.</p>
+    </section>
+
+    <section class="tarjeta ayuda-cta" style="margin-top:16px" aria-labelledby="titulo-ayuda">
+      <div>
+        <h2 id="titulo-ayuda" style="margin-bottom:.2em">¿Tenés algún problema?</h2>
+        <p class="suave" style="margin:0">Escribinos por WhatsApp y te ayudamos: <strong style="white-space:nowrap">+54 9 11 7822-4918</strong></p>
+      </div>
+      <a class="btn btn-wa" data-ayuda target="_blank" rel="noopener" href="https://wa.me/5491178224918">Escribinos por WhatsApp</a>
     </section>
   </main>
 
@@ -160,30 +260,57 @@
       <h2 id="titulo-datos">Tus datos</h2>
       <ul class="resumen-lista" id="resumen-datos"></ul>
       <form id="form-datos" novalidate>
+        <p class="suave chico" style="margin-top:0">Todos los datos son obligatorios.</p>
         <div class="campo">
           <label for="f-nombre">Nombre y apellido</label>
           <input id="f-nombre" name="nombre" autocomplete="name" required minlength="2" maxlength="80">
         </div>
         <div class="campo">
-          <label for="f-whatsapp">WhatsApp</label>
-          <input id="f-whatsapp" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" required placeholder="Ej: 11 4195 2323" maxlength="20">
-          <div class="ayuda">Con código de área, sin 0 ni 15.</div>
-        </div>
-        <div class="campo">
           <label for="f-profesion">Profesión</label>
-          <select id="f-profesion" name="profesion">
+          <select id="f-profesion" name="profesion" required>
             <option value="">Elegí una opción</option>
             <option>Psicólogo/a</option><option>Psiquiatra</option><option>Psicopedagogo/a</option>
             <option>Terapeuta ocupacional</option><option>Fonoaudiólogo/a</option><option>Nutricionista</option><option>Otra</option>
           </select>
+          <input id="f-profesion-otra" class="oculto" maxlength="60" placeholder="¿Cuál es tu profesión?" aria-label="Otra profesión" style="margin-top:8px">
         </div>
+        <div class="campo">
+          <label for="f-whatsapp">Celular (WhatsApp)</label>
+          <input id="f-whatsapp" name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" required placeholder="Ej: 11 4195 2323" maxlength="20">
+          <div class="ayuda">Con código de área, sin 0 ni 15.</div>
+        </div>
+        <div class="campo">
+          <label for="f-email">Mail</label>
+          <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" required maxlength="120" placeholder="nombre@ejemplo.com">
+        </div>
+        <label style="display:flex;gap:.6em;align-items:center;font-weight:500;margin-bottom:12px">
+          <input type="checkbox" id="f-recordar" checked style="width:22px;min-height:22px;flex:0 0 auto">
+          <span>Recordar mis datos en este dispositivo</span>
+        </label>
         <label style="display:flex;gap:.6em;align-items:flex-start;font-weight:500" id="acepto-wrap">
           <input type="checkbox" id="f-acepto" required style="width:22px;min-height:22px;margin-top:.15em;flex:0 0 auto">
           <span id="acepto-texto"></span>
         </label>
         <div id="aviso-form" class="aviso aviso-error oculto" role="alert"></div>
         <button class="btn btn-acento btn-bloque" type="submit" id="btn-enviar" style="margin-top:1em">Reservar</button>
+        <button class="btn btn-borde btn-bloque" type="button" data-cerrar style="margin-top:.6em">← Cambiar día u horario</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Visor de fotos -->
+  <div class="modal-fondo oculto" id="modal-fotos" role="dialog" aria-modal="true" aria-labelledby="fotos-titulo">
+    <div class="modal modal-fotos">
+      <button class="modal-cerrar" data-cerrar aria-label="Cerrar">×</button>
+      <h2 id="fotos-titulo"></h2>
+      <div class="visor">
+        <img id="fotos-img" alt="">
+        <button type="button" class="visor-flecha ant" id="fotos-ant" aria-label="Foto anterior">‹</button>
+        <button type="button" class="visor-flecha sig" id="fotos-sig" aria-label="Foto siguiente">›</button>
+      </div>
+      <p id="fotos-texto" class="suave" style="margin:.8em 0"></p>
+      <div class="fotos-minis" id="fotos-minis"></div>
+      <button type="button" class="btn btn-acento btn-bloque" id="fotos-reservar" style="margin-top:12px">Ver horarios de este consultorio</button>
     </div>
   </div>
 
@@ -192,7 +319,7 @@
     <div class="modal resultado" id="contenido-resultado"></div>
   </div>
 
-  <a class="wa-flotante oculto" id="wa-flotante" target="_blank" rel="noopener" aria-label="Escribinos por WhatsApp">
+  <a class="wa-flotante oculto" id="wa-flotante" data-ayuda target="_blank" rel="noopener" href="https://wa.me/5491178224918" aria-label="¿Tenés algún problema? Escribinos por WhatsApp">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.1 4.9 4.3 2.4.9 2.9.7 3.4.7.5-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4zM12 21.8c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4c-1-1.6-1.5-3.4-1.5-5.2 0-5.4 4.4-9.8 9.8-9.8 2.6 0 5.1 1 6.9 2.9 1.8 1.8 2.9 4.3 2.9 6.9 0 5.4-4.4 9.8-9.8 9.8zM20.5 3.5C18.2 1.2 15.2 0 12 0 5.4 0 .1 5.3.1 11.9c0 2.1.6 4.1 1.6 6L0 24l6.3-1.6c1.7.9 3.7 1.4 5.7 1.4 6.6 0 11.9-5.3 11.9-11.9 0-3.2-1.2-6.2-3.4-8.4z"/></svg>
   </a>
 

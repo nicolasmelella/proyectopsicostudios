@@ -18,7 +18,7 @@ export function crearClienteDemo() {
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
-      ['mercadopago_activo', 'si'],
+      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -30,7 +30,7 @@ export function crearClienteDemo() {
       { id: 4, modalidad: 'fijo', franja: 'tarde', valor: 8500, vigente_desde: '2026-01-01' },
     ],
     profesionales: [
-      { id: 1, nombre: 'Lucía Fernández', whatsapp: '1141234567', profesion: 'Psicólogo/a', origen: 'Web', email: null, notas: null },
+      { id: 1, nombre: 'Lucía Fernández', whatsapp: '1141234567', profesion: 'Psicólogo/a', origen: 'Web', email: 'lucia.fernandez@ejemplo.com', notas: null },
       { id: 2, nombre: 'Martín Gómez', whatsapp: '1152345678', profesion: 'Psiquiatra', origen: 'Recomendación', email: null, notas: null },
       { id: 3, nombre: 'Sofía Ruiz', whatsapp: '1163456789', profesion: 'Psicopedagogo/a', origen: 'Meta Ads', email: null, notas: null },
       { id: 4, nombre: 'Diego Álvarez', whatsapp: '1174567890', profesion: 'Psicólogo/a', origen: 'Google', email: null, notas: null },
@@ -65,6 +65,15 @@ export function crearClienteDemo() {
       if (!db.ocupaciones.has(k)) db.ocupaciones.set(k, { fijo_id: f.id });
     }
   };
+  const fechaMax = (() => {
+    const [a, m, dd] = hoy.split('-').map(Number);
+    const destino = new Date(Date.UTC(a, m - 1 + 2, 1));
+    destino.setUTCDate(Math.min(dd, new Date(Date.UTC(destino.getUTCFullYear(), destino.getUTCMonth() + 1, 0)).getUTCDate()));
+    return destino.toISOString().slice(0, 10);
+  })();
+  const contactoInvalido = (profesion, email) =>
+    (!profesion || profesion.trim().length < 2) ? err('FALTA_PROFESION', 'Contanos tu profesión')
+      : (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || '')) ? err('EMAIL_INVALIDO', 'Revisá el mail: tiene que ser del tipo nombre@ejemplo.com') : null;
   const proximo = (dia) => { let d = sumarDias(hoy, 1); while (diaSemana(d) !== dia) d = sumarDias(d, 1); return d; };
 
   // ---- datos de ejemplo ----
@@ -197,12 +206,24 @@ export function crearClienteDemo() {
     es_equipo: () => !!sesion,
     disponibilidad({ p_desde, p_hasta }) {
       const out = [];
-      for (let f = p_desde < hoy ? hoy : p_desde; f <= p_hasta; f = sumarDias(f, 1)) {
+      for (let f = p_desde < hoy ? hoy : p_desde; f <= p_hasta && f <= fechaMax; f = sumarDias(f, 1)) {
         if (diaSemana(f) === 7) continue;
         for (let h = cfg('hora_apertura'); h < cfg('hora_cierre'); h++) {
           if (f === hoy && h <= horaAR()) continue;
           for (const c of db.consultorios) if (c.activo && c.online && libre(c.id, f, [h])) out.push({ fecha: f, hora: h, consultorio_id: c.id });
         }
+      }
+      return out;
+    },
+    resumen_disponibilidad({ p_desde, p_hasta }) {
+      const libres = new Map();
+      for (const r of rpcs.disponibilidad({ p_desde, p_hasta })) libres.set(r.fecha, (libres.get(r.fecha) || 0) + 1);
+      const out = [];
+      const nCons = db.consultorios.filter((c) => c.activo && c.online).length;
+      for (let f = p_desde < hoy ? hoy : p_desde; f <= p_hasta && f <= fechaMax; f = sumarDias(f, 1)) {
+        if (diaSemana(f) === 7) continue;
+        const desde = f === hoy ? Math.max(cfg('hora_apertura'), horaAR() + 1) : cfg('hora_apertura');
+        out.push({ fecha: f, libres: libres.get(f) || 0, total: Math.max(0, cfg('hora_cierre') - desde) * nCons });
       }
       return out;
     },
@@ -217,27 +238,33 @@ export function crearClienteDemo() {
       }
       return out;
     },
-    obtenerProfesional(nombre, whatsapp, profesion, origen) {
+    obtenerProfesional(nombre, whatsapp, profesion, origen, email = null) {
       let p = db.profesionales.find((x) => x.whatsapp === whatsapp);
-      if (!p) { p = { id: nuevoId(), nombre, whatsapp, profesion, origen, email: null, notas: null }; db.profesionales.push(p); }
+      if (!p) { p = { id: nuevoId(), nombre, whatsapp, profesion, origen, email, notas: null }; db.profesionales.push(p); }
+      else { p.profesion = p.profesion || profesion; p.email = p.email || email; }
       return p.id;
     },
-    crear_reserva({ p_nombre, p_whatsapp, p_profesion, p_fecha, p_horas, p_consultorio }) {
+    crear_reserva({ p_nombre, p_whatsapp, p_profesion, p_email, p_fecha, p_horas, p_consultorio }) {
+      const invalido = contactoInvalido(p_profesion, p_email);
+      if (invalido) return invalido;
+      if (p_fecha > fechaMax) return err('FECHA_LEJANA', 'Todavía no se puede reservar tan adelante');
       if (p_horas.length > cfg('max_horas_por_reserva')) return err('DEMASIADAS_HORAS', `Se pueden reservar hasta ${cfg('max_horas_por_reserva')} horas por vez.`);
       const pend = db.reservas.filter((r) => r.estado === 'pendiente' && r.origen === 'web' &&
         db.profesionales.find((p) => p.id === r.profesional_id)?.whatsapp === p_whatsapp).length;
       if (pend >= cfg('max_pendientes_por_whatsapp')) return err('DEMASIADAS_PENDIENTES', 'Ya tenés reservas esperando el pago de la seña. Pagalas o escribinos por WhatsApp.');
       const cons = p_consultorio || db.consultorios.find((c) => c.nombre !== 'Salón' && libre(c.id, p_fecha, p_horas))?.id;
       if (!cons || !libre(cons, p_fecha, p_horas)) return err('SIN_LUGAR', 'Ese horario se acaba de ocupar. Elegí otro.');
-      const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web');
+      const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web', p_email);
       const r = agregarReserva(prof, cons, p_fecha, p_horas, 'pendiente', 0, cfg('retencion_suelta_minutos'));
       return { id: r.id, token: r.token_pago, consultorio: db.consultorios.find((c) => c.id === cons).nombre, total: r.precio_total, sena: sena(r.precio_total), expira_en: r.expira_en };
     },
-    crear_solicitud_fijo({ p_nombre, p_whatsapp, p_profesion, p_dia, p_horas, p_desde }) {
+    crear_solicitud_fijo({ p_nombre, p_whatsapp, p_profesion, p_email, p_dia, p_horas, p_desde }) {
+      const invalido = contactoInvalido(p_profesion, p_email);
+      if (invalido) return invalido;
       const disp = rpcs.disponibilidad_fijo({ p_dia, p_desde });
       const cons = db.consultorios.find((c) => c.nombre !== 'Salón' && p_horas.every((h) => disp.some((d) => d.hora === h && d.consultorio_id === c.id)))?.id;
       if (!cons) return err('SIN_LUGAR', 'No hay un consultorio libre en ese horario todas las semanas');
-      const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web');
+      const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web', p_email);
       const semanal = p_horas.reduce((s, h) => s + precioHora('fijo', h, p_desde), 0);
       const f = { id: nuevoId(), profesional_id: prof, consultorio_id: cons, dia_semana: p_dia, horas: p_horas, precio_semanal: semanal,
         estado: 'solicitud', desde: p_desde, hasta: null, expira_en: ahoraISO(60 * cfg('retencion_fijo_horas')), origen: 'web' };
@@ -413,10 +440,12 @@ export function crearClienteDemo() {
       // Adelanta el reloj: lo que vencía en ese tiempo, vence
       adelantar(minutos) {
         const ms = minutos * 60000;
+        const antes = db.reservas.filter((r) => r.estado === 'vencida').length;
         for (const r of db.reservas) if (r.estado === 'pendiente' && r.expira_en) r.expira_en = new Date(new Date(r.expira_en).getTime() - ms).toISOString();
         for (const f of db.fijos) if (f.estado === 'solicitud' && f.expira_en) f.expira_en = new Date(new Date(f.expira_en).getTime() - ms).toISOString();
         liberarVencidas();
         guardar();
+        return db.reservas.filter((r) => r.estado === 'vencida').length - antes;
       },
       reiniciar() { try { localStorage.removeItem(CLAVE_GUARDADO); } catch { /* nada */ } },
     },

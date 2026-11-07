@@ -63,7 +63,7 @@ const ok = (msg) => console.log('ok  · ' + msg);
 sql('postgres', "update public.config set valor = 'si' where clave = 'mercadopago_activo'");
 let dia = sql('postgres', 'select public.hoy_ar() + 21');
 if (sql('postgres', `select extract(isodow from date '${dia}')`) === '7') dia = sql('postgres', `select date '${dia}' + 1`);
-const reserva = JSON.parse(sql('anon', `select public.crear_reserva('Juli Prueba', '1133334444', null, '${dia}', array[18,19]::smallint[], 1::smallint)`));
+const reserva = JSON.parse(sql('anon', `select public.crear_reserva('Juli Prueba', '1133334444', 'Psicóloga', 'juli@prueba.com', '${dia}', array[18,19]::smallint[], 1::smallint)`));
 
 // ---------- mp-crear-pago ----------
 const crearPago = await cargar('mp-crear-pago');

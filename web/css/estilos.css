@@ -142,3 +142,5 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .chip:focus-visib
 }
 .btn-peligro-lleno { background: var(--error); color: #fff; }
 .btn-peligro-lleno:hover:not(:disabled) { background: #8f1e18; }
+.demo-explica { flex-basis: 100%; text-align: left; max-width: 720px; background: var(--crema); color: var(--azul); border-radius: 10px; padding: .7em 1em; line-height: 1.45; }
+.demo-aviso:not(:empty) { flex-basis: 100%; text-align: center; font-weight: 700; }

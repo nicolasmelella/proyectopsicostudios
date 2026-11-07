@@ -20,15 +20,43 @@ export async function crearCliente({ sesionTemporal = false } = {}) {
       <div class="demo-banda" role="region" aria-label="Herramientas del simulador">
         <span><strong>SIMULADOR</strong> · datos de prueba, nada es real</span>
         <span class="demo-acciones">
-          <a href="${enPanel ? 'index.html' : 'panel.html'}">${enPanel ? '→ Ir a la web' : '→ Ir al panel del equipo'}</a>
-          <button type="button" data-demo="adelantar">⏩ Pasaron 2 horas</button>
-          <button type="button" data-demo="reiniciar">↺ Reiniciar</button>
+          <a href="${enPanel ? 'index.html' : 'panel.html'}">${enPanel ? '→ Ver la web (profesionales)' : '→ Ver el panel (equipo)'}</a>
+          <button type="button" data-demo="adelantar">⏩ Adelantar el reloj 2 horas</button>
+          <button type="button" data-demo="reiniciar">↺ Borrar mis pruebas</button>
+          <button type="button" data-demo="ayuda" aria-expanded="false">¿Qué es esto?</button>
         </span>
+        <span class="demo-explica" hidden>
+          <strong>Adelantar el reloj 2 horas:</strong> las reservas que no pagan la seña se liberan solas a las 2 horas.
+          Este botón simula que ya pasó ese tiempo, para que veas qué pasa sin esperar.<br>
+          <strong>Borrar mis pruebas:</strong> borra todas las reservas y pagos que hiciste en el simulador y vuelve a los datos de ejemplo.
+        </span>
+        <span class="demo-aviso" role="status"></span>
       </div>`);
-    document.querySelector('[data-demo="adelantar"]').onclick = () => { cliente.demo.adelantar(120); location.reload(); };
+    const ayuda = document.querySelector('[data-demo="ayuda"]');
+    ayuda.onclick = () => {
+      const exp = document.querySelector('.demo-explica');
+      exp.hidden = !exp.hidden;
+      ayuda.setAttribute('aria-expanded', !exp.hidden);
+    };
+    try {
+      const aviso = sessionStorage.getItem('psicostudios-demo-aviso');
+      if (aviso) { document.querySelector('.demo-aviso').textContent = aviso; sessionStorage.removeItem('psicostudios-demo-aviso'); }
+    } catch { /* sin almacenamiento */ }
+    document.querySelector('[data-demo="adelantar"]').onclick = () => {
+      const n = cliente.demo.adelantar(120);
+      const aviso = n ? `⏩ Pasaron 2 horas: ${n === 1 ? 'se liberó 1 reserva' : `se liberaron ${n} reservas`} que no pagaron la seña.`
+        : '⏩ Pasaron 2 horas: no había reservas sin seña por vencer.';
+      try { sessionStorage.setItem('psicostudios-demo-aviso', aviso); } catch { /* nada */ }
+      location.reload();
+    };
     document.querySelector('[data-demo="reiniciar"]').onclick = () => {
       preguntar({ titulo: '¿Empezar de cero?', texto: 'Se borra todo lo que hiciste en el simulador y vuelven los datos de ejemplo.', aceptar: 'Reiniciar', peligro: true })
-        .then((ok) => { if (ok === null) return; cliente.demo.reiniciar(); location.href = location.pathname; });
+        .then((ok) => {
+          if (ok === null) return;
+          cliente.demo.reiniciar();
+          try { sessionStorage.setItem('psicostudios-demo-aviso', '↺ Listo: se borraron tus pruebas y volvieron los datos de ejemplo.'); } catch { /* nada */ }
+          location.href = location.pathname;
+        });
     };
     document.querySelector('#form-login h1')?.insertAdjacentHTML('afterend',
       '<p class="aviso aviso-info chico">Simulador: entrá con cualquier usuario y contraseña.</p>');
@@ -112,6 +140,8 @@ const MENSAJES = {
   DOMINGO: 'Los domingos está cerrado.',
   WHATSAPP_INVALIDO: 'Revisá el WhatsApp: tiene que tener al menos 8 números.',
   NOMBRE_INVALIDO: 'Falta el nombre.',
+  EMAIL_INVALIDO: 'Revisá el mail: tiene que ser del tipo nombre@ejemplo.com',
+  FALTA_PROFESION: 'Contanos tu profesión.',
   NO_AUTORIZADO: 'Tu usuario no tiene permiso para esto.',
 };
 export function mensajeError(error) {
