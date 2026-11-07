@@ -101,10 +101,9 @@
     /* ---------- Semana (como el Excel) ---------- */
     .topbar .hola { font-size: .9rem; opacity: .85; }
     .como-usar { background: #fff8e1; border: 1px solid #f0dfa6; border-radius: 10px; padding: .6em .9em; margin: 0 0 12px; font-size: .95rem; }
-    table.semana { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: calc(58px + var(--nc) * 88px); }
-    html.letra-grande table.semana { width: calc(58px + var(--nc) * 104px); }
+    table.semana { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: calc(58px + var(--nc) * var(--cw, 88px)); }
     .semana th, .semana td { border-bottom: 1px solid var(--borde); border-right: 1px solid var(--borde); padding: 0; }
-    .semana col.c { width: 88px; }
+    .semana col.c { width: var(--cw, 88px); }
     .semana col.hcol { width: 58px; }
     .semana thead th { background: var(--azul); color: var(--crema); font-size: .82rem; padding: .45em .2em; position: sticky; z-index: 2; }
     .semana thead tr:first-child th { top: 0; font-size: .95rem; }
@@ -125,12 +124,22 @@
     .s-sinsena { background: #fff6d6; box-shadow: inset 0 0 0 2px #e0b52c; }
     .s-lib { background: #fbd9bf; }
     .s-sol { background: repeating-linear-gradient(135deg, #e3f1dc, #e3f1dc 6px, #d2e7c8 6px, #d2e7c8 12px); }
+    .s-peri { background: #c9daf8; }
+    .s-quinc { background: #ead1dc; }
+    .semana.compacto .sc { padding: .15em .2em; min-height: 30px !important; }
+    .semana.compacto .sc .n { font-size: .68rem; line-height: 1.1; }
+    .semana.compacto .sc .e { display: none; }
+    .semana.compacto thead tr:first-child th { font-size: .78rem; }
+    .semana.compacto thead tr:nth-child(2) th { font-size: .66rem; padding: .3em 0; }
+    .zoom { display: flex; gap: 6px; align-items: center; }
+    .zoom .chip { min-height: 36px; padding: .3em .7em; font-size: .85rem; font-weight: 600; }
     .s-bloq { background: repeating-linear-gradient(135deg, #ebebeb, #ebebeb 6px, #dedede 6px, #dedede 12px); color: #555; }
     .leyenda-se { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: .85rem; }
     .leyenda-se span::before { content: ""; display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.12); }
     .leyenda-se .l-fijo::before { background: #cfe8c4; } .leyenda-se .l-suelta::before { background: #fbe7a1; }
     .leyenda-se .l-sinsena::before { background: #fff6d6; border: 2px solid #e0b52c; } .leyenda-se .l-lib::before { background: #fbd9bf; }
-    .leyenda-se .l-sol::before { background: #d2e7c8; } .leyenda-se .l-bloq::before { background: #dedede; }
+    .leyenda-se .l-sol::before { background: #d2e7c8; }
+    .leyenda-se .l-peri::before { background: #c9daf8; } .leyenda-se .l-quinc::before { background: #ead1dc; } .leyenda-se .l-bloq::before { background: #dedede; }
     .notas-semana { margin-top: 22px; background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem; max-width: 900px; }
     .notas-semana ul { list-style: none; margin: .5em 0 1em; padding: 0; }
     .notas-semana li { display: flex; gap: 10px; align-items: flex-start; padding: .55em 0; border-bottom: 1px dashed var(--borde); }
@@ -139,6 +148,40 @@
     .notas-semana form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
     .notas-semana textarea { flex: 1; min-width: 220px; }
     .oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    /* ---------- Números ---------- */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .kpi { background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem 1.1rem; }
+    .kpi .t { font-size: .85rem; color: var(--texto-suave); font-weight: 600; }
+    .kpi .v { font-size: 2rem; font-weight: 800; color: var(--azul); line-height: 1.15; margin: .15em 0; }
+    .kpi .d { font-size: .85rem; color: var(--texto-suave); }
+    .kpi .sube { color: var(--ok); font-weight: 700; } .kpi .baja { color: var(--error); font-weight: 700; }
+    .nu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+    .nu-card { background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem 1.1rem; min-width: 0; }
+    .nu-card h3 { margin: 0 0 .2em; }
+    .nu-ancha { grid-column: 1 / -1; }
+    .barras-v { display: flex; align-items: flex-end; gap: 4px; height: 180px; padding-top: 22px; border-bottom: 1px solid var(--borde); }
+    .barras-v .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; position: relative; }
+    .barras-v .bar { width: 100%; max-width: 34px; background: var(--celeste); border-radius: 4px 4px 0 0; }
+    .barras-v .col.actual .bar { background: var(--terracota); }
+    .barras-v .col:hover .bar { filter: brightness(.9); }
+    .barras-v .val { position: absolute; font-size: .72rem; font-weight: 700; color: var(--texto); transform: translateY(-1.3em); white-space: nowrap; }
+    .ejes-v { display: flex; gap: 4px; margin-top: 4px; }
+    .ejes-v span { flex: 1; text-align: center; font-size: .66rem; color: var(--texto-suave); min-width: 0; overflow: hidden; }
+    .barras-h { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; }
+    .barras-h .et { font-size: .88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+    .barras-h .pista { background: #efe9d6; border-radius: 4px; height: 14px; }
+    .barras-h .bar { height: 14px; background: var(--azul); border-radius: 4px; }
+    .barras-h .num { font-size: .82rem; color: var(--texto-suave); white-space: nowrap; }
+    .barras-h .num strong { color: var(--texto); }
+    table.calor { border-collapse: separate; border-spacing: 2px; width: 100%; table-layout: fixed; font-size: .72rem; }
+    table.calor th { font-weight: 700; color: var(--texto-suave); padding: 2px; }
+    table.calor td { height: 22px; border-radius: 4px; text-align: center; color: var(--texto); font-weight: 600; }
+    table.calor td.osc { color: #fff; }
+    .pend-lista { list-style: none; margin: 0; padding: 0; }
+    .pend-lista li { border-bottom: 1px solid var(--borde); }
+    .pend-lista button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: .55em .2em; }
+    .pend-lista button:hover, .pend-lista button:focus-visible { background: #f3eedc; outline: none; }
+    .pend-lista small { display: block; color: var(--texto-suave); }
     /* Ventana "Anotar" */
     .contexto { background: #eef2f8; border-radius: 10px; padding: .6em .9em; font-weight: 700; color: var(--azul); }
     .grupo-grande { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -150,7 +193,6 @@
                        font-weight: 800; padding: .3em .9em; cursor: pointer; }
     /* Letra grande */
     html.letra-grande { font-size: 118%; }
-    html.letra-grande .semana col.c { width: 104px; }
     html.letra-grande .sc .n { font-size: .85rem; }
     @media print {
       .topbar, .barra-herr, .como-usar, #form-nota, .notas-semana li button, .demo-banda { display: none !important; }
@@ -203,6 +245,7 @@
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="semana" aria-selected="true">Semana</button>
         <button role="tab" data-tab="agenda" aria-selected="false">Día</button>
+        <button role="tab" data-tab="numeros" aria-selected="false">Números</button>
         <button role="tab" data-tab="pendientes" aria-selected="false">Pendientes <span class="badge oculto" id="badge-pend"></span></button>
         <button role="tab" data-tab="fijos" aria-selected="false">Fijos</button>
         <button role="tab" data-tab="profesionales" aria-selected="false">Profesionales</button>
@@ -218,6 +261,12 @@
           <button class="btn btn-borde btn-chico" id="se-hoy">Esta semana</button>
           <button class="btn btn-borde btn-chico" id="se-sig" aria-label="Semana siguiente">▶</button>
           <span class="fecha-actual" id="se-titulo"></span>
+          <div class="zoom" role="group" aria-label="Cuántos días ver">
+            <span class="suave chico">Ver:</span>
+            <button class="chip" data-zoom="2" aria-pressed="false">2 días</button>
+            <button class="chip" data-zoom="3" aria-pressed="false">3 días</button>
+            <button class="chip" data-zoom="6" aria-pressed="false">Semana entera</button>
+          </div>
           <div class="der">
             <button class="btn btn-borde btn-chico" id="se-excel">Bajar en Excel</button>
             <button class="btn btn-borde btn-chico" id="se-imprimir">Imprimir</button>
@@ -227,6 +276,7 @@
         <div class="grilla-wrap" id="se-wrap"><div id="semana"><div class="cargando" style="padding:1em">Cargando semana…</div></div></div>
         <div class="leyenda-se">
           <span class="l-fijo">Fijo</span><span class="l-suelta">Horas sueltas (señada)</span><span class="l-sinsena">Sin seña</span>
+          <span class="l-peri">Pericia</span><span class="l-quinc">Cada 15 días</span>
           <span class="l-lib">Fijo que no viene (libre)</span><span class="l-sol">Pidió fijo (falta aprobar)</span><span class="l-bloq">Bloqueado</span>
         </div>
         <div class="notas-semana">
@@ -237,6 +287,37 @@
             <textarea id="nota-texto" rows="2" maxlength="1000" placeholder="Ej: Ana avisó que el jueves no viene · Martín ya abonó octubre"></textarea>
             <button class="btn btn-primario">Agregar nota</button>
           </form>
+        </div>
+      </section>
+
+      <!-- NÚMEROS (tablero) -->
+      <section data-vista="numeros" class="oculto">
+        <div class="barra-herr">
+          <h2 style="margin:0">Números</h2>
+          <div class="der">
+            <label for="nu-periodo" class="suave chico" style="align-self:center">Gráficos de</label>
+            <select id="nu-periodo" style="width:auto;min-height:40px">
+              <option value="12">las últimas 12 semanas</option>
+              <option value="4">las últimas 4 semanas</option>
+              <option value="26">los últimos 6 meses</option>
+              <option value="anio">todo el año</option>
+            </select>
+          </div>
+        </div>
+        <div class="kpis" id="nu-kpis"><div class="cargando">Calculando…</div></div>
+        <div class="nu-grid">
+          <article class="nu-card nu-ancha"><h3>Ocupación por semana</h3>
+            <p class="suave chico">Qué parte de las horas disponibles se usó cada semana (6 espacios × 13 horas × 6 días).</p>
+            <div id="nu-semanas"></div></article>
+          <article class="nu-card"><h3>Días con más ocupación</h3>
+            <p class="suave chico">Promedio del período elegido.</p><div id="nu-dias"></div></article>
+          <article class="nu-card"><h3>¿A qué hora se llena?</h3>
+            <p class="suave chico">Más oscuro = más lleno. Promedio del período elegido.</p><div id="nu-calor"></div></article>
+          <article class="nu-card"><h3>Profesionales con más horas <span class="suave chico" id="nu-mes-rank"></span></h3>
+            <div id="nu-ranking"></div></article>
+          <article class="nu-card"><h3>Falta cobrar</h3>
+            <p class="suave chico">Turnos ya usados con saldo, y lo que falta del mes de cada fijo. Tocá para cobrar.</p>
+            <div id="nu-pendientes"></div></article>
         </div>
       </section>
 

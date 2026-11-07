@@ -138,7 +138,19 @@ export function crearClienteDemo() {
     for (const s of EXCEL.sueltas) {
       if (s.fecha < hoy || !libre(s.cons, s.fecha, s.horas)) continue;
       const r = agregarReserva(idPersona.get(s.clave), s.cons, s.fecha, s.horas, 'confirmada', 0, 0);
-      r.origen = 'panel';
+      r.origen = 'panel'; r.tipo_excel = s.tipo || null; r.comentario = s.coment || null;
+    }
+    // Historia: cada bloque de las semanas pasadas, tal cual estaba en el Excel
+    for (const s of EXCEL.historia || []) {
+      if (!libre(s.cons, s.fecha, s.horas)) continue;
+      const r = agregarReserva(idPersona.get(s.clave), s.cons, s.fecha, s.horas, 'confirmada', 0, 0);
+      r.origen = 'excel'; r.tipo_excel = s.tipo; r.comentario = s.coment || null; delete r.token_pago;
+    }
+    for (const b of EXCEL.bloqueos || []) {
+      if (!libre(b.cons, b.fecha, b.horas)) continue;
+      const bl = { id: nuevoId(), consultorio_id: b.cons, fecha: b.fecha, hora_desde: b.horas[0], hora_hasta: b.horas.at(-1) + 1, motivo: b.motivo };
+      db.bloqueos.push(bl);
+      b.horas.forEach((h) => db.ocupaciones.set(key(b.cons, b.fecha, h), { bloqueo_id: bl.id }));
     }
     EXCEL.notas.forEach((n) => db.notas_semana.push({ id: nuevoId(), semana: n.semana, texto: n.texto, autor: null, autor_nombre: 'Excel', creado_en: ahoraISO() }));
   }
@@ -426,7 +438,7 @@ export function crearClienteDemo() {
           profesional_id: p?.id || null, reserva_id: r?.id || null, fijo_id: fj?.id || null, bloqueo_id: b?.id || null,
           pagado: r ? pagado(r.id) >= r.precio_total : fj ? db.pagos.some((x) => x.fijo_id === fj.id && !x.anulado && x.periodo === f.slice(0, 7)) : null,
           detalle: r?.comentario || fj?.comentario || null, monto_total: r?.precio_total ?? fj?.precio_semanal ?? null, monto_pagado: r ? pagado(r.id) : null,
-          expira_en: r?.expira_en || fj?.expira_en || null,
+          expira_en: r?.expira_en || fj?.expira_en || null, tipo_excel: r?.tipo_excel || null,
         });
       }
       for (const e of db.fijo_excepciones) {
@@ -436,7 +448,7 @@ export function crearClienteDemo() {
         for (const h of fj.horas) if (!db.ocupaciones.has(key(fj.consultorio_id, e.fecha, h))) out.push({
           fecha: e.fecha, hora: h, consultorio_id: fj.consultorio_id, tipo: 'liberado', estado: 'libre', nombre: p.nombre,
           whatsapp: p.whatsapp, profesional_id: p.id, reserva_id: null, fijo_id: fj.id, bloqueo_id: null, pagado: null, detalle: e.motivo,
-          monto_total: null, monto_pagado: null, expira_en: null });
+          monto_total: null, monto_pagado: null, expira_en: null, tipo_excel: null });
       }
       return out.sort((a, b) => (a.fecha + a.hora + a.consultorio_id > b.fecha + b.hora + b.consultorio_id ? 1 : -1));
     },
@@ -518,6 +530,67 @@ export function crearClienteDemo() {
       db.bloqueos.push(b);
       cons.forEach((c) => horas.forEach((h) => db.ocupaciones.set(key(c.id, p_fecha, h), { bloqueo_id: b.id })));
       return b.id;
+    },
+    // ---- 12_tablero.sql ----
+    tablero({ p_desde, p_hasta }) {
+      const R = new Map(db.reservas.map((r) => [r.id, r]));
+      const F = new Map(db.fijos.map((f) => [f.id, f]));
+      const P = new Map(db.profesionales.map((p) => [p.id, p]));
+      const oc = [];
+      for (const [k, o] of db.ocupaciones) {
+        const [c, f, h] = k.split('|');
+        if (f < p_desde || f > p_hasta || o.bloqueo_id) continue;
+        const r = o.reserva_id && R.get(o.reserva_id);
+        const fj = o.fijo_id && F.get(o.fijo_id);
+        if (r && !['pendiente', 'confirmada'].includes(r.estado)) continue;
+        if (fj && fj.estado !== 'activo') continue;
+        oc.push({ fecha: f, hora: Number(h), cons: Number(c), prof: (r || fj)?.profesional_id, tipo: fj || r?.tipo_excel === 'fijo' ? 'fijo' : 'suelta' });
+      }
+      const contar = (fn) => { const m = new Map(); oc.forEach((x) => { const k = fn(x); m.set(k, (m.get(k) || 0) + 1); }); return m; };
+      const lunes = (f) => sumarDias(f, 1 - diaSemana(f));
+      const porProf = new Map();
+      oc.filter((x) => x.prof).forEach((x) => { const v = porProf.get(x.prof) || { h: 0, hf: 0 }; v.h++; if (x.tipo === 'fijo') v.hf++; porProf.set(x.prof, v); });
+      const pg = db.pagos.filter((p) => !p.anulado && p.pagado_en >= p_desde && p.pagado_en <= p_hasta)
+        .map((p) => ({ ...p, recibio: p.recibio || (p.medio === 'mercadopago' ? 'Mercado Pago' : 'Sin indicar') }));
+      const sumaPor = (campo, k) => [...pg.reduce((m, p) => m.set(p[campo], (m.get(p[campo]) || 0) + p.monto), new Map())]
+        .map(([v, monto]) => ({ [k]: v, monto })).sort((a, b) => b.monto - a.monto);
+      return {
+        horas: oc.length,
+        por_semana: [...contar((x) => lunes(x.fecha))].map(([l, horas]) => ({ lunes: l, horas })).sort((a, b) => (a.lunes < b.lunes ? -1 : 1)),
+        por_dia: [...contar((x) => diaSemana(x.fecha))].map(([dia, horas]) => ({ dia, horas })).sort((a, b) => a.dia - b.dia),
+        calor: [...contar((x) => diaSemana(x.fecha) + '|' + x.hora)].map(([k, horas]) => ({ dia: Number(k.split('|')[0]), hora: Number(k.split('|')[1]), horas })),
+        por_consultorio: [...contar((x) => x.cons)].map(([consultorio_id, horas]) => ({ consultorio_id, horas })).sort((a, b) => a.consultorio_id - b.consultorio_id),
+        por_tipo: Object.fromEntries(contar((x) => x.tipo)),
+        ranking: [...porProf].map(([id, v]) => ({ profesional_id: id, nombre: P.get(id)?.nombre, horas: v.h, horas_fijo: v.hf }))
+          .sort((a, b) => b.horas - a.horas || (a.nombre < b.nombre ? -1 : 1)).slice(0, 20),
+        cobrado: pg.reduce((s, p) => s + p.monto, 0),
+        cobros_por_persona: sumaPor('recibio', 'recibio'),
+        cobros_por_medio: sumaPor('medio', 'medio'),
+      };
+    },
+    pendientes_cobro() {
+      const mes = hoy.slice(0, 7);
+      const ini = mes + '-01';
+      const fin = sumarDias(sumarDias(ini, 32).slice(0, 7) + '-01', -1);
+      const items = [];
+      for (const r of db.reservas) {
+        if (!['pendiente', 'confirmada'].includes(r.estado) || r.origen === 'excel' || r.fecha > hoy) continue;
+        const falta = r.precio_total - pagado(r.id);
+        const p = db.profesionales.find((x) => x.id === r.profesional_id);
+        if (falta > 0) items.push({ tipo: 'reserva', id: r.id, nombre: p?.nombre, falta, detalle: { fecha: r.fecha, horas: r.horas } });
+      }
+      for (const f of db.fijos.filter((x) => x.estado === 'activo')) {
+        let veces = 0;
+        for (let d = f.desde > ini ? f.desde : ini; d <= fin && (!f.hasta || d <= f.hasta); d = sumarDias(d, 1)) {
+          if (diaSemana(d) === f.dia_semana && !db.fijo_excepciones.some((e) => e.fijo_id === f.id && e.fecha === d)) veces++;
+        }
+        const pagadoMes = db.pagos.filter((p) => p.fijo_id === f.id && p.periodo === mes && !p.anulado).reduce((s, p) => s + p.monto, 0);
+        const falta = f.precio_semanal * veces - pagadoMes;
+        const p = db.profesionales.find((x) => x.id === f.profesional_id);
+        if (falta > 0) items.push({ tipo: 'fijo', id: f.id, nombre: p?.nombre, falta, detalle: { dia_semana: f.dia_semana, horas: f.horas } });
+      }
+      items.sort((a, b) => b.falta - a.falta);
+      return { mes, total: items.reduce((s, x) => s + x.falta, 0), items };
     },
     // ---- 11_comentarios.sql ----
     guardar_comentario({ p_texto, p_reserva_id, p_fijo_id }) {

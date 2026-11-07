@@ -218,7 +218,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ semana: pintarSemana, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
+  ({ semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -319,6 +319,26 @@ $('#se-imprimir').onclick = () => window.print();
 $('#se-excel').onclick = () => bajarSemanaExcel();
 
 let datosSemana = { filas: [], mapa: new Map(), notas: [] };
+
+// Cuántos días entran en pantalla: 2, 3 o la semana entera (se recuerda en esta compu)
+let zoom = 3;
+try { zoom = Number(localStorage.getItem('psico-zoom')) || 3; } catch { /* nada */ }
+function ajustarZoom() {
+  const tabla = $('#semana table.semana');
+  if (!tabla) return;
+  const ancho = $('#se-wrap').clientWidth - 62;
+  const columnas = zoom * 6;
+  const cw = Math.max(zoom === 6 ? 26 : zoom === 3 ? 64 : 88, Math.floor(ancho / columnas));
+  tabla.style.setProperty('--cw', cw + 'px');
+  tabla.classList.toggle('compacto', cw < 64);
+  $$('[data-zoom]').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.zoom) === zoom));
+}
+$$('[data-zoom]').forEach((b) => (b.onclick = () => {
+  zoom = Number(b.dataset.zoom);
+  try { localStorage.setItem('psico-zoom', zoom); } catch { /* nada */ }
+  pintarSemana();
+}));
+window.addEventListener('resize', () => { if (st.tab === 'semana') ajustarZoom(); });
 const diasDeSemana = () => [0, 1, 2, 3, 4, 5].map((i) => sumarDias(st.semana, i));
 const consCorto = (c) => (c.id === 6 || /sal[oó]n/i.test(c.nombre) ? 'Salón' : 'C' + (c.nombre.match(/\d+/)?.[0] || c.id));
 
@@ -328,6 +348,10 @@ function claseSemana(f) {
   if (f.tipo === 'solicitud') return ['s-sol', 'pidió fijo'];
   if (f.tipo === 'liberado') return ['s-lib', 'no viene · libre'];
   if (f.tipo === 'bloqueo') return ['s-bloq', 'bloqueado'];
+  if (f.tipo_excel) {
+    const t = { fijo: ['s-fijo', 'fijo'], flotante: ['s-suelta', 'flotante'], pericia: ['s-peri', 'pericia'], quincenal: ['s-quinc', 'cada 15 días'] }[f.tipo_excel];
+    if (t) return t;
+  }
   if (f.estado === 'confirmada') return ['s-suelta', f.pagado ? 'pagó todo' : f.monto_pagado ? 'señada' : 'anotada'];
   return ['s-sinsena', 'sin seña'];
 }
@@ -360,8 +384,9 @@ async function pintarSemana() {
   const idDe = (f) => f && (f.reserva_id ? 'r' + f.reserva_id : f.bloqueo_id ? 'b' + f.bloqueo_id : (f.tipo === 'liberado' ? 'l' : 'f') + f.fijo_id);
   const salto = new Set();
   let html = `<table class="semana" style="--nc:${dias.length * cons.length}"><colgroup><col class="hcol">${dias.map(() => cons.map(() => '<col class="c">').join('')).join('')}</colgroup><thead><tr><th class="h" rowspan="2">Hora</th>`;
-  html += dias.map((d) => `<th colspan="${cons.length}" class="fin-dia ${d === hoy ? 'hoy' : ''}" scope="colgroup">${DIAS[diaSemana(d)]} ${fechaCorta(d)}${d === hoy ? ' · HOY' : ''}</th>`).join('');
-  html += '</tr><tr>' + dias.map((d) => cons.map((c, i) => `<th scope="col" title="${esc(c.nombre)}" class="${i === cons.length - 1 ? 'fin-dia' : ''} ${d === hoy ? 'hoy' : ''}">${esc(consCorto(c))}</th>`).join('')).join('') + '</tr></thead><tbody>';
+  const corto = zoom === 6;
+  html += dias.map((d) => `<th colspan="${cons.length}" class="fin-dia ${d === hoy ? 'hoy' : ''}" scope="colgroup">${(corto ? DIAS_CORTOS : DIAS)[diaSemana(d)]} ${fechaCorta(d)}${d === hoy ? (corto ? ' ·' : ' · HOY') : ''}</th>`).join('');
+  html += '</tr><tr>' + dias.map((d) => cons.map((c, i) => `<th scope="col" title="${esc(c.nombre)}" class="${i === cons.length - 1 ? 'fin-dia' : ''} ${d === hoy ? 'hoy' : ''}">${esc(corto ? consCorto(c).replace('Salón', 'S') : consCorto(c))}</th>`).join('')).join('') + '</tr></thead><tbody>';
   for (const h of horas) {
     html += `<tr><th class="h" scope="row">${h} hs</th>`;
     for (const d of dias) {
@@ -376,7 +401,7 @@ async function pintarSemana() {
         while (h + span <= horas[horas.length - 1] && idDe(mapa.get(`${d}|${c.id}|${h + span}`)) === idDe(f)) { salto.add(`${d}|${c.id}|${h + span}`); span++; }
         const [clase, estado] = claseSemana(f);
         const coment = f.tipo !== 'liberado' && f.detalle ? ` · 📝 ${f.detalle}` : '';
-        html += `<td class="${td}" rowspan="${span}"><button class="sc ${clase}" data-ver="${k}" style="min-height:${40 * span}px"
+        html += `<td class="${td}" rowspan="${span}"><button class="sc ${clase}" data-ver="${k}" style="min-height:${(zoom === 6 ? 30 : 40) * span}px"
           title="${esc(f.nombre || '')} · ${esc(estado)}${esc(coment)}" aria-label="${esc(etiqueta)}: ${esc(f.nombre || '')}, ${esc(estado)}${esc(coment)}">
           <span class="n">${esc(f.nombre || '')}</span><span class="e">${esc(estado)}${coment ? ' 📝' : ''}</span></button></td>`;
       });
@@ -384,6 +409,7 @@ async function pintarSemana() {
     html += '</tr>';
   }
   cont.innerHTML = html + '</tbody></table>';
+  ajustarZoom();
 
   $$('[data-anotar]', cont).forEach((b) => (b.onclick = () => {
     const [d, c, h] = b.dataset.anotar.split('|');
@@ -398,6 +424,113 @@ async function pintarSemana() {
   const iHoy = dias.indexOf(hoy);
   if (iHoy > 0) $('#se-wrap').scrollLeft = Math.max(0, cont.querySelector('thead th.hoy')?.offsetLeft - 60 || 0);
   pintarNotas();
+}
+
+// ================================================================ NÚMEROS (tablero)
+$('#nu-periodo').onchange = () => pintarNumeros();
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const pct = (n) => `${Math.round(n * 100)}%`;
+const finDeMes = (ini) => sumarDias(sumarDias(ini, 32).slice(0, 7) + '-01', -1);
+
+async function pintarNumeros() {
+  const hoy = hoyAR();
+  const lunesHoy = lunesDe(hoy);
+  const nCons = st.consultorios.filter((c) => c.activo).length;
+  const horasDia = Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8);
+  const capDia = nCons * horasDia;          // horas posibles en un día
+  const capSemana = capDia * 6;              // lunes a sábado
+  const per = $('#nu-periodo').value;
+  const desde = per === 'anio' ? lunesDe(hoy.slice(0, 4) + '-01-01') : sumarDias(lunesHoy, -7 * (Number(per) - 1));
+  const hasta = sumarDias(lunesHoy, 5);
+  const mesIni = hoy.slice(0, 8) + '01';
+  const mesAntIni = sumarDias(mesIni, -1).slice(0, 8) + '01';
+  const nombreMes = (f) => MESES_LARGOS[Number(f.slice(5, 7)) - 1];
+  let T, M, MA, P;
+  try {
+    [T, M, MA, P] = await Promise.all([
+      llamar('tablero', { p_desde: desde, p_hasta: hasta }),
+      llamar('tablero', { p_desde: mesIni, p_hasta: finDeMes(mesIni) }),
+      llamar('tablero', { p_desde: mesAntIni, p_hasta: finDeMes(mesAntIni) }),
+      llamar('pendientes_cobro', {}),
+    ]);
+  } catch (err) { $('#nu-kpis').innerHTML = ''; errorEn(null, err); return; }
+
+  // ---- números grandes ----
+  const horasSem = (l) => T.por_semana.find((x) => x.lunes === l)?.horas || 0;
+  const ocAct = horasSem(lunesHoy) / capSemana;
+  const ocAnt = horasSem(sumarDias(lunesHoy, -7)) / capSemana;
+  const dif = Math.round((ocAct - ocAnt) * 100);
+  const difMes = MA.horas ? Math.round(((M.horas - MA.horas) / MA.horas) * 100) : null;
+  const flecha = (n, txt) => (n > 0 ? `<span class="sube">▲ ${txt}</span>` : n < 0 ? `<span class="baja">▼ ${txt}</span>` : 'igual');
+  $('#nu-kpis').innerHTML = `
+    <div class="kpi"><div class="t">Ocupación de esta semana</div><div class="v">${pct(ocAct)}</div>
+      <div class="d">${horasSem(lunesHoy)} de ${capSemana} horas · ${flecha(dif, Math.abs(dif) + ' puntos')} vs. la semana pasada (${pct(ocAnt)})</div></div>
+    <div class="kpi"><div class="t">Horas reservadas en ${nombreMes(mesIni)}</div><div class="v">${M.horas.toLocaleString('es-AR')}</div>
+      <div class="d">${difMes === null ? '' : flecha(difMes, Math.abs(difMes) + '%') + ` vs. ${nombreMes(mesAntIni)} (${MA.horas.toLocaleString('es-AR')})`}</div></div>
+    <div class="kpi"><div class="t">Cobrado en ${nombreMes(mesIni)}</div><div class="v">${pesos(M.cobrado)}</div>
+      <div class="d">${M.cobros_por_persona.length ? M.cobros_por_persona.map((x) => `${esc(x.recibio)} <strong>${pesos(x.monto)}</strong>`).join(' · ') : 'Todavía no hay pagos cargados este mes.'}</div></div>
+    <div class="kpi"><div class="t">Falta cobrar</div><div class="v">${pesos(P.total)}</div>
+      <div class="d">${P.items.length} ${P.items.length === 1 ? 'pendiente' : 'pendientes'} (lista abajo)</div></div>`;
+
+  // ---- ocupación por semana ----
+  const semanas = [];
+  for (let l = lunesDe(desde); l <= lunesHoy; l = sumarDias(l, 7)) semanas.push(l);
+  const maxSem = Math.max(...semanas.map(horasSem), 1);
+  const mejor = semanas.reduce((a, l) => (horasSem(l) > horasSem(a) ? l : a), semanas[0]);
+  $('#nu-semanas').innerHTML = `<div class="barras-v">${semanas.map((l) => {
+    const h = horasSem(l);
+    const etiqueta = l === lunesHoy || l === mejor ? `<span class="val" style="bottom:${(h / maxSem) * 100}%">${pct(h / capSemana)}</span>` : '';
+    return `<div class="col ${l === lunesHoy ? 'actual' : ''}" title="Semana del ${fechaCorta(l)}: ${h} horas (${pct(h / capSemana)})">
+      ${etiqueta}<div class="bar" style="height:${(h / maxSem) * 100}%"></div></div>`;
+  }).join('')}</div>
+  <div class="ejes-v">${semanas.map((l, i) => `<span>${semanas.length <= 14 || i % Math.ceil(semanas.length / 12) === 0 ? fechaCorta(l) : ''}</span>`).join('')}</div>
+  <p class="suave chico" style="margin:.6em 0 0">En naranja, esta semana. Pasá el mouse por una barra para ver el detalle. Mejor semana: ${fechaCorta(mejor)} (${pct(horasSem(mejor) / capSemana)}).</p>`;
+
+  // ---- días ----
+  const cuantos = (dia) => { let n = 0; for (let d = desde; d <= hasta; d = sumarDias(d, 1)) if (diaSemana(d) === dia) n++; return n; };
+  const dias = [1, 2, 3, 4, 5, 6].map((dia) => ({ dia, oc: (T.por_dia.find((x) => x.dia === dia)?.horas || 0) / (cuantos(dia) * capDia || 1) }));
+  const maxDia = Math.max(...dias.map((x) => x.oc), 0.01);
+  $('#nu-dias').innerHTML = `<div class="barras-h">${dias.map((x) => `
+    <span class="et">${DIAS[x.dia]}</span><div class="pista" title="${DIAS[x.dia]}: ${pct(x.oc)} ocupado en promedio"><div class="bar" style="width:${(x.oc / maxDia) * 100}%"></div></div>
+    <span class="num"><strong>${pct(x.oc)}</strong></span>`).join('')}</div>`;
+
+  // ---- mapa de calor ----
+  const calor = new Map(T.calor.map((x) => [`${x.dia}|${x.hora}`, x.horas]));
+  const horas = horasDelDia();
+  $('#nu-calor').innerHTML = `<table class="calor"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map((d) => `<th>${DIAS_CORTOS[d]}</th>`).join('')}</tr></thead><tbody>
+    ${horas.map((h) => `<tr><th>${h} hs</th>${[1, 2, 3, 4, 5, 6].map((d) => {
+      const v = (calor.get(`${d}|${h}`) || 0) / (cuantos(d) * nCons || 1);
+      return `<td class="${v > 0.55 ? 'osc' : ''}" style="background:rgba(18,39,90,${(0.06 + v * 0.94).toFixed(2)})" title="${DIAS[d]} ${h} hs: ${pct(v)} ocupado">${Math.round(v * 100)}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>
+    <p class="suave chico" style="margin:.5em 0 0">Los números son el % de consultorios ocupados a esa hora.</p>`;
+
+  // ---- ranking del mes ----
+  $('#nu-mes-rank').textContent = `· ${nombreMes(mesIni)}`;
+  const antes = new Map(MA.ranking.map((x) => [x.profesional_id, x.horas]));
+  const top = M.ranking.slice(0, 10);
+  const maxR = Math.max(...top.map((x) => x.horas), 1);
+  $('#nu-ranking').innerHTML = top.length ? `<div class="barras-h">${top.map((x) => {
+    const a = antes.get(x.profesional_id) || 0;
+    const d = x.horas - a;
+    return `<span class="et" title="${esc(x.nombre)}">${esc(x.nombre)}</span>
+      <div class="pista" title="${esc(x.nombre)}: ${x.horas} h (${x.horas_fijo} de fijo) · ${nombreMes(mesAntIni)}: ${a} h"><div class="bar" style="width:${(x.horas / maxR) * 100}%"></div></div>
+      <span class="num"><strong>${x.horas} h</strong> ${d > 0 ? `<span class="sube">▲${d}</span>` : d < 0 ? `<span class="baja">▼${-d}</span>` : ''}</span>`;
+  }).join('')}</div><p class="suave chico" style="margin:.6em 0 0">▲▼ = diferencia con ${nombreMes(mesAntIni)}.</p>`
+    : '<p class="suave">Todavía no hay horas este mes.</p>';
+
+  // ---- falta cobrar ----
+  $('#nu-pendientes').innerHTML = P.items.length ? `<ul class="pend-lista">${P.items.map((x, i) => `<li ${i >= 8 ? 'class="oculto" data-mas' : ''}><button data-pend="${i}">
+      <span><strong>${esc(x.nombre)}</strong><small>${x.tipo === 'fijo'
+        ? `Fijo de los ${DIAS[x.detalle.dia_semana].toLowerCase()} ${rangos(x.detalle.horas)} · mes de ${nombreMes(P.mes + '-01')}`
+        : `${fechaLarga(x.detalle.fecha)} · ${rangos(x.detalle.horas)}`}</small></span>
+      <strong>${pesos(x.falta)}</strong></button></li>`).join('')}</ul>
+    ${P.items.length > 8 ? `<button class="btn btn-borde btn-chico" id="pend-mas" style="margin-top:8px">Ver los ${P.items.length - 8} restantes</button>` : ''}`
+    : '<p class="aviso aviso-ok">No hay nada pendiente de cobro. 🎉</p>';
+  $('#pend-mas')?.addEventListener('click', (e) => { $$('[data-mas]').forEach((li) => li.classList.remove('oculto')); e.target.remove(); });
+  $$('[data-pend]').forEach((b) => (b.onclick = () => {
+    const x = P.items[Number(b.dataset.pend)];
+    if (x.tipo === 'fijo') detalleFijo(x.id, hoy); else detalleReserva(x.id);
+  }));
 }
 
 // ---------- Notas de la semana ----------

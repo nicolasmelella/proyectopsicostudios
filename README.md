@@ -101,6 +101,10 @@ Y `supabase/10_quien_cobro.sql` → **Run** → *"Listo: los pagos ahora guardan
 Y `supabase/11_comentarios.sql` → **Run** → *"Listo: comentarios en reservas y fijos"*.
 (Un comentario del equipo en cada reserva o fijo, "algo a tener en cuenta". Solo lo ve el equipo.)
 
+Y `supabase/12_tablero.sql` → **Run** → *"Listo: tablero de números"*.
+(La pestaña **Números**: ocupación por semana, días y horas más llenos, profesionales con más horas,
+cobrado por persona y lo que falta cobrar. También prepara la base para cargar la historia del Excel.)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**
