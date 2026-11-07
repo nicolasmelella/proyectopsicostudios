@@ -167,6 +167,14 @@
               display: grid; place-items: center; font-weight: 800; font-size: .85rem; }
     @media (max-width: 640px) { .como-funciona { grid-template-columns: 1fr; gap: 6px; } .como-funciona li { padding: 8px 12px; } }
 
+    /* Comprobante de pago */
+    .comprobante { display: flex; flex-direction: column; gap: 2px; background: var(--blanco); border: 1.5px solid var(--borde);
+                   border-radius: 12px; padding: 12px 14px; margin-top: 12px; text-align: left; }
+    .comprobante label.btn { cursor: pointer; }
+    .comprobante input:focus-visible + div, .comprobante label:focus-within { outline: 3px solid var(--celeste); }
+    #comp-estado:empty { display: none; }
+    #comp-estado { margin: .6em 0 0; }
+
     .btn-mp { background: #007eb5; color: #fff; }
     .btn-mp:hover:not(:disabled) { background: #006a99; }
     .otra-forma { margin-top: 1em; text-align: left; }

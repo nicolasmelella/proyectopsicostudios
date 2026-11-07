@@ -77,7 +77,7 @@ Los precios y horarios se cambian desde el panel → **Precios y ajustes**.
 - Mercado Pago: pagar el saldo con el mismo mecanismo que la seña (link en el recordatorio).
 - Panel: lista "Saldos por vencer / vencidos" y botón "Cancelar sin devolución".
 
-## 5. Subir el comprobante de pago 🕓 PENDIENTE
+## 5. Subir el comprobante de pago ✅
 
 Para quien paga **por transferencia** (la seña o el saldo): en vez de mandar la captura por WhatsApp, la sube en la web.
 
@@ -85,6 +85,8 @@ Para quien paga **por transferencia** (la seña o el saldo): en vez de mandar la
 - En el panel aparece **"Comprobantes para revisar"** con la imagen; el equipo la mira y toca **"Registrar pago"**.
 - Seguridad: los comprobantes se guardan en un espacio **privado** de Supabase. Solo se pueden subir con el código
   secreto del pedido, y solo el equipo los puede ver. Máximo 5 MB, solo imágenes o PDF.
+- Al subirlo, los horarios del pedido se guardan **12 horas más** (configurable) mientras el equipo lo revisa.
+- En el panel: **"Registrar seña"** (reparte el pago entre los días del pedido), **"Otro monto"** o **"Rechazar"** (con motivo).
 - Mercado Pago no lo necesita: ahí la confirmación es automática.
 
 ## 6. Datos de cobro y seguridad ✅

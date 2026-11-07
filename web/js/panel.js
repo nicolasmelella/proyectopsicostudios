@@ -151,12 +151,13 @@ async function refrescar() {
 }
 
 async function actualizarBadge() {
-  const [r, f, m] = await Promise.all([
+  const [r, f, m, c] = await Promise.all([
     sb.from('reservas').select('id').eq('estado', 'pendiente'),
     sb.from('fijos').select('id').eq('estado', 'solicitud'),
     sb.from('pagos_a_revisar').select('id').eq('resuelto', false),
+    sb.from('comprobantes').select('id').eq('estado', 'pendiente'),
   ]);
-  const n = (r.data?.length || 0) + (f.data?.length || 0) + (m.data?.length || 0);
+  const n = (r.data?.length || 0) + (f.data?.length || 0) + (m.data?.length || 0) + (c.data?.length || 0);
   const b = $('#badge-pend');
   b.textContent = n;
   b.classList.toggle('oculto', !n);
@@ -583,7 +584,67 @@ async function pintarPagosRevisar() {
   }));
 }
 
+// Comprobantes de transferencia subidos desde la web
+async function pintarComprobantes() {
+  const bloque = $('#bloque-comprobantes');
+  let lista;
+  try { lista = await llamar('comprobantes_pendientes', {}); } catch { bloque.classList.add('oculto'); return; }
+  if (!lista?.length) { bloque.classList.add('oculto'); return; }
+  bloque.classList.remove('oculto');
+  // enlaces temporales (10 min) para ver los archivos privados
+  const urls = await Promise.all(lista.map(async (c) => (await sb.storage.from('comprobantes').createSignedUrl(c.ruta, 600)).data?.signedUrl || null));
+  const estadoPill = { confirmada: 'pill-ok">Confirmada', pendiente: 'pill-alerta">Sin seña', vencida: 'pill-error">Vencida', cancelada: 'pill-error">Cancelada' };
+  $('#lista-comprobantes').innerHTML = lista.map((c, i) => {
+    const esPdf = (c.tipo || c.ruta).includes('pdf');
+    const vista = !urls[i] ? '<div class="comp-pdf">No se pudo cargar el archivo</div>'
+      : esPdf ? `<a class="comp-pdf" href="${urls[i]}" target="_blank" rel="noopener">📄 Ver PDF</a>`
+      : `<img class="comp-mini" src="${urls[i]}" alt="Comprobante de ${esc(c.nombre)}" data-ver-comp="${i}">`;
+    const vigente = c.falta_total > 0;
+    return `<div class="item">
+      ${vista}
+      <h3>${esc(c.nombre)}</h3>
+      <div class="suave chico">Pedido #${c.pedido_id} · subido ${esc(new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(c.creado_en)))}</div>
+      <ul class="datos" style="margin:.5em 0">${(c.reservas || []).map((r) => `<li><span>${esc(fechaLarga(r.fecha))} · ${esc(rangos(r.horas))} · ${esc(r.consultorio)}</span>
+        <span><span class="pill ${estadoPill[r.estado] || 'pill-info">' + esc(r.estado)}</span></span></li>`).join('')}</ul>
+      ${vigente ? `<div>Falta de seña: <strong>${pesos(c.falta_sena)}</strong> · Saldo total: ${pesos(c.falta_total)}</div>`
+        : '<p class="aviso aviso-alerta chico">Las reservas de este pedido ya no están vigentes (vencidas o pagas). Si corresponde, cargalas de nuevo desde "+ Reserva".</p>'}
+      <div class="acciones">
+        ${vigente && c.falta_sena > 0 ? `<button class="btn btn-acento btn-chico" data-comp-sena="${i}">Registrar seña ${pesos(c.falta_sena)}</button>` : ''}
+        ${vigente ? `<button class="btn btn-borde btn-chico" data-comp-otro="${i}">Otro monto</button>` : ''}
+        <button class="btn btn-peligro btn-chico" data-comp-rechazar="${i}">${vigente ? 'Rechazar' : 'Archivar'}</button>
+        <a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(c.whatsapp, `Hola ${c.nombre.split(' ')[0]}! Te escribimos de Psico Studios por el comprobante del pedido #${c.pedido_id}.`)}">WhatsApp</a>
+      </div>
+    </div>`;
+  }).join('');
+  const revisar = async (c, aceptar, monto, nota, msg) => {
+    try { await llamar('revisar_comprobante', { p_id: c.id, p_aceptar: aceptar, p_monto: monto, p_medio: 'transferencia', p_nota: nota }, msg); refrescar(); }
+    catch (err) { errorEn(null, err); }
+  };
+  $$('[data-ver-comp]').forEach((im) => (im.onclick = () => abrirModal(`<h2 id="modal-titulo">Comprobante de ${esc(lista[im.dataset.verComp].nombre)}</h2>
+    <img src="${im.src}" alt="Comprobante" style="width:100%;border-radius:10px">`)));
+  $$('[data-comp-sena]').forEach((b) => (b.onclick = async () => {
+    const c = lista[b.dataset.compSena];
+    if (await preguntar({ titulo: `¿Registrar la seña de ${pesos(c.falta_sena)}?`, texto: `Se confirma el pedido #${c.pedido_id} de ${c.nombre}. Confirmalo solo si viste la transferencia en la cuenta.`, aceptar: 'Registrar seña' }) === null) return;
+    revisar(c, true, c.falta_sena, null, 'Seña registrada: pedido confirmado');
+  }));
+  $$('[data-comp-otro]').forEach((b) => (b.onclick = async () => {
+    const c = lista[b.dataset.compOtro];
+    const v = await preguntar({ titulo: '¿Cuánto transfirió?', texto: `Se reparte entre los días del pedido: primero la seña de cada uno y después el saldo. Máximo ${pesos(c.falta_total)}.`,
+      campo: { etiqueta: 'Monto ($)', tipo: 'number', valor: c.falta_sena || c.falta_total }, aceptar: 'Registrar pago' });
+    if (v === null) return;
+    revisar(c, true, Number(v), null, 'Pago registrado');
+  }));
+  $$('[data-comp-rechazar]').forEach((b) => (b.onclick = async () => {
+    const c = lista[b.dataset.compRechazar];
+    const nota = await preguntar({ titulo: '¿Rechazar el comprobante?', texto: 'No se registra ningún pago. Avisale por WhatsApp qué pasó.',
+      campo: { etiqueta: 'Motivo (queda registrado)', placeholder: 'Ej: no se lee el monto' }, aceptar: 'Rechazar', peligro: true });
+    if (nota === null) return;
+    revisar(c, false, null, nota || null, 'Comprobante rechazado');
+  }));
+}
+
 async function pintarPendientes() {
+  pintarComprobantes();
   pintarPagosRevisar();
   const lp = $('#lista-pend'), ls = $('#lista-sol');
   lp.innerHTML = ls.innerHTML = '<div class="cargando">Cargando…</div>';

@@ -18,7 +18,7 @@ export function crearClienteDemo() {
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
-      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'],
+      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['max_comprobantes_por_pedido', '5'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -35,7 +35,7 @@ export function crearClienteDemo() {
       { id: 3, nombre: 'Sofía Ruiz', whatsapp: '1163456789', profesion: 'Psicopedagogo/a', origen: 'Meta Ads', email: null, notas: null },
       { id: 4, nombre: 'Diego Álvarez', whatsapp: '1174567890', profesion: 'Psicólogo/a', origen: 'Google', email: null, notas: null },
     ],
-    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [], pedidos: [],
+    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [], pedidos: [], comprobantes: [], archivos: [],
     ocupaciones: new Map(), // "cons|fecha|hora" → {reserva_id|fijo_id|bloqueo_id}
   };
   const cfg = (k) => Number(db.config.find((c) => c.clave === k)?.valor);
@@ -292,6 +292,57 @@ export function crearClienteDemo() {
         reservas: reservas.map((r) => ({ id: r.id, fecha: r.fecha, horas: r.horas, total: r.precio_total, consultorio: db.consultorios.find((c) => c.id === r.consultorio_id).nombre })),
       };
     },
+    // Comprobantes (copia de 07_comprobantes.sql)
+    registrar_comprobante({ p_pedido_id, p_token, p_ruta }) {
+      const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
+      if (!pe) return err('NO_ENCONTRADO', 'No encontramos ese pedido');
+      const a = db.archivos.find((x) => x.ruta === p_ruta);
+      if (!a) return err('ARCHIVO_INVALIDO', 'No se pudo subir el archivo. Probá de nuevo.');
+      if (!db.comprobantes.some((c) => c.ruta === p_ruta)) {
+        db.comprobantes.push({ id: nuevoId(), pedido_id: pe.id, ruta: p_ruta, tipo: a.tipo, estado: 'pendiente', creado_en: ahoraISO() });
+      }
+      const hasta = ahoraISO(60 * cfg('horas_espera_comprobante'));
+      db.reservas.filter((r) => r.pedido_id === pe.id && r.estado === 'pendiente' && r.expira_en).forEach((r) => { if (r.expira_en < hasta) r.expira_en = hasta; });
+      return { id: null, horarios_guardados_hasta: hasta };
+    },
+    comprobantes_pendientes() {
+      return db.comprobantes.filter((c) => c.estado === 'pendiente').map((c) => {
+        const rs = db.reservas.filter((r) => r.pedido_id === c.pedido_id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+        const vig = rs.filter((r) => ['pendiente', 'confirmada'].includes(r.estado));
+        const p = db.profesionales.find((x) => x.id === db.pedidos.find((pe) => pe.id === c.pedido_id)?.profesional_id);
+        return { ...c, nombre: p?.nombre, whatsapp: p?.whatsapp,
+          falta_sena: vig.reduce((s, r) => s + Math.max(0, sena(r.precio_total) - pagado(r.id)), 0),
+          falta_total: vig.reduce((s, r) => s + r.precio_total - pagado(r.id), 0),
+          reservas: rs.map((r) => ({ id: r.id, fecha: r.fecha, horas: r.horas, estado: r.estado, consultorio: db.consultorios.find((k) => k.id === r.consultorio_id).nombre })) };
+      });
+    },
+    registrar_pago_pedido({ p_pedido_id, p_monto, p_medio }) {
+      const vig = db.reservas.filter((r) => r.pedido_id === p_pedido_id && ['pendiente', 'confirmada'].includes(r.estado)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+      const falta = vig.reduce((s, r) => s + r.precio_total - pagado(r.id), 0);
+      if (!falta) return err('RESERVA_NO_VIGENTE', 'Este pedido no tiene reservas vigentes con saldo.');
+      if (p_monto > falta) return err('PAGO_EXCEDE', `Lo que falta pagar del pedido es $${falta}`);
+      let resto = p_monto;
+      for (const tope of [(r) => sena(r.precio_total), (r) => r.precio_total]) {
+        for (const r of vig) {
+          const parte = Math.min(resto, Math.max(0, tope(r) - pagado(r.id)));
+          if (parte > 0) { db.pagos.push({ id: nuevoId(), reserva_id: r.id, fijo_id: null, periodo: null, monto: parte, medio: p_medio, pagado_en: hoy, anulado: false, creado_en: ahoraISO() }); resto -= parte; }
+        }
+      }
+      vig.forEach((r) => { if (r.estado === 'pendiente' && pagado(r.id) >= sena(r.precio_total)) { r.estado = 'confirmada'; r.expira_en = null; } });
+      return vig.some((r) => r.estado === 'pendiente') ? 'PAGO_PARCIAL' : 'CONFIRMADA';
+    },
+    revisar_comprobante({ p_id, p_aceptar, p_monto, p_medio, p_nota }) {
+      const c = db.comprobantes.find((x) => x.id === p_id && x.estado === 'pendiente');
+      if (!c) return err('NO_ENCONTRADO', 'Ese comprobante ya fue revisado');
+      let res = 'RECHAZADO';
+      if (p_aceptar) {
+        res = rpcs.registrar_pago_pedido({ p_pedido_id: c.pedido_id, p_monto, p_medio: p_medio || 'transferencia' });
+        if (res?.error) return res;
+      }
+      c.estado = p_aceptar ? 'aceptado' : 'rechazado';
+      c.nota = p_nota;
+      return res;
+    },
     estado_pago_pedido({ p_pedido_id, p_token }) {
       const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
       const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
@@ -475,6 +526,30 @@ export function crearClienteDemo() {
             : { data: null, error: { message: 'RESERVA_NO_VIGENTE', hint: 'Se venció el tiempo para pagar y los horarios se liberaron. Hacé una reserva nueva.' } };
         }
         return { data: { url: `simulador-pago.html?pedido=${pe.id}&t=${pe.token}` }, error: null };
+      },
+    },
+    // Espacio de archivos simulado (en la versión real: espacio privado de Supabase)
+    storage: {
+      from(bucket) {
+        return {
+          async upload(ruta, archivo, { contentType } = {}) {
+            const m = /^(\d+)\/([0-9a-f-]{36})\/[0-9a-f-]{36}\.(jpg|png|webp|heic|heif|pdf)$/.exec(ruta);
+            const pe = m && db.pedidos.find((x) => x.id === Number(m[1]) && x.token === m[2]);
+            const cuantos = db.archivos.filter((a) => a.ruta.startsWith(`${m?.[1]}/`)).length;
+            if (bucket !== 'comprobantes' || !pe || cuantos >= cfg('max_comprobantes_por_pedido')) {
+              return { data: null, error: { message: 'new row violates row-level security policy' } };
+            }
+            if (archivo.size > 5 * 1024 * 1024) return { data: null, error: { message: 'The object exceeded the maximum allowed size' } };
+            const dataUrl = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(archivo); });
+            db.archivos.push({ ruta, tipo: contentType, dataUrl });
+            guardar();
+            return { data: { path: ruta }, error: null };
+          },
+          async createSignedUrl(ruta) {
+            const a = db.archivos.find((x) => x.ruta === ruta);
+            return a ? { data: { signedUrl: a.dataUrl }, error: null } : { data: null, error: { message: 'Object not found' } };
+          },
+        };
       },
     },
     // Herramientas del simulador

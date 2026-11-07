@@ -79,6 +79,9 @@ Por último: `supabase/05_calendario.sql` → **Run** → *"Calendario listo: se
 Y `supabase/06_pedidos.sql` → **Run** → *"Pedidos de varios días listos"*.
 (Reservar varios días de una vez, con una sola seña.)
 
+Y `supabase/07_comprobantes.sql` → **Run** → *"Comprobantes listos…"*.
+(Subir el comprobante de la transferencia desde la web y revisarlo en el panel → Pendientes. Crea solo el espacio privado de archivos.)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

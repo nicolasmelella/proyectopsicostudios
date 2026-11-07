@@ -480,10 +480,12 @@ const abrir = (id) => {
   try { if (!history.state?.ventana) history.pushState({ ventana: true }, ''); } catch { /* sin historial */ }
 };
 const cerrar = (id) => { $(id).classList.add('oculto'); document.body.style.overflow = ''; };
-// Cerrar a pedido de la persona: vuelve un paso en el historial (como el botón "atrás")
+// Cerrar a pedido de la persona: se cierra directo (no depende del historial del navegador,
+// que dentro de algunos visores no responde) y se desarma la marca para el botón "atrás"
 const cerrarVentanas = () => {
-  if (history.state?.ventana) history.back();
-  else { cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos'); }
+  cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos');
+  clearInterval(reloj);
+  try { if (history.state?.ventana) history.replaceState(null, ''); } catch { /* sin historial */ }
 };
 window.addEventListener('popstate', () => { cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos'); clearInterval(reloj); });
 document.querySelectorAll('[data-cerrar]').forEach((b) => (b.onclick = cerrarVentanas));
@@ -613,8 +615,8 @@ function mostrarResultadoSuelta(r, nombre) {
         <button class="btn btn-borde btn-chico" data-copiar="${esc(cvu)}">Copiar</button></div>` : ''}
       ${configurado(titular) ? `<div class="fila"><span>Titular</span><span class="valor valor-largo">${esc(titular)}</span></div>` : ''}
     </div>
-    ${configurado(wa) ? `<a class="btn btn-wa btn-bloque" target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Enviar comprobante por WhatsApp</a>` :
-      '<p class="aviso aviso-info">Mandanos el comprobante por WhatsApp indicando el número de reserva.</p>'}`;
+    ${bloqueComprobante()}
+    <p class="ayuda centro" style="margin:.6em 0 0">¿Preferís mandarlo por WhatsApp? <a target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Enviar por WhatsApp</a></p>`;
 
   $('#contenido-resultado').innerHTML = `
     <div class="icono" aria-hidden="true">✓</div>
@@ -628,11 +630,14 @@ function mostrarResultadoSuelta(r, nombre) {
       <p class="ayuda">Tarjeta de débito, crédito o dinero en cuenta. Se confirma al instante.</p>
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
       <details class="otra-forma"><summary>¿Preferís transferir?</summary>${transferencia}</details>` : transferencia}
+    <p class="ayuda" style="margin-top:.8em">¿Vas a transferir más tarde? Guardá este link para subir el comprobante:
+      <button class="btn btn-borde btn-chico" data-copiar="${esc(linkComprobante(r.pedido, r.token))}">Copiar link</button></p>
     <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de cada turno. Si la seña no llega a tiempo, los horarios se liberan automáticamente.</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Hacer otra reserva</button>`;
   abrir('#modal-resultado');
 
   $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(r.pedido, r.token, e.currentTarget, $('#aviso-mp')));
+  conectarComprobante(r.pedido, r.token);
   $('#copiar-alias')?.addEventListener('click', async (e) => {
     try { await navigator.clipboard.writeText(alias); e.target.textContent = '¡Copiado!'; } catch { /* sin permiso */ }
   });
@@ -741,14 +746,115 @@ async function mostrarRetorno(id, token, resultado) {
       <h2 id="titulo-resultado">El pago no se completó</h2>${detalle}
       <p>${varios ? 'Tus horarios siguen guardados' : 'Tu horario sigue guardado'} ${r.expira_en ? `<strong>${faltan(r.expira_en)}</strong> más` : ''}. Podés intentar de nuevo con otra tarjeta o medio de pago.</p>
       <button class="btn btn-mp btn-bloque" id="pagar-mp">Intentar de nuevo · ${pesos(r.sena - r.pagado)}</button>
-      <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>${botonVolver()}`;
+      <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
+      <details class="otra-forma"><summary>¿Pagaste por transferencia?</summary>${datosTransferencia(r.sena - r.pagado)}${bloqueComprobante()}</details>${botonVolver()}`;
     $('#pagar-mp').onclick = (e) => pagarConMP(id, token, e.currentTarget, $('#aviso-mp'));
+    conectarComprobante(id, token);
   } else {
     caja.innerHTML = `<h2 id="titulo-resultado">${varios ? 'Las reservas ya no están vigentes' : 'La reserva ya no está vigente'}</h2>${detalle}
       <p>Venció el tiempo para pagar la seña y ${varios ? 'los horarios se liberaron' : 'el horario se liberó'}. Si llegaste a pagar, escribinos por WhatsApp con el número de pedido y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
   }
   conectarVolver();
 }
+// ================================================================ COMPROBANTE DE PAGO
+const MAX_ARCHIVO = 5 * 1024 * 1024;
+const EXTENSION = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
+const linkComprobante = (pedido, token) => `${location.origin}${location.pathname}?comprobante=${pedido}&t=${token}`;
+
+function datosTransferencia(monto) {
+  const c = estado.cfg, ok = (v) => v && v !== 'COMPLETAR';
+  return `<div class="dato-pago">
+    ${monto ? `<div class="fila"><span>A transferir</span><span class="valor" style="font-size:1.15rem">${pesos(monto)}</span></div>` : ''}
+    ${ok(c.alias_transferencia) ? `<div class="fila"><span>Alias</span><span class="valor valor-largo">${esc(c.alias_transferencia)}</span><button class="btn btn-borde btn-chico" data-copiar="${esc(c.alias_transferencia)}">Copiar</button></div>` : ''}
+    ${ok(c.cvu_transferencia) ? `<div class="fila"><span>CVU</span><span class="valor valor-largo">${esc(c.cvu_transferencia)}</span><button class="btn btn-borde btn-chico" data-copiar="${esc(c.cvu_transferencia)}">Copiar</button></div>` : ''}
+    ${ok(c.titular_transferencia) ? `<div class="fila"><span>Titular</span><span class="valor valor-largo">${esc(c.titular_transferencia)}</span></div>` : ''}
+  </div>`;
+}
+
+function bloqueComprobante() {
+  return `<div class="comprobante">
+    <strong>¿Ya transferiste? Subí el comprobante</strong>
+    <span class="suave chico">Foto, captura o PDF. Lo revisamos y te confirmamos.</span>
+    <label class="btn btn-acento btn-bloque" for="comp-archivo" style="margin-top:.6em">📎 Subir comprobante</label>
+    <input type="file" id="comp-archivo" accept="image/*,application/pdf" class="visualmente-oculto">
+    <div id="comp-estado" role="status" aria-live="polite"></div>
+  </div>`;
+}
+
+function conectarComprobante(pedido, token) {
+  const input = $('#comp-archivo');
+  if (!input) return;
+  document.querySelectorAll('[data-copiar]').forEach((b) => (b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copiar); b.textContent = '¡Copiado!'; } catch { /* sin permiso */ }
+  }));
+  input.onchange = async () => {
+    const archivo = input.files?.[0];
+    input.value = '';
+    if (!archivo) return;
+    const el = $('#comp-estado');
+    el.className = 'aviso aviso-info';
+    el.textContent = 'Subiendo el comprobante…';
+    try {
+      const r = await subirComprobante(pedido, token, archivo);
+      const hasta = r?.horarios_guardados_hasta ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires',
+        weekday: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(r.horarios_guardados_hasta)) : null;
+      el.className = 'aviso aviso-ok';
+      el.innerHTML = `✓ <strong>Recibimos tu comprobante.</strong> Lo revisamos y te confirmamos por WhatsApp.${hasta ? ` Tus horarios quedan guardados hasta el ${esc(hasta)} hs.` : ''}
+        <br><span class="chico">¿Te faltó alguno? Podés subir otro.</span>`;
+    } catch (err) {
+      el.className = 'aviso aviso-error';
+      el.textContent = mensajeError(err);
+    }
+  };
+}
+
+// Achica fotos grandes (las del celular pesan varios MB) a 1600 px en JPG
+async function achicarImagen(archivo) {
+  const img = await createImageBitmap(archivo);
+  const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.round(img.width * escala);
+  lienzo.height = Math.round(img.height * escala);
+  lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+  return new Promise((ok, mal) => lienzo.toBlob((b) => (b ? ok(b) : mal(new Error('No se pudo leer la imagen'))), 'image/jpeg', 0.82));
+}
+
+async function subirComprobante(pedido, token, archivo) {
+  let datos = archivo, tipo = archivo.type || '';
+  if (!(tipo.startsWith('image/') || tipo === 'application/pdf')) throw { hint: 'Subí una foto, una captura o un PDF del comprobante.' };
+  if (tipo.startsWith('image/') && tipo !== 'image/heic' && tipo !== 'image/heif') {
+    try { datos = await achicarImagen(archivo); tipo = 'image/jpeg'; } catch { /* si no se puede achicar, va como está */ }
+  }
+  if (!EXTENSION[tipo]) throw { hint: 'Ese formato de imagen no se puede subir. Probá con una captura de pantalla o un PDF.' };
+  if (datos.size > MAX_ARCHIVO) throw { hint: 'El archivo pesa más de 5 MB. Probá con una captura de pantalla.' };
+  const ruta = `${pedido}/${token}/${crypto.randomUUID()}.${EXTENSION[tipo]}`;
+  const subida = await sb.storage.from('comprobantes').upload(ruta, datos, { contentType: tipo, upsert: false });
+  if (subida.error) {
+    throw /row-level security|policy/i.test(subida.error.message || '')
+      ? { hint: 'No pudimos guardar el comprobante: ya se subió el máximo para este pedido o el link no es válido. Escribinos por WhatsApp.' }
+      : subida.error;
+  }
+  const { data, error } = await sb.rpc('registrar_comprobante', { p_pedido_id: pedido, p_token: token, p_ruta: ruta });
+  if (error) throw error;
+  return data;
+}
+
+// Pantalla para subir el comprobante más tarde (?comprobante=PEDIDO&t=CODIGO)
+async function mostrarSubirComprobante(id, token) {
+  const caja = $('#contenido-resultado');
+  caja.innerHTML = '<div class="cargando" style="justify-content:center">Buscando tu pedido…</div>';
+  abrir('#modal-resultado');
+  const { data: r, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
+  if (error) { caja.innerHTML = `<h2 id="titulo-resultado">No encontramos el pedido</h2><p>${esc(mensajeError(error))}</p>${botonVolver()}`; conectarVolver(); return; }
+  const falta = Math.max(0, r.sena - r.pagado);
+  caja.innerHTML = `<h2 id="titulo-resultado">Subir comprobante</h2>
+    <p style="margin-bottom:.4em">Pedido <strong>#${esc(r.id)}</strong></p>${listaReservas(r.reservas, true)}
+    ${r.estado === 'vencida' ? '<p class="aviso aviso-alerta">Este pedido venció. Si ya transferiste, subí el comprobante igual y lo resolvemos.</p>' : ''}
+    ${datosTransferencia(falta)}${bloqueComprobante()}${botonVolver()}`;
+  conectarComprobante(id, token);
+  conectarVolver();
+}
+
 const botonVolver = (t = 'Volver al inicio') => `<button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">${t}</button>`;
 function conectarVolver() {
   const b = $('#nueva-reserva');
@@ -771,6 +877,11 @@ try {
     q.delete('pago'); q.delete('pedido'); q.delete('t');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
     mostrarRetorno(id, token, resultado);
+  } else if (q.has('comprobante') && q.has('t')) {
+    const [id, token] = [Number(q.get('comprobante')), q.get('t')];
+    q.delete('comprobante'); q.delete('t');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+    mostrarSubirComprobante(id, token);
   }
 } catch (err) {
   mostrarError(mensajeError(err));
