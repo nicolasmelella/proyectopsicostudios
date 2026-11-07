@@ -151,6 +151,7 @@ const MENSAJES = {
 };
 export function mensajeError(error) {
   if (!error) return '';
+  if (typeof error === 'string') return error;
   if (error.hint) return error.hint;
   const msg = error.message || String(error);
   if (MENSAJES[msg]) return MENSAJES[msg];

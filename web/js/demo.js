@@ -19,7 +19,7 @@ export function crearClienteDemo() {
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
-      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'],
+      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -146,7 +146,10 @@ export function crearClienteDemo() {
   try {
     const guardado = JSON.parse(localStorage.getItem(CLAVE_GUARDADO) || 'null');
     if (guardado && guardado.dia === hoy) {
+      const configBase = db.config;
       Object.assign(db, guardado.db);
+      // ajustes nuevos que no estaban cuando se guardó
+      configBase.forEach((c) => { if (!db.config.some((x) => x.clave === c.clave)) db.config.push(c); });
       db.ocupaciones = new Map(guardado.ocupaciones);
       seq = guardado.seq;
     }
@@ -514,6 +517,15 @@ export function crearClienteDemo() {
       db.bloqueos.push(b);
       cons.forEach((c) => horas.forEach((h) => db.ocupaciones.set(key(c.id, p_fecha, h), { bloqueo_id: b.id })));
       return b.id;
+    },
+    // ---- 10_quien_cobro.sql ----
+    marcar_quien_recibio({ p_recibio, p_pago_id, p_reserva_id }) {
+      const lista = String(db.config.find((c) => c.clave === 'quienes_cobran')?.valor || '').split(',').map((x) => x.trim()).filter(Boolean);
+      const nombre = lista.find((x) => x.toLowerCase() === String(p_recibio || '').trim().toLowerCase());
+      if (!nombre) return err('COBRADOR_INVALIDO', 'Elegí a quién le pagaron');
+      const ps = db.pagos.filter((p) => !p.anulado && !p.recibio && (p_pago_id ? p.id === p_pago_id : p.reserva_id === p_reserva_id));
+      ps.forEach((p) => { p.recibio = nombre; });
+      return ps.length;
     },
     // ---- 09_semana.sql ----
     agregar_nota({ p_semana, p_texto }) {

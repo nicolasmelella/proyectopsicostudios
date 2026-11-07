@@ -88,6 +88,26 @@ const horasDelDia = () => {
 };
 const sena = (total) => Math.ceil((total * Number(st.cfg.porcentaje_sena || 50)) / 100);
 
+// "¿A quién le pagaron?" (la lista sale de Precios y ajustes)
+const quienesCobran = () => String(st.cfg.quienes_cobran || '').split(',').map((x) => x.trim()).filter(Boolean);
+function campoRecibio(id) {
+  const lista = quienesCobran();
+  if (!lista.length) return '';
+  return `<div class="campo"><label>¿A quién le pagaron?</label><div class="grupo-grande" id="${id}">${lista.map((x) =>
+    `<button type="button" class="chip" data-recibio="${esc(x)}" aria-pressed="false">${esc(x)}</button>`).join('')}</div></div>`;
+}
+// Conecta los botones y devuelve una función que dice quién quedó elegido
+function conectarRecibio(id) {
+  let elegido = null;
+  $$(`#${id} .chip`).forEach((b) => (b.onclick = () => {
+    elegido = b.dataset.recibio;
+    document.querySelectorAll('#modal-cuerpo .aviso-error').forEach((x) => x.classList.add('oculto'));
+    $$(`#${id} .chip`).forEach((x) => x.setAttribute('aria-pressed', x === b));
+  }));
+  return () => elegido;
+}
+const faltaRecibio = (elegido) => quienesCobran().length > 0 && !elegido;
+
 // ================================================================ sesión
 let temporizador = null;
 function reiniciarInactividad() {
@@ -423,7 +443,10 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
           <button type="button" class="chip" data-pago="todo" aria-pressed="false">Todo<small id="a-todo"></small></button>
         </div>
       </div>
-      <div class="campo oculto" id="a-medio-campo"><label for="a-medio">¿Cómo pagó?</label><select id="a-medio">${medioOpts('transferencia')}</select></div>
+      <div class="oculto" id="a-medio-campo">
+        ${campoRecibio('a-recibio')}
+        <div class="campo"><label for="a-medio">¿Cómo pagó?</label><select id="a-medio">${medioOpts('transferencia')}</select></div>
+      </div>
       <div id="a-error" class="aviso aviso-error oculto" role="alert"></div>
       <button class="btn btn-acento btn-bloque" id="a-guardar" style="min-height:56px;font-size:1.1rem">Anotar</button>
     </form>`);
@@ -460,6 +483,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
     $$('#a-pago .chip').forEach((x) => x.setAttribute('aria-pressed', x === b));
     actualizar();
   }));
+  const recibio = conectarRecibio('a-recibio');
   actualizar();
   if (maxHoras === 0) errorEn($('#a-error'), 'Ese horario ya está ocupado.');
 
@@ -472,6 +496,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
     if (!persona?.whatsapp && whatsapp.replace(/\D/g, '').length < 8) { $('#a-wa').focus(); return errorEn($('#a-error'), 'Anotá su WhatsApp (al menos 8 números).'); }
     const t = total();
     const monto = pago === 'todo' ? t : pago === 'sena' ? sena(t) : 0;
+    if (monto > 0 && faltaRecibio(recibio())) return errorEn($('#a-error'), 'Elegí a quién le pagaron.');
     const horas = Array.from({ length: horasN }, (_, i) => hora + i);
     const btn = $('#a-guardar');
     btn.disabled = true; btn.textContent = 'Anotando…';
@@ -480,6 +505,10 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
         p_nombre: nombre, p_whatsapp: whatsapp, p_consultorio: consultorio, p_fecha: fecha,
         p_horas: horas, p_monto_pagado: monto, p_medio: $('#a-medio').value,
       });
+      if (monto > 0 && recibio()) {
+        try { await llamar('marcar_quien_recibio', { p_recibio: recibio(), p_reserva_id: id }); }
+        catch (err) { toast('Se anotó, pero no se guardó a quién le pagaron: ' + mensajeError(err)); }
+      }
       cerrarModal();
       await cargarBase();
       refrescar();
@@ -562,7 +591,7 @@ async function detalleReserva(id) {
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel' + (st.equipo.find((e) => e.user_id === r.creado_por) ? ' por ' + esc(st.equipo.find((e) => e.user_id === r.creado_por).nombre) : '')}</span></li>
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
-    ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
+    ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.recibio ? ` · le pagaron a ${esc(p.recibio)}` : ''}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
       <span>${pesos(p.monto)} ${!p.anulado ? `<button class="btn btn-peligro btn-chico" data-anular="${p.id}" style="margin-left:6px">Anular</button>` : ''}</span></li>`).join('')}</ul>` : ''}
     ${vigente && falta > 0 ? `
     <form class="bloque" id="form-pago">
@@ -575,6 +604,7 @@ async function detalleReserva(id) {
         ${faltaSena ? `<button type="button" class="btn btn-borde btn-chico" data-monto="${faltaSena}">Seña ${pesos(faltaSena)}</button>` : ''}
         <button type="button" class="btn btn-borde btn-chico" data-monto="${falta}">Total ${pesos(falta)}</button>
       </div>
+      ${campoRecibio('pg-recibio')}
       <button class="btn btn-acento btn-bloque">Registrar pago</button>
     </form>` : ''}
     <div id="det-error" class="aviso aviso-error oculto" role="alert"></div>
@@ -586,10 +616,13 @@ async function detalleReserva(id) {
 
   const errEl = $('#det-error');
   $$('[data-monto]').forEach((b) => (b.onclick = () => { $('#pg-monto').value = b.dataset.monto; }));
+  const recibioPago = conectarRecibio('pg-recibio');
   $('#form-pago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (faltaRecibio(recibioPago())) return errorEn(errEl, 'Elegí a quién le pagaron.');
     try {
-      await llamar('registrar_pago', { p_monto: Number($('#pg-monto').value), p_medio: $('#pg-medio').value, p_reserva_id: r.id }, 'Pago registrado');
+      const pagoId = await llamar('registrar_pago', { p_monto: Number($('#pg-monto').value), p_medio: $('#pg-medio').value, p_reserva_id: r.id }, 'Pago registrado');
+      if (recibioPago()) await llamar('marcar_quien_recibio', { p_recibio: recibioPago(), p_pago_id: pagoId });
       cerrarModal(); refrescar();
     } catch (err) { errorEn(errEl, err); }
   });
@@ -665,6 +698,7 @@ async function detalleFijo(id, fecha, liberado) {
           <div class="campo"><label for="pf-monto">Monto</label><input id="pf-monto" type="number" min="1" value="${sugerido || f.precio_semanal * veces}" required></div>
         </div>
         <div class="campo"><label for="pf-medio">Medio</label><select id="pf-medio">${medioOpts('transferencia')}</select></div>
+        ${campoRecibio('pf-recibio')}
         <button class="btn btn-acento btn-bloque">Registrar pago</button>
       </form>
       <div class="bloque grupo-btn">
@@ -692,9 +726,15 @@ async function detalleFijo(id, fecha, liberado) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde)) return errorEn(errEl, 'La fecha tiene que tener el formato AAAA-MM-DD');
     act('dar_baja_fijo', { p_fijo_id: f.id, p_desde: desde }, 'Fijo dado de baja');
   });
-  $('#form-pago-fijo')?.addEventListener('submit', (e) => {
+  const recibioFijo = conectarRecibio('pf-recibio');
+  $('#form-pago-fijo')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    act('registrar_pago', { p_monto: Number($('#pf-monto').value), p_medio: $('#pf-medio').value, p_fijo_id: f.id, p_periodo: $('#pf-periodo').value }, 'Pago registrado');
+    if (faltaRecibio(recibioFijo())) return errorEn(errEl, 'Elegí a quién le pagaron.');
+    try {
+      const pagoId = await llamar('registrar_pago', { p_monto: Number($('#pf-monto').value), p_medio: $('#pf-medio').value, p_fijo_id: f.id, p_periodo: $('#pf-periodo').value }, 'Pago registrado');
+      if (recibioFijo()) await llamar('marcar_quien_recibio', { p_recibio: recibioFijo(), p_pago_id: pagoId });
+      cerrarModal(); refrescar();
+    } catch (err) { errorEn(errEl, err); }
   });
 }
 
@@ -1066,6 +1106,7 @@ const CONFIG_VISIBLE = [
   ['min_horas_fijo_manana', 'Horario fijo: mínimo de horas por la mañana', 'number'],
   ['min_horas_fijo_tarde', 'Horario fijo: mínimo de horas seguidas por la tarde', 'number'],
   ['max_pendientes_por_whatsapp', 'Reservas sin pagar por persona (web)', 'number'],
+  ['quienes_cobran', '¿A quién le pagan? (nombres separados por coma, ej: Silvia,Nico)', 'text'],
 ];
 
 async function pintarAjustes() {

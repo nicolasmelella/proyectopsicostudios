@@ -95,6 +95,9 @@ Y `supabase/09_semana.sql` → **Run** → *"Semana lista. Usuarios del panel: �
 (La vista **Semana** del panel, como la hoja del Excel: notas de la semana, "Deshacer" y un usuario por persona.
 Si después se suma alguien al equipo, se crea su usuario y se vuelve a correr este archivo.)
 
+Y `supabase/10_quien_cobro.sql` → **Run** → *"Listo: los pagos ahora guardan a quién le pagaron …"*.
+(Cada pago cargado a mano dice **a quién le pagaron**. La lista se cambia en el panel → Precios y ajustes.)
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**
