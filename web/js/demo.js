@@ -18,7 +18,7 @@ export function crearClienteDemo() {
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
-      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'],
+      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -35,7 +35,7 @@ export function crearClienteDemo() {
       { id: 3, nombre: 'Sofía Ruiz', whatsapp: '1163456789', profesion: 'Psicopedagogo/a', origen: 'Meta Ads', email: null, notas: null },
       { id: 4, nombre: 'Diego Álvarez', whatsapp: '1174567890', profesion: 'Psicólogo/a', origen: 'Google', email: null, notas: null },
     ],
-    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [],
+    reservas: [], fijos: [], pagos: [], bloqueos: [], fijo_excepciones: [], pagos_a_revisar: [], pedidos: [],
     ocupaciones: new Map(), // "cons|fecha|hora" → {reserva_id|fijo_id|bloqueo_id}
   };
   const cfg = (k) => Number(db.config.find((c) => c.clave === k)?.valor);
@@ -258,6 +258,53 @@ export function crearClienteDemo() {
       const r = agregarReserva(prof, cons, p_fecha, p_horas, 'pendiente', 0, cfg('retencion_suelta_minutos'));
       return { id: r.id, token: r.token_pago, consultorio: db.consultorios.find((c) => c.id === cons).nombre, total: r.precio_total, sena: sena(r.precio_total), expira_en: r.expira_en };
     },
+    crear_pedido({ p_nombre, p_whatsapp, p_profesion, p_email, p_items }) {
+      const invalido = contactoInvalido(p_profesion, p_email);
+      if (invalido) return invalido;
+      if (!p_items?.length) return err('SIN_HORAS', 'Elegí al menos un horario');
+      if (p_items.length > cfg('max_dias_por_pedido')) return err('DEMASIADOS_DIAS', `Se pueden reservar hasta ${cfg('max_dias_por_pedido')} días por vez.`);
+      const pendientes = new Set(db.reservas.filter((r) => r.estado === 'pendiente' && r.origen === 'web' &&
+        db.profesionales.find((p) => p.id === r.profesional_id)?.whatsapp === p_whatsapp).map((r) => (r.pedido_id ? 'p' + r.pedido_id : 'r' + r.id))).size;
+      if (pendientes >= cfg('max_pendientes_por_whatsapp')) return err('DEMASIADAS_PENDIENTES', 'Ya tenés reservas esperando el pago de la seña. Pagalas o escribinos por WhatsApp.');
+      // todo o nada: primero se revisa todo, después se crea
+      const plan = [];
+      for (const it of [...p_items].sort((a, b) => (a.fecha < b.fecha ? -1 : 1))) {
+        const horas = [...it.horas].map(Number).sort((a, b) => a - b);
+        const [, mm, dd] = it.fecha.split('-');
+        if (it.fecha > fechaMax) return err('FECHA_LEJANA', 'Todavía no se puede reservar tan adelante');
+        if (horas.length > cfg('max_horas_por_reserva')) return err('DEMASIADAS_HORAS', `Se pueden reservar hasta ${cfg('max_horas_por_reserva')} horas por día.`);
+        const cons = it.consultorio || db.consultorios.find((c) => c.nombre !== 'Salón' && libre(c.id, it.fecha, horas))?.id;
+        if (!cons || !libre(cons, it.fecha, horas)) return err('SIN_LUGAR', `El horario del ${dd}/${mm} se acaba de ocupar. Elegí otro y volvé a intentar.`);
+        plan.push({ fecha: it.fecha, horas, cons });
+      }
+      const prof = rpcs.obtenerProfesional(p_nombre, p_whatsapp, p_profesion, 'Web', p_email);
+      const pedido = { id: nuevoId(), token: crypto.randomUUID(), profesional_id: prof, creado_en: ahoraISO() };
+      db.pedidos.push(pedido);
+      const reservas = plan.map((it) => {
+        const r = agregarReserva(prof, it.cons, it.fecha, it.horas, 'pendiente', 0, cfg('retencion_suelta_minutos'));
+        r.pedido_id = pedido.id;
+        r.token_pago = pedido.token;
+        return r;
+      });
+      return {
+        pedido: pedido.id, token: pedido.token, expira_en: reservas[0].expira_en,
+        total: reservas.reduce((s, r) => s + r.precio_total, 0), sena: reservas.reduce((s, r) => s + sena(r.precio_total), 0),
+        reservas: reservas.map((r) => ({ id: r.id, fecha: r.fecha, horas: r.horas, total: r.precio_total, consultorio: db.consultorios.find((c) => c.id === r.consultorio_id).nombre })),
+      };
+    },
+    estado_pago_pedido({ p_pedido_id, p_token }) {
+      const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
+      const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
+      if (!rs.length) return err('NO_ENCONTRADO', 'No encontramos ese pedido');
+      const estado = rs.every((r) => r.estado === 'confirmada') ? 'confirmada' : rs.some((r) => r.estado === 'pendiente') ? 'pendiente'
+        : rs.some((r) => r.estado === 'confirmada') ? 'parcial' : 'vencida';
+      return {
+        id: pe.id, estado, total: rs.reduce((s, r) => s + r.precio_total, 0), pagado: rs.reduce((s, r) => s + pagado(r.id), 0),
+        sena: rs.reduce((s, r) => s + sena(r.precio_total), 0), expira_en: rs.map((r) => r.expira_en).filter(Boolean).sort()[0] || null,
+        reservas: rs.map((r) => ({ id: r.id, fecha: r.fecha, horas: r.horas, estado: r.estado, total: r.precio_total,
+          consultorio: db.consultorios.find((c) => c.id === r.consultorio_id).nombre })),
+      };
+    },
     crear_solicitud_fijo({ p_nombre, p_whatsapp, p_profesion, p_email, p_dia, p_horas, p_desde }) {
       const invalido = contactoInvalido(p_profesion, p_email);
       if (invalido) return invalido;
@@ -419,23 +466,28 @@ export function crearClienteDemo() {
       async invoke(nombre, { body }) {
         await new Promise((r) => setTimeout(r, 400));
         liberarVencidas();
-        const r = db.reservas.find((x) => x.id === body.reserva_id && x.token_pago === body.token);
-        if (nombre !== 'mp-crear-pago' || !r) return { data: null, error: { message: 'NO_ENCONTRADO', hint: 'No encontramos esa reserva' } };
-        if (r.estado === 'confirmada') return { data: null, error: { message: 'YA_CONFIRMADA', hint: 'Esta reserva ya tiene la seña paga.' } };
-        if (r.estado !== 'pendiente') return { data: null, error: { message: 'RESERVA_NO_VIGENTE', hint: 'Se venció el tiempo para pagar y el horario se liberó. Hacé una reserva nueva.' } };
-        return { data: { url: `simulador-pago.html?reserva=${r.id}&t=${r.token_pago}` }, error: null };
+        const pe = db.pedidos.find((x) => x.id === body.pedido_id && x.token === body.token);
+        const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id) : [];
+        if (nombre !== 'mp-crear-pago' || !rs.length) return { data: null, error: { message: 'NO_ENCONTRADO', hint: 'No encontramos ese pedido' } };
+        if (!rs.some((r) => r.estado === 'pendiente')) {
+          return rs.some((r) => r.estado === 'confirmada')
+            ? { data: null, error: { message: 'YA_CONFIRMADA', hint: 'Este pedido ya tiene la seña paga.' } }
+            : { data: null, error: { message: 'RESERVA_NO_VIGENTE', hint: 'Se venció el tiempo para pagar y los horarios se liberaron. Hacé una reserva nueva.' } };
+        }
+        return { data: { url: `simulador-pago.html?pedido=${pe.id}&t=${pe.token}` }, error: null };
       },
     },
     // Herramientas del simulador
     demo: {
-      // Lo que pasa cuando Mercado Pago aprueba el pago
-      pagoAprobado(reservaId, token) {
-        const r = db.reservas.find((x) => x.id === reservaId && x.token_pago === token);
-        if (!r) return 'NO_ENCONTRADO';
-        const monto = Math.max(1, sena(r.precio_total) - pagado(r.id));
-        const res = registrarPagoMP(reservaId, String(Date.now()), monto);
+      // Lo que pasa cuando Mercado Pago aprueba el pago de un pedido: completa la seña de cada día
+      pagoAprobado(pedidoId, token) {
+        const pe = db.pedidos.find((x) => x.id === pedidoId && x.token === token);
+        if (!pe) return 'NO_ENCONTRADO';
+        const mpId = String(Date.now());
+        const resultados = db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
+          .map((r) => { const falta = sena(r.precio_total) - pagado(r.id); return falta > 0 ? registrarPagoMP(r.id, mpId, falta) : 'CONFIRMADA'; });
         guardar();
-        return res;
+        return resultados.includes('A_REVISAR') ? 'A_REVISAR' : 'CONFIRMADA';
       },
       // Adelanta el reloj: lo que vencía en ese tiempo, vence
       adelantar(minutos) {

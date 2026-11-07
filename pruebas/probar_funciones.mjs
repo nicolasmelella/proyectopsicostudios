@@ -129,4 +129,22 @@ assert.equal(r.status, 502); ok('pago que Mercado Pago no encuentra: pide reinte
 const estado = JSON.parse(sql('anon', `select public.estado_pago_reserva(${reserva.id}, '${reserva.token}')`));
 assert.equal(estado.estado, 'confirmada'); assert.equal(estado.pagado, 9000); ok('la web ve la reserva confirmada al volver');
 
+// ---------- Pedido de varios días ----------
+const d2 = sql('postgres', `select (date '${dia}' + case when extract(isodow from date '${dia}' + 3) = 7 then 4 else 3 end)::text`);
+const items = JSON.stringify([{ fecha: dia, horas: [10, 11], consultorio: 2 }, { fecha: d2, horas: [16], consultorio: null }]);
+const pedido = JSON.parse(sql('anon', `select public.crear_pedido('Pedro Pedido', '1133335555', 'Psicólogo', 'pedro@prueba.com', '${items}'::jsonb)`));
+r = await pedir({ pedido_id: pedido.pedido, token: pedido.token });
+cuerpo = await r.json();
+assert.equal(r.status, 200, JSON.stringify(cuerpo));
+const prefPedido = mp.preferencias.at(-1);
+assert.equal(prefPedido.items[0].unit_price, pedido.sena); ok(`pedido de 2 días: cobra una sola seña de $${pedido.sena}`);
+assert.equal(prefPedido.external_reference, `pedido-${pedido.pedido}`); ok('identifica el pedido');
+assert.equal(prefPedido.back_urls.success, `https://reservas.prueba/?pago=ok&pedido=${pedido.pedido}&t=${pedido.token}`); ok('vuelve a la web con el pedido y su código');
+mp.pagos['9101'] = { id: 9101, status: 'approved', currency_id: 'ARS', external_reference: `pedido-${pedido.pedido}`, transaction_amount: pedido.sena };
+r = await avisar(9101);
+assert.equal(await r.text(), 'CONFIRMADA'); ok('pago del pedido aprobado: CONFIRMADA');
+assert.equal(sql('postgres', `select count(*) from public.reservas where pedido_id = ${pedido.pedido} and estado = 'confirmada'`), '2'); ok('los 2 días quedaron confirmados');
+r = await avisar(9101);
+assert.equal(await r.text(), 'YA_REGISTRADO'); ok('aviso repetido del pedido: no duplica');
+
 console.log('PRUEBAS DE FUNCIONES DEL SERVIDOR PASARON');

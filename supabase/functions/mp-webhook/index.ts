@@ -72,17 +72,17 @@ Deno.serve(async (req: Request) => {
     if (!r.ok) return texto('no se pudo consultar el pago', 502); // Mercado Pago reintenta
     const pago = await r.json();
 
-    const ref = /^reserva-(\d+)$/.exec(String(pago.external_reference ?? ''));
+    // "pedido-123" (uno o varios días) o "reserva-123" (reservas anteriores a los pedidos)
+    const ref = /^(pedido|reserva)-(\d+)$/.exec(String(pago.external_reference ?? ''));
     if (!ref) return texto('no es un pago de reserva');
     if (pago.status !== 'approved') return texto(`pago ${pago.status}`);
     if (pago.currency_id !== 'ARS') return texto('moneda no esperada');
 
-    const resultado = await rpc('registrar_pago_mp', {
-      p_reserva_id: Number(ref[1]),
-      p_mp_payment_id: pagoId,
-      p_monto: Math.round(Number(pago.transaction_amount)),
-    });
-    console.log(`Pago ${pagoId} reserva ${ref[1]}: ${resultado}`);
+    const monto = Math.round(Number(pago.transaction_amount));
+    const resultado = ref[1] === 'pedido'
+      ? await rpc('registrar_pago_pedido_mp', { p_pedido_id: Number(ref[2]), p_mp_payment_id: pagoId, p_monto: monto })
+      : await rpc('registrar_pago_mp', { p_reserva_id: Number(ref[2]), p_mp_payment_id: pagoId, p_monto: monto });
+    console.log(`Pago ${pagoId} ${ref[1]} ${ref[2]}: ${resultado}`);
     return texto(String(resultado));
   } catch (e) {
     console.error('Error en mp-webhook', e);

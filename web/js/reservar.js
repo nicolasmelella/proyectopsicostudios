@@ -1,6 +1,6 @@
 // Web pública de reservas (sin login).
 import {
-  crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos,
+  crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
   faltan, precioHora, mensajeError, linkWhatsApp, DIAS, DIAS_CORTOS,
 } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
@@ -32,6 +32,7 @@ const estado = {
   libres: new Map(),      // hora → Set(consultorio_id)
   horas: new Set(),
   consultorio: null,      // null = cualquiera
+  pedido: new Map(),      // fecha → { consultorio, horas[] }: todos los días elegidos
   vistaHoras: (() => { try { return localStorage.getItem('psicostudios-vista-horas') || 'grilla'; } catch { return 'grilla'; } })(),
   // fijo
   dia: null,
@@ -133,8 +134,10 @@ function pintarCalendario() {
     const f = `${estado.mesVista}-${String(d).padStart(2, '0')}`;
     const nivel = f < hoy || f > max ? null : nivelDia(f);
     const estadoTxt = diaSemana(f) === 7 ? 'cerrado' : !nivel ? 'no disponible' : { mucho: 'hay lugar', poco: 'queda poco lugar', lleno: 'completo' }[nivel];
-    html += `<button type="button" class="cal-dia ${nivel ? 'n-' + nivel : 'fuera'}" data-f="${f}"
-      ${!nivel || nivel === 'lleno' ? 'disabled' : ''} aria-pressed="${f === estado.fecha}" aria-label="${fechaLarga(f)}: ${estadoTxt}">${d}</button>`;
+    const enPedido = estado.pedido.has(f);
+    html += `<button type="button" class="cal-dia ${nivel ? 'n-' + nivel : 'fuera'}${enPedido ? ' en-pedido' : ''}" data-f="${f}"
+      ${(!nivel || nivel === 'lleno') && !enPedido ? 'disabled' : ''} aria-pressed="${f === estado.fecha}"
+      aria-label="${fechaLarga(f)}: ${estadoTxt}${enPedido ? ', está en tu pedido' : ''}">${d}</button>`;
   }
   $('#cal-dias').innerHTML = html;
   $('#cal-dias').querySelectorAll('.cal-dia:not(:disabled)').forEach((b) => (b.onclick = () => elegirFecha(b.dataset.f, true)));
@@ -144,8 +147,9 @@ $('#cal-sig').onclick = () => { estado.mesVista = mesMover(estado.mesVista, 1); 
 
 async function elegirFecha(f, desplazar = false) {
   estado.fecha = f;
-  estado.horas.clear();
-  estado.consultorio = null;
+  const guardado = estado.pedido.get(f);
+  estado.horas = new Set(guardado?.horas || []);
+  estado.consultorio = guardado?.consultorio ?? null;
   estado.mesVista = f.slice(0, 7);
   mostrarError('');
   pintarCalendario();
@@ -159,6 +163,12 @@ async function elegirFecha(f, desplazar = false) {
     if (!estado.libres.has(r.hora)) estado.libres.set(r.hora, new Set());
     estado.libres.get(r.hora).add(r.consultorio_id);
   }
+  // si algo que estaba en el pedido para este día se ocupó mientras tanto, se saca
+  const antes = estado.horas.size;
+  for (const h of [...estado.horas]) {
+    if (estado.consultorio ? !libreEn(h, estado.consultorio) : !estado.libres.get(h)?.size) estado.horas.delete(h);
+  }
+  if (estado.horas.size < antes) mostrarError(`Un horario que habías elegido para el ${fechaCorta(f)} se ocupó y lo sacamos de tu pedido.`);
   pintarHorasSuelta();
 }
 
@@ -194,7 +204,25 @@ document.querySelectorAll('[data-vista-h]').forEach((b) => (b.onclick = () => {
   pintarHorasSuelta();
 }));
 
+// Guarda la selección del día actual en el pedido
+function sincronizarPedido() {
+  if (!estado.fecha) return;
+  const max = Number(estado.cfg.max_dias_por_pedido || 8);
+  if (estado.horas.size && !estado.pedido.has(estado.fecha) && estado.pedido.size >= max) {
+    estado.horas.clear();
+    estado.consultorio = null;
+    mostrarError(`Se pueden reservar hasta ${max} días por vez. Para más, escribinos.`);
+    return;
+  }
+  if (estado.horas.size) estado.pedido.set(estado.fecha, { consultorio: estado.consultorio, horas: [...estado.horas].sort((a, b) => a - b) });
+  else estado.pedido.delete(estado.fecha);
+}
+const totalDia = (f, horas) => horas.reduce((s, h) => s + precioHora(estado.precios, estado.cfg, 'suelta', h, f), 0);
+const diasPedido = () => [...estado.pedido.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+
 function pintarHorasSuelta() {
+  sincronizarPedido();
+  pintarCalendario();
   document.querySelectorAll('[data-vista-h]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vistaH === estado.vistaHoras));
   const hs = horasVisibles();
   if (!hs.some((h) => estado.libres.get(h)?.size)) {
@@ -269,11 +297,30 @@ function pintarLista(hs) {
 
 function pintarSeleccion() {
   const el = $('#seleccion');
-  if (!estado.horas.size) { el.classList.add('oculto'); return; }
+  const dias = diasPedido();
+  if (!dias.length) {
+    el.classList.remove('oculto');
+    el.innerHTML = '<span class="suave">Tocá los horarios libres para armar tu pedido. Podés sumar varios días.</span>';
+    return;
+  }
   el.classList.remove('oculto');
-  el.innerHTML = `<span>Elegiste: <strong>${esc(rangos(estado.horas))}</strong> · ${estado.consultorio ? esc(nombreCons(estado.consultorio)) : 'cualquier consultorio'}</span>
-    <button type="button" class="btn btn-borde btn-chico" id="borrar-seleccion">Borrar selección</button>`;
-  $('#borrar-seleccion').onclick = () => { estado.horas.clear(); estado.consultorio = null; pintarHorasSuelta(); };
+  el.innerHTML = `<div class="pedido-cab"><strong>Tu pedido</strong><span>${dias.length === 1 ? '1 día' : `${dias.length} días`}</span></div>
+    <ul class="pedido-lista">${dias.map(([f, it]) => `
+      <li class="${f === estado.fecha ? 'actual' : ''}">
+        <span><strong>${esc(fechaLarga(f))}</strong><br>${esc(rangos(it.horas))} · ${it.consultorio ? esc(nombreCons(it.consultorio)) : 'cualquier consultorio'} · ${pesos(totalDia(f, it.horas))}</span>
+        <span class="pedido-acc">
+          ${f !== estado.fecha ? `<button type="button" class="btn btn-borde btn-chico" data-ver-dia="${f}">Ver</button>` : ''}
+          <button type="button" class="btn btn-peligro btn-chico" data-quitar-dia="${f}" aria-label="Quitar ${esc(fechaLarga(f))} del pedido">Quitar</button>
+        </span>
+      </li>`).join('')}</ul>
+    <p class="ayuda" style="margin:.4em 0 0">¿Querés sumar otro día? Elegilo en el calendario: lo que ya elegiste queda guardado.</p>`;
+  el.querySelectorAll('[data-ver-dia]').forEach((b) => (b.onclick = () => elegirFecha(b.dataset.verDia, true)));
+  el.querySelectorAll('[data-quitar-dia]').forEach((b) => (b.onclick = () => {
+    const f = b.dataset.quitarDia;
+    estado.pedido.delete(f);
+    if (f === estado.fecha) { estado.horas.clear(); estado.consultorio = null; }
+    pintarHorasSuelta();
+  }));
 }
 
 // ================================================================ FOTOS
@@ -394,9 +441,14 @@ function pintarHorasFijo() {
 function calculo() {
   const pct = Number(estado.cfg.porcentaje_sena || 50);
   if (estado.modo === 'suelta') {
-    const horas = [...estado.horas];
-    const total = horas.reduce((s, h) => s + precioHora(estado.precios, estado.cfg, 'suelta', h, estado.fecha), 0);
-    return { horas, total, sena: Math.ceil((total * pct) / 100), listo: horas.length > 0 };
+    let total = 0, sena = 0, nHoras = 0;
+    for (const [f, it] of diasPedido()) {
+      const t = totalDia(f, it.horas);
+      total += t;
+      sena += Math.ceil((t * pct) / 100);   // igual que la base: la seña de cada día, sumada
+      nHoras += it.horas.length;
+    }
+    return { nHoras, dias: estado.pedido.size, total, sena, listo: nHoras > 0 };
   }
   const horas = [...estado.horasFijo];
   const semanal = horas.reduce((s, h) => s + precioHora(estado.precios, estado.cfg, 'fijo', h, estado.desde), 0);
@@ -406,11 +458,12 @@ function calculo() {
 function actualizarBarra() {
   const c = calculo();
   const barra = $('#barra');
-  if (!c.horas.length) { barra.classList.add('oculto'); return; }
+  const cuantas = estado.modo === 'suelta' ? c.nHoras : c.horas.length;
+  if (!cuantas) { barra.classList.add('oculto'); return; }
   barra.classList.remove('oculto');
-  const n = c.horas.length === 1 ? '1 hora' : `${c.horas.length} horas`;
+  const n = cuantas === 1 ? '1 hora' : `${cuantas} horas`;
   $('#barra-detalle').innerHTML = estado.modo === 'suelta'
-    ? `${n} · Total <strong>${pesos(c.total)}</strong><br>Seña para confirmar: <strong>${pesos(c.sena)}</strong>`
+    ? `${n}${c.dias > 1 ? ` en ${c.dias} días` : ''} · Total <strong>${pesos(c.total)}</strong><br>Seña para confirmar: <strong>${pesos(c.sena)}</strong>`
     : `${n} por semana · <strong>${pesos(c.semanal)}</strong><br>Aprox. ${pesos(c.mensual)} por mes`;
   $('#btn-continuar').disabled = !c.listo;
 }
@@ -439,9 +492,8 @@ document.addEventListener('keydown', (e) => {
 
 $('#btn-continuar').onclick = () => {
   const c = calculo();
-  const consultorio = estado.consultorio ? nombreCons(estado.consultorio) : 'Te asignamos uno';
   const filas = estado.modo === 'suelta'
-    ? [['Día', fechaLarga(estado.fecha)], ['Horario', rangos(c.horas)], ['Consultorio', consultorio],
+    ? [...diasPedido().map(([f, it]) => [fechaLarga(f), `${rangos(it.horas)} · ${it.consultorio ? nombreCons(it.consultorio) : 'te asignamos uno'}`]),
        ['Total', pesos(c.total)], ['Seña (' + (estado.cfg.porcentaje_sena || 50) + '%)', pesos(c.sena)]]
     : [['Día', 'Todos los ' + DIAS[estado.dia].toLowerCase()], ['Desde', fechaLarga(estado.desde)],
        ['Horario', rangos(c.horas)], ['Por semana', pesos(c.semanal)], ['Por mes (aprox.)', pesos(c.mensual)]];
@@ -449,7 +501,7 @@ $('#btn-continuar').onclick = () => {
   const min = Number(estado.cfg.retencion_suelta_minutos || 120);
   const tiempo = min % 60 === 0 ? `${min / 60} ${min === 60 ? 'hora' : 'horas'}` : `${min} minutos`;
   $('#acepto-texto').textContent = estado.modo === 'suelta'
-    ? `Entiendo que el horario se guarda ${tiempo} y se confirma cuando pago la seña de ${pesos(c.sena)}. Si no, se libera solo.`
+    ? `Entiendo que ${c.dias > 1 ? 'los horarios se guardan' : 'el horario se guarda'} ${tiempo} y se ${c.dias > 1 ? 'confirman' : 'confirma'} cuando pago la seña de ${pesos(c.sena)}. Si no, se ${c.dias > 1 ? 'liberan solos' : 'libera solo'}.`
     : 'Entiendo que es una solicitud: el equipo me escribe por WhatsApp para confirmarla.';
   $('#btn-enviar').textContent = estado.modo === 'suelta' ? 'Reservar' : 'Enviar solicitud';
   $('#aviso-form').classList.add('oculto');
@@ -502,13 +554,15 @@ $('#form-datos').onsubmit = async (e) => {
   btn.textContent = 'Enviando…';
   try {
     if (estado.modo === 'suelta') {
-      const { data, error } = await sb.rpc('crear_reserva', {
+      const { data, error } = await sb.rpc('crear_pedido', {
         p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion, p_email: email,
-        p_fecha: estado.fecha, p_horas: [...estado.horas].sort((a, b) => a - b),
-        p_consultorio: estado.consultorio,
+        p_items: diasPedido().map(([f, it]) => ({ fecha: f, horas: it.horas, consultorio: it.consultorio })),
       });
       if (error) throw error;
       guardarMisDatos({ nombre, whatsapp, profesion, email });
+      estado.pedido.clear();
+      estado.horas.clear();
+      estado.consultorio = null;
       mostrarResultadoSuelta(data, nombre);
     } else {
       const { data, error } = await sb.rpc('crear_solicitud_fijo', {
@@ -535,20 +589,19 @@ let reloj = null;
 
 function mostrarResultadoSuelta(r, nombre) {
   cerrar('#modal-datos');
-  const horas = [...estado.horas];
   const alias = estado.cfg.alias_transferencia;
   const titular = estado.cfg.titular_transferencia;
   const cvu = estado.cfg.cvu_transferencia;
   const configurado = (v) => v && v !== 'COMPLETAR';
   const wa = configurado(estado.cfg.whatsapp_contacto) ? estado.cfg.whatsapp_contacto : WHATSAPP_AYUDA;
-  const textoWa = `Hola! Soy ${nombre}. Te paso el comprobante de la seña de la reserva #${r.id}: ` +
-    `${fechaLarga(estado.fecha)}, ${rangos(horas)}, ${r.consultorio}. Seña: ${pesos(r.sena)}.`;
+  const textoWa = `Hola! Soy ${nombre}. Te paso el comprobante de la seña del pedido #${r.pedido}: ` +
+    r.reservas.map((x) => `${fechaLarga(x.fecha)} ${rangos(x.horas)} (${x.consultorio})`).join('; ') + `. Seña: ${pesos(r.sena)}.`;
 
   const conMP = mpActivo() && r.token;
   const transferencia = `
     <div class="dato-pago">
       <div class="fila"><span>Seña a transferir</span><span class="valor" style="font-size:1.2rem">${pesos(r.sena)}</span></div>
-      <div class="fila"><span>Total de la reserva</span><span class="valor">${pesos(r.total)}</span></div>
+      <div class="fila"><span>Total</span><span class="valor">${pesos(r.total)}</span></div>
       ${configurado(alias) ? `<div class="fila"><span>Alias</span><span class="valor valor-largo">${esc(alias)}</span>
         <button class="btn btn-borde btn-chico" id="copiar-alias">Copiar</button></div>` : ''}
       ${configurado(cvu) ? `<div class="fila"><span>CVU</span><span class="valor valor-largo">${esc(cvu)}</span>
@@ -560,20 +613,21 @@ function mostrarResultadoSuelta(r, nombre) {
 
   $('#contenido-resultado').innerHTML = `
     <div class="icono" aria-hidden="true">✓</div>
-    <h2 id="titulo-resultado">¡Tu horario está guardado!</h2>
-    <p>Reserva <strong>#${esc(r.id)}</strong> · ${esc(fechaLarga(estado.fecha))}, ${esc(rangos(horas))} · <strong>${esc(r.consultorio)}</strong></p>
-    <p class="suave chico" style="margin-bottom:.25em">Para confirmarla, pagá la seña de <strong>${pesos(r.sena)}</strong> antes de que termine este tiempo:</p>
+    <h2 id="titulo-resultado">${r.reservas.length > 1 ? '¡Tus horarios están guardados!' : '¡Tu horario está guardado!'}</h2>
+    <p style="margin-bottom:.4em">Pedido <strong>#${esc(r.pedido)}</strong></p>
+    ${listaReservas(r.reservas)}
+    <p class="suave chico" style="margin-bottom:.25em">Para confirmar${r.reservas.length > 1 ? ' todo' : 'la'}, pagá la seña de <strong>${pesos(r.sena)}</strong> antes de que termine este tiempo:</p>
     <div class="cuenta" id="cuenta" aria-live="polite">${faltan(r.expira_en)}</div>
     ${conMP ? `
       <button class="btn btn-mp btn-bloque" id="pagar-mp" style="margin-top:1em">Pagar seña con Mercado Pago</button>
       <p class="ayuda">Tarjeta de débito, crédito o dinero en cuenta. Se confirma al instante.</p>
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
       <details class="otra-forma"><summary>¿Preferís transferir?</summary>${transferencia}</details>` : transferencia}
-    <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de la reserva. Si la seña no llega a tiempo, el horario se libera automáticamente.</p>
+    <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de cada turno. Si la seña no llega a tiempo, los horarios se liberan automáticamente.</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Hacer otra reserva</button>`;
   abrir('#modal-resultado');
 
-  $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(r.id, r.token, e.currentTarget, $('#aviso-mp')));
+  $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(r.pedido, r.token, e.currentTarget, $('#aviso-mp')));
   $('#copiar-alias')?.addEventListener('click', async (e) => {
     try { await navigator.clipboard.writeText(alias); e.target.textContent = '¡Copiado!'; } catch { /* sin permiso */ }
   });
@@ -583,6 +637,14 @@ function mostrarResultadoSuelta(r, nombre) {
   clearInterval(reloj);
   reloj = setInterval(() => { const el = $('#cuenta'); if (el) el.textContent = faltan(r.expira_en); }, 15000);
   $('#nueva-reserva').onclick = async () => { clearInterval(reloj); cerrarVentanas(); await cargarResumen(); elegirFecha(estado.fecha); };
+}
+
+// Lista de los turnos de un pedido (en la pantalla de resultado)
+function listaReservas(reservas, conEstado = false) {
+  const etiqueta = { confirmada: '<span class="pill-mini ok">Confirmada</span>', pendiente: '<span class="pill-mini alerta">Sin seña</span>',
+                     vencida: '<span class="pill-mini error">Vencida</span>', cancelada: '<span class="pill-mini error">Cancelada</span>' };
+  return `<ul class="resumen-lista">${reservas.map((x) => `<li><span>${esc(fechaLarga(x.fecha))}<br><small class="suave">${esc(rangos(x.horas))}</small></span>
+    <span>${esc(x.consultorio)}${conEstado ? `<br>${etiqueta[x.estado] || ''}` : ''}</span></li>`).join('')}</ul>`;
 }
 
 function mostrarResultadoFijo(r, nombre) {
@@ -617,7 +679,7 @@ async function pagarConMP(id, token, boton, aviso) {
   boton.textContent = 'Abriendo Mercado Pago…';
   aviso?.classList.add('oculto');
   try {
-    const { data, error } = await sb.functions.invoke('mp-crear-pago', { body: { reserva_id: id, token } });
+    const { data, error } = await sb.functions.invoke('mp-crear-pago', { body: { pedido_id: id, token } });
     if (error) {
       const detalle = await error.context?.json?.().catch(() => null);
       throw detalle || error;
@@ -631,7 +693,7 @@ async function pagarConMP(id, token, boton, aviso) {
   }
 }
 
-// Pantalla al volver de Mercado Pago (?pago=ok|error|pendiente&reserva=ID&t=CODIGO)
+// Pantalla al volver de Mercado Pago (?pago=ok|error|pendiente&pedido=ID&t=CODIGO)
 async function mostrarRetorno(id, token, resultado) {
   clearInterval(reloj);
   cerrar('#modal-datos');
@@ -641,38 +703,44 @@ async function mostrarRetorno(id, token, resultado) {
 
   let r = null;
   for (let intento = 0; intento < 10; intento++) {
-    const { data, error } = await sb.rpc('estado_pago_reserva', { p_reserva_id: id, p_token: token });
+    const { data, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
     if (error) { caja.innerHTML = `<h2 id="titulo-resultado">No encontramos la reserva</h2><p>${esc(mensajeError(error))}</p>${botonVolver()}`; conectarVolver(); return; }
     r = data;
     if (r.estado === 'confirmada' || resultado !== 'ok') break;
     await new Promise((ok) => setTimeout(ok, 3000));
   }
 
-  const detalle = `<p>Reserva <strong>#${esc(r.id)}</strong> · ${esc(fechaLarga(r.fecha))}, ${esc(rangos(r.horas))} · <strong>${esc(r.consultorio)}</strong></p>`;
+  const varios = r.reservas.length > 1;
+  const detalle = `<p style="margin-bottom:.4em">Pedido <strong>#${esc(r.id)}</strong></p>${listaReservas(r.reservas, r.estado === 'parcial')}`;
   if (r.estado === 'confirmada') {
     caja.innerHTML = `<div class="icono" aria-hidden="true">✓</div>
-      <h2 id="titulo-resultado">¡Seña pagada! Tu reserva está confirmada</h2>${detalle}
+      <h2 id="titulo-resultado">¡Seña pagada! ${varios ? 'Tus reservas están confirmadas' : 'Tu reserva está confirmada'}</h2>${detalle}
       <div class="dato-pago">
         <div class="fila"><span>Pagaste</span><span class="valor">${pesos(r.pagado)}</span></div>
-        <div class="fila"><span>Saldo (se abona el día de la reserva)</span><span class="valor">${pesos(r.total - r.pagado)}</span></div>
+        <div class="fila"><span>Saldo (se abona el día de cada turno)</span><span class="valor">${pesos(r.total - r.pagado)}</span></div>
       </div>
-      <p class="suave chico">Guardá el número de reserva. ¡Te esperamos!</p>${botonVolver()}`;
+      <p class="suave chico">Guardá el número de pedido. ¡Te esperamos!</p>${botonVolver()}`;
+  } else if (r.estado === 'parcial') {
+    caja.innerHTML = `<div class="icono" aria-hidden="true" style="background:var(--alerta-fondo);color:var(--alerta)">!</div>
+      <h2 id="titulo-resultado">Recibimos tu pago, pero no todos los horarios seguían libres</h2>${detalle}
+      <p>Los turnos confirmados están marcados. Para el resto te escribimos para devolverte esa parte o buscarte otro horario.</p>
+      <a class="btn btn-wa btn-bloque" data-ayuda target="_blank" rel="noopener" href="${linkWhatsApp(WHATSAPP_AYUDA, `Hola! Pagué el pedido #${r.id} y no todos los horarios quedaron confirmados.`)}">Escribinos por WhatsApp</a>${botonVolver()}`;
   } else if (r.estado === 'pendiente' && resultado === 'ok') {
     caja.innerHTML = `<div class="icono" aria-hidden="true">⏳</div>
       <h2 id="titulo-resultado">Estamos acreditando tu pago</h2>${detalle}
-      <p>Mercado Pago todavía no nos confirmó el pago. Suele tardar un minuto: tu reserva se confirma sola. Si tenés dudas, escribinos por WhatsApp con el número de reserva.</p>
+      <p>Mercado Pago todavía no nos confirmó el pago. Suele tardar un minuto: ${varios ? 'tus reservas se confirman solas' : 'tu reserva se confirma sola'}. Si tenés dudas, escribinos por WhatsApp con el número de pedido.</p>
       <button class="btn btn-primario btn-bloque" id="reverificar">Volver a verificar</button>${botonVolver()}`;
     $('#reverificar').onclick = () => mostrarRetorno(id, token, 'ok');
   } else if (r.estado === 'pendiente') {
     caja.innerHTML = `<div class="icono" aria-hidden="true" style="background:var(--alerta-fondo);color:var(--alerta)">!</div>
       <h2 id="titulo-resultado">El pago no se completó</h2>${detalle}
-      <p>Tu horario sigue guardado ${r.expira_en ? `<strong>${faltan(r.expira_en)}</strong> más` : ''}. Podés intentar de nuevo con otra tarjeta o medio de pago.</p>
+      <p>${varios ? 'Tus horarios siguen guardados' : 'Tu horario sigue guardado'} ${r.expira_en ? `<strong>${faltan(r.expira_en)}</strong> más` : ''}. Podés intentar de nuevo con otra tarjeta o medio de pago.</p>
       <button class="btn btn-mp btn-bloque" id="pagar-mp">Intentar de nuevo · ${pesos(r.sena - r.pagado)}</button>
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>${botonVolver()}`;
     $('#pagar-mp').onclick = (e) => pagarConMP(id, token, e.currentTarget, $('#aviso-mp'));
   } else {
-    caja.innerHTML = `<h2 id="titulo-resultado">La reserva ya no está vigente</h2>${detalle}
-      <p>Venció el tiempo para pagar la seña y el horario se liberó. Si llegaste a pagar, escribinos por WhatsApp con el número de reserva y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
+    caja.innerHTML = `<h2 id="titulo-resultado">${varios ? 'Las reservas ya no están vigentes' : 'La reserva ya no está vigente'}</h2>${detalle}
+      <p>Venció el tiempo para pagar la seña y ${varios ? 'los horarios se liberaron' : 'el horario se liberó'}. Si llegaste a pagar, escribinos por WhatsApp con el número de pedido y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
   }
   conectarVolver();
 }
@@ -693,9 +761,9 @@ try {
   if (primero) await elegirFecha(primero);
   else { pintarCalendario(); $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres en los próximos meses. Escribinos por WhatsApp.</p>'; }
   const q = new URLSearchParams(location.search);
-  if (q.has('pago') && q.has('reserva') && q.has('t')) {
-    const [resultado, id, token] = [q.get('pago'), Number(q.get('reserva')), q.get('t')];
-    q.delete('pago'); q.delete('reserva'); q.delete('t');
+  if (q.has('pago') && q.has('pedido') && q.has('t')) {
+    const [resultado, id, token] = [q.get('pago'), Number(q.get('pedido')), q.get('t')];
+    q.delete('pago'); q.delete('pedido'); q.delete('t');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
     mostrarRetorno(id, token, resultado);
   }

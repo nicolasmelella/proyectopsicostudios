@@ -38,22 +38,22 @@
     import { esc, pesos, fechaLarga, rangos } from './js/comun.js';
 
     const q = new URLSearchParams(location.search);
-    const id = Number(q.get('reserva'));
+    const id = Number(q.get('pedido'));
     const token = q.get('t');
-    const volver = (resultado) => { location.href = `index.html?pago=${resultado}&reserva=${id}&t=${token}`; };
+    const volver = (resultado) => { location.href = `index.html?pago=${resultado}&pedido=${id}&t=${token}`; };
     const caja = document.getElementById('caja');
     const sb = crearClienteDemo();
 
-    const { data: r, error } = await sb.rpc('estado_pago_reserva', { p_reserva_id: id, p_token: token });
+    const { data: r, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
     if (error) {
       caja.innerHTML = `<h1>No encontramos la reserva</h1><p>${esc(error.hint || error.message)}</p>
         <a class="btn btn-borde btn-bloque" href="index.html">Volver a la web</a>`;
     } else {
       const monto = Math.max(0, r.sena - r.pagado);
       caja.innerHTML = `
-        <h1>Psico Studios · Seña reserva #${esc(r.id)}</h1>
+        <h1>Psico Studios · Seña pedido #${esc(r.id)}</h1>
         <div class="simu-monto">${pesos(monto)}</div>
-        <div class="simu-detalle">${esc(fechaLarga(r.fecha))}, ${esc(rangos(r.horas))} · ${esc(r.consultorio)}</div>
+        <div class="simu-detalle">${r.reservas.map((x) => `${esc(fechaLarga(x.fecha))}, ${esc(rangos(x.horas))} · ${esc(x.consultorio)}`).join('<br>')}</div>
         <div class="simu-tarjeta">💳 Tarjeta de prueba terminada en 4242</div>
         <div class="grupo">
           <button class="btn btn-aprobar btn-bloque" id="aprobar">Simular pago APROBADO</button>

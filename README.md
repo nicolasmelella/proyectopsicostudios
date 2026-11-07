@@ -19,8 +19,9 @@ pruebas/    → pruebas automáticas de la base (no hace falta tocarlas)
 ## Cómo funciona
 
 **Reserva por horas (web):**
-1. La persona elige el día y las horas, y deja nombre y WhatsApp.
-2. El horario queda **guardado 2 horas** esperando la seña (50% del total).
+1. La persona elige uno o **varios días** (ej: lunes en el Consultorio 1 y jueves en el 3); todo queda en "Tu pedido".
+   Deja sus datos una sola vez: nombre, profesión, celular y mail.
+2. Los horarios quedan **guardados 2 horas** esperando **una sola seña** (50% del total del pedido).
 3. Le aparece el alias para transferir y un botón para mandar el comprobante por WhatsApp.
 4. El equipo, desde el panel, toca **Registrar seña** → la reserva queda **confirmada**.
 5. Si la seña no se registra en 2 horas, el horario **se libera solo**.
@@ -70,6 +71,9 @@ Después, en una consulta nueva: `supabase/04_mercadopago.sql` → **Run** → *
 
 Por último: `supabase/05_calendario.sql` → **Run** → *"Calendario listo: se puede reservar hasta el …"*.
 (Agenda abierta 2 meses de calendario, colores por día, y nombre, profesión, celular y mail obligatorios.)
+
+Y `supabase/06_pedidos.sql` → **Run** → *"Pedidos de varios días listos"*.
+(Reservar varios días de una vez, con una sola seña.)
 
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:

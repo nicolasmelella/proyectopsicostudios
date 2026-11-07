@@ -47,9 +47,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return responder({ message: 'METODO_NO_PERMITIDO' }, 405);
 
-  let cuerpo: { reserva_id?: unknown; token?: unknown };
+  // Se paga un pedido (uno o varios días) o, por compatibilidad, una reserva suelta
+  let cuerpo: { pedido_id?: unknown; reserva_id?: unknown; token?: unknown };
   try { cuerpo = await req.json(); } catch { return responder({ message: 'PEDIDO_INVALIDO' }, 400); }
-  const id = Number(cuerpo.reserva_id);
+  const tipo = cuerpo.pedido_id != null ? 'pedido' : 'reserva';
+  const id = Number(tipo === 'pedido' ? cuerpo.pedido_id : cuerpo.reserva_id);
   const token = String(cuerpo.token ?? '');
   if (!Number.isInteger(id) || id <= 0 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
     return responder({ message: 'PEDIDO_INVALIDO', hint: 'Faltan los datos de la reserva' }, 400);
@@ -58,17 +60,19 @@ Deno.serve(async (req: Request) => {
   try {
     let datos: { monto: number; expira_en: string | null; descripcion: string };
     try {
-      datos = await rpc('preparar_pago_mp', { p_reserva_id: id, p_token: token });
+      datos = tipo === 'pedido'
+        ? await rpc('preparar_pago_pedido', { p_pedido_id: id, p_token: token })
+        : await rpc('preparar_pago_mp', { p_reserva_id: id, p_token: token });
     } catch (e) {
       const err = e as { message: string; hint?: string };
       return responder({ message: err.message, hint: err.hint }, 400);
     }
 
     const sitio = variable('SITIO_URL').replace(/\/+$/, '');
-    const vuelta = (resultado: string) => `${sitio}/?pago=${resultado}&reserva=${id}&t=${token}`;
+    const vuelta = (resultado: string) => `${sitio}/?pago=${resultado}&${tipo}=${id}&t=${token}`;
     const preferencia: Record<string, unknown> = {
-      items: [{ id: `reserva-${id}`, title: datos.descripcion, quantity: 1, unit_price: datos.monto, currency_id: 'ARS' }],
-      external_reference: `reserva-${id}`,
+      items: [{ id: `${tipo}-${id}`, title: datos.descripcion, quantity: 1, unit_price: datos.monto, currency_id: 'ARS' }],
+      external_reference: `${tipo}-${id}`,
       notification_url: `${variable('SUPABASE_URL')}/functions/v1/mp-webhook`,
       back_urls: { success: vuelta('ok'), failure: vuelta('error'), pending: vuelta('pendiente') },
       auto_return: 'approved',

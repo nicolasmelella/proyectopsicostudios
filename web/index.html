@@ -88,6 +88,7 @@
     .cal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: .75rem; color: var(--texto-suave); margin-top: 10px; }
     .cal-leyenda span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
     .l-mucho::before { background: var(--ok); } .l-poco::before { background: #d9a21b; } .l-lleno::before { background: #c3c6cf; }
+    .cal-leyenda .l-pedido::before { background: transparent; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--terracota-osc); width: 10px; height: 10px; }
 
     /* Grilla de horarios por consultorio */
     .vista-toggle { display: inline-flex; background: var(--crema-claro); border: 1px solid var(--borde); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 12px; }
@@ -112,6 +113,21 @@
     .mini-elegido { background: var(--azul); border-color: var(--azul); }
     .seleccion { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: #e6ecf5;
                  color: var(--azul); border-radius: 10px; padding: .6em .9em; margin-top: 12px; font-size: .92rem; }
+    /* Pedido de varios días */
+    .cal-dia.en-pedido { box-shadow: inset 0 0 0 2px var(--terracota-osc); }
+    .cal-dia.en-pedido::before { content: "✓"; position: absolute; top: 1px; right: 4px; font-size: .62rem; color: var(--terracota-osc); }
+    .cal-dia.en-pedido[aria-pressed="true"]::before { color: var(--crema); }
+    .seleccion { display: block; }
+    .pedido-cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .4em; }
+    .pedido-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .pedido-lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+                       background: var(--blanco); border-radius: 8px; padding: .55em .7em; font-size: .88rem; }
+    .pedido-lista li.actual { box-shadow: inset 3px 0 0 var(--azul); }
+    .pedido-acc { display: flex; gap: 6px; }
+    .pill-mini { display: inline-block; font-size: .7rem; font-weight: 700; padding: .1em .5em; border-radius: 999px; margin-top: 2px; }
+    .pill-mini.ok { background: var(--ok-fondo); color: var(--ok); }
+    .pill-mini.alerta { background: var(--alerta-fondo); color: var(--alerta); }
+    .pill-mini.error { background: var(--error-fondo); color: var(--error); }
     .ayuda-cta { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
     #aviso-general a { color: inherit; font-weight: 700; }
 
@@ -179,7 +195,7 @@
           </div>
           <div class="cal-semana" aria-hidden="true"><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span></div>
           <div class="cal-dias" id="cal-dias"></div>
-          <div class="cal-leyenda"><span class="l-mucho">Hay lugar</span><span class="l-poco">Queda poco</span><span class="l-lleno">Completo o cerrado</span></div>
+          <div class="cal-leyenda"><span class="l-mucho">Hay lugar</span><span class="l-poco">Queda poco</span><span class="l-lleno">Completo o cerrado</span><span class="l-pedido">En tu pedido</span></div>
         </div>
         <p class="ayuda">Se puede reservar hasta el <strong id="fecha-max"></strong>.</p>
       </div>
@@ -196,7 +212,7 @@
           <span><i class="mini mini-libre"></i>Libre: tocalo para elegir</span><span><i class="mini mini-ocupado"></i>Ocupado</span><span><i class="mini mini-elegido"></i>Elegido</span>
           <span>☀️ Mañana hasta las <span data-cfg="hora_fin_manana">13</span> hs · 🌙 Tarde desde las <span data-cfg="hora_fin_manana">13</span> hs</span>
         </div>
-        <div id="seleccion" class="seleccion oculto" aria-live="polite"></div>
+        <div id="seleccion" class="seleccion" aria-live="polite"></div>
       </div>
     </section>
 

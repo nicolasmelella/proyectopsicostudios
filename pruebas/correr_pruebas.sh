@@ -9,5 +9,6 @@ psql -q -d psicostudios_prueba -v ON_ERROR_STOP=1 \
   -f supabase/01_base.sql \
   -f pruebas/probar.sql \
   -f pruebas/probar_mercadopago.sql \
-  -f pruebas/probar_calendario.sql
+  -f pruebas/probar_calendario.sql \
+  -f pruebas/probar_pedidos.sql
 node --experimental-strip-types --no-warnings pruebas/probar_funciones.mjs

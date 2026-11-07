@@ -246,6 +246,8 @@ async function detalleReserva(id) {
   ]);
   if (error || !rs?.length) return errorEn(null, error || 'No se encontró la reserva');
   const r = rs[0];
+  let pedidoN = 0;
+  if (r.pedido_id) pedidoN = (await sb.from('reservas').select('id').eq('pedido_id', r.pedido_id)).data?.length || 0;
   const pagado = (pagos || []).filter((p) => !p.anulado).reduce((s, p) => s + p.monto, 0);
   const falta = r.precio_total - pagado;
   const faltaSena = Math.max(0, sena(r.precio_total) - pagado);
@@ -270,6 +272,7 @@ async function detalleReserva(id) {
       ${r.estado === 'pendiente' && r.expira_en ? `<li><span>Vence en</span><span>${faltan(r.expira_en)}</span></li>` : ''}
       ${r.motivo_cancelacion ? `<li><span>Motivo</span><span>${esc(r.motivo_cancelacion)}</span></li>` : ''}
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel'}</span></li>
+      ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
     ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
       <span>${pesos(p.monto)} ${!p.anulado ? `<button class="btn btn-peligro btn-chico" data-anular="${p.id}" style="margin-left:6px">Anular</button>` : ''}</span></li>`).join('')}</ul>` : ''}
