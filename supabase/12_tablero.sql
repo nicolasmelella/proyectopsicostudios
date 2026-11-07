@@ -90,6 +90,9 @@ begin
     where o.fecha between p_desde and p_hasta and o.bloqueo_id is null
       and (o.reserva_id is null or r.estado in ('pendiente', 'confirmada'))
       and (o.fijo_id is null or f.estado = 'activo')
+  ), bq as (   -- horarios bloqueados: no se pueden alquilar, no cuentan como disponibles
+    select o.fecha, o.hora from public.ocupaciones o
+    where o.fecha between p_desde and p_hasta and o.bloqueo_id is not null
   ), pg as (
     select p.monto, p.medio, coalesce(p.recibio, case when p.medio = 'mercadopago' then 'Mercado Pago' else 'Sin indicar' end) as recibio
     from public.pagos p
@@ -97,6 +100,10 @@ begin
   )
   select jsonb_build_object(
     'horas', (select count(*) from oc),
+    'bloq_por_fecha', coalesce((select jsonb_agg(jsonb_build_object('fecha', fecha, 'horas', horas) order by fecha) from (
+        select fecha, count(*) as horas from bq group by 1) x), '[]'),
+    'bloq_calor', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'hora', hora, 'horas', horas)) from (
+        select extract(isodow from fecha)::int as dia, hora, count(*) as horas from bq group by 1, 2) x), '[]'),
     'n_profesionales', (select count(distinct prof) from oc where prof is not null),
     'por_fecha', coalesce((select jsonb_agg(jsonb_build_object('fecha', fecha, 'horas', horas) order by fecha) from (
         select fecha, count(*) as horas from oc group by 1) x), '[]'),

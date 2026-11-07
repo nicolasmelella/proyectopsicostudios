@@ -537,9 +537,11 @@ export function crearClienteDemo() {
       const F = new Map(db.fijos.map((f) => [f.id, f]));
       const P = new Map(db.profesionales.map((p) => [p.id, p]));
       const oc = [];
+      const bq = [];
       for (const [k, o] of db.ocupaciones) {
         const [c, f, h] = k.split('|');
-        if (f < p_desde || f > p_hasta || o.bloqueo_id) continue;
+        if (f < p_desde || f > p_hasta) continue;
+        if (o.bloqueo_id) { bq.push({ fecha: f, hora: Number(h) }); continue; }
         const r = o.reserva_id && R.get(o.reserva_id);
         const fj = o.fijo_id && F.get(o.fijo_id);
         if (r && !['pendiente', 'confirmada'].includes(r.estado)) continue;
@@ -556,6 +558,9 @@ export function crearClienteDemo() {
         .map(([v, monto]) => ({ [k]: v, monto })).sort((a, b) => b.monto - a.monto);
       return {
         horas: oc.length,
+        bloq_por_fecha: [...bq.reduce((m, x) => m.set(x.fecha, (m.get(x.fecha) || 0) + 1), new Map())].map(([fecha, horas]) => ({ fecha, horas })),
+        bloq_calor: [...bq.reduce((m, x) => { const k = diaSemana(x.fecha) + '|' + x.hora; return m.set(k, (m.get(k) || 0) + 1); }, new Map())]
+          .map(([k, horas]) => ({ dia: Number(k.split('|')[0]), hora: Number(k.split('|')[1]), horas })),
         n_profesionales: new Set(oc.filter((x) => x.prof).map((x) => x.prof)).size,
         por_fecha: [...contar((x) => x.fecha)].map(([fecha, horas]) => ({ fecha, horas })).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)),
         por_semana: [...contar((x) => lunes(x.fecha))].map(([l, horas]) => ({ lunes: l, horas })).sort((a, b) => (a.lunes < b.lunes ? -1 : 1)),

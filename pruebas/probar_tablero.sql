@@ -28,6 +28,10 @@ select pg_temp.ok((select exists (select 1 from jsonb_array_elements(j->'ranking
 select pg_temp.ok((select (select sum((x->>'horas')::int) from jsonb_array_elements(j->'por_dia') x) = (j->>'horas')::int
                       and (select sum((x->>'horas')::int) from jsonb_array_elements(j->'calor') x) = (j->>'horas')::int from tb),
   'días y mapa de calor suman lo mismo que el total');
+select pg_temp.ok((select coalesce((select sum((x->>'horas')::int) from jsonb_array_elements(j->'bloq_por_fecha') x), 0) =
+                      (select count(*) from public.ocupaciones where bloqueo_id is not null
+                         and fecha between (select lunes - 7 from sem) and (select lunes + 13 from sem)) from tb),
+  'devuelve las horas bloqueadas (para no contarlas como disponibles)');
 select pg_temp.ok((select (select sum((x->>'horas')::int) from jsonb_array_elements(j->'por_fecha') x) = (j->>'horas')::int
                       and (j->>'n_profesionales')::int >= 1 from tb), 'horas por día y cantidad de profesionales');
 select pg_temp.ok((select (j->>'cobrado')::int = (select coalesce(sum(monto), 0) from public.pagos where not anulado

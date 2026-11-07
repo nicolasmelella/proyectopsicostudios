@@ -451,8 +451,12 @@ function nombrePeriodo(p, corto = false) {
   }
   return corto ? may(mes.slice(0, 3)) : `${may(mes)} ${anio}`;
 }
-// Horas posibles en un período (lunes a sábado)
-function capacidad(p) {
+// Horas posibles en un período (lunes a sábado), sin contar las bloqueadas (ej: Privado)
+function capacidad(p, T) {
+  const bloq = (T?.bloq_por_fecha || []).filter((x) => x.fecha >= p.ini && x.fecha <= p.fin).reduce((s, x) => s + x.horas, 0);
+  return capacidadBruta(p) - bloq;
+}
+function capacidadBruta(p) {
   const nCons = st.consultorios.filter((c) => c.activo).length;
   const horasDia = Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8);
   let dias = 0;
@@ -506,7 +510,7 @@ async function pintarNumeros() {
   } catch (err) { $('#nu-kpis').innerHTML = ''; errorEn(null, err); return; }
 
   // ---- números grandes: elegido vs. comparación ----
-  const ocS = S.horas / capacidad(sel), ocC = C.horas / capacidad(comp);
+  const ocS = S.horas / (capacidad(sel, S) || 1), ocC = C.horas / (capacidad(comp, C) || 1);
   const flecha = (n, txt) => (n > 0 ? `<span class="sube">▲ ${txt}</span>` : n < 0 ? `<span class="baja">▼ ${txt}</span>` : '<span>= igual</span>');
   const varPct = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null);
   const vs = `vs. ${nombrePeriodo(comp)}`;
@@ -527,7 +531,7 @@ async function pintarNumeros() {
 
   // ---- evolución ----
   const horasDe = (p) => E.por_fecha.filter((x) => x.fecha >= p.ini && x.fecha <= p.fin).reduce((s, x) => s + x.horas, 0);
-  const valores = evo.map((p) => ({ p, oc: horasDe(p) / capacidad(p), h: horasDe(p) }));
+  const valores = evo.map((p) => ({ p, oc: horasDe(p) / (capacidad(p, E) || 1), h: horasDe(p) }));
   const compH = { p: comp, oc: ocC, h: C.horas };
   const enEvo = valores.some((v) => v.p.ini === comp.ini);
   const max = Math.max(...valores.map((v) => v.oc), ocC, 0.01);
@@ -543,7 +547,8 @@ async function pintarNumeros() {
   // ---- días: elegido vs. comparación ----
   const capDia = st.consultorios.filter((c) => c.activo).length * (Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8));
   const cuantos = (p, dia) => { let n = 0; for (let d = p.ini; d <= p.fin; d = sumarDias(d, 1)) if (diaSemana(d) === dia) n++; return n; };
-  const ocDia = (T, p, dia) => (T.por_dia.find((x) => x.dia === dia)?.horas || 0) / ((cuantos(p, dia) * capDia) || 1);
+  const bloqDia = (T, dia) => (T.bloq_calor || []).filter((x) => x.dia === dia).reduce((s, x) => s + x.horas, 0);
+  const ocDia = (T, p, dia) => (T.por_dia.find((x) => x.dia === dia)?.horas || 0) / ((cuantos(p, dia) * capDia - bloqDia(T, dia)) || 1);
   const dias = [1, 2, 3, 4, 5, 6].map((dia) => ({ dia, s: ocDia(S, sel, dia), c: ocDia(C, comp, dia) }));
   const maxD = Math.max(...dias.flatMap((x) => [x.s, x.c]), 0.01);
   $('#nu-dias').innerHTML = `<div class="ley"><span style="--c:var(--azul)">${esc(nombrePeriodo(sel))}</span><span style="--c:#b9c3d6">${esc(nombrePeriodo(comp))}</span></div>
@@ -558,9 +563,10 @@ async function pintarNumeros() {
   // ---- mapa de calor (período elegido) ----
   const nCons = st.consultorios.filter((c) => c.activo).length;
   const calor = new Map(S.calor.map((x) => [`${x.dia}|${x.hora}`, x.horas]));
+  const bloqCalor = new Map((S.bloq_calor || []).map((x) => [`${x.dia}|${x.hora}`, x.horas]));
   $('#nu-calor').innerHTML = `<table class="calor"><thead><tr><th></th>${[1, 2, 3, 4, 5, 6].map((d) => `<th>${DIAS_CORTOS[d]}</th>`).join('')}</tr></thead><tbody>
     ${horasDelDia().map((h) => `<tr><th>${h} hs</th>${[1, 2, 3, 4, 5, 6].map((d) => {
-      const v = (calor.get(`${d}|${h}`) || 0) / ((cuantos(sel, d) * nCons) || 1);
+      const v = (calor.get(`${d}|${h}`) || 0) / ((cuantos(sel, d) * nCons - (bloqCalor.get(`${d}|${h}`) || 0)) || 1);
       return `<td class="${v > 0.55 ? 'osc' : ''}" style="background:rgba(18,39,90,${(0.06 + v * 0.94).toFixed(2)})" title="${DIAS[d]} ${h} hs: ${pct(v)} ocupado">${Math.round(v * 100)}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table>
     <p class="suave chico" style="margin:.5em 0 0">% de consultorios ocupados a esa hora · ${esc(nombrePeriodo(sel))}.</p>`;
