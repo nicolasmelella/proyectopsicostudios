@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="es-AR">
 <head>
+  <script>
+    // Los links de invitación y de "olvidé mi contraseña" llevan al panel.
+    if (/type=(invite|recovery)/.test(location.hash)) location.replace('panel.html' + location.hash);
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Consultorios por hora en Microcentro | Psico Studios</title>
