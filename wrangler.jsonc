@@ -1,0 +1,9 @@
+// Publicación en Cloudflare (Workers con archivos estáticos): sube solo la carpeta web/.
+{
+  "name": "psicostudios",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./web",
+    "not_found_handling": "404-page"
+  }
+}
