@@ -1457,16 +1457,66 @@ function pintarAlertas(cont, lista) {
       <div class="suave chico">${esc(que)}</div>
       <div class="chico" style="margin-top:.3em">Plazo: hasta el ${esc(fechaLarga(x.fecha_limite))}${x.tipo === 'sena' && x.total > x.falta ? ` · total ${pesos(x.total)}` : ''}</div>
       <div class="acciones">
-        <button class="btn btn-acento btn-chico" data-alerta="${i}">Ver · registrar pago o cancelar</button>
+        <button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
+        <button class="btn btn-borde btn-chico" data-alerta="${i}">Ver · cancelar</button>
         ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar por WhatsApp</a>`
           : '<span class="suave chico">Sin WhatsApp cargado</span>'}
       </div>
     </div>`;
   }).join('');
+  $$('[data-cobrar]', cont).forEach((b) => (b.onclick = () => cobrarAlerta(lista[b.dataset.cobrar])));
   $$('[data-alerta]', cont).forEach((b) => (b.onclick = () => {
     const x = lista[b.dataset.alerta];
     if (x.reserva_id) detalleReserva(x.reserva_id); else detalleFijo(x.fijo_id, null, false);
   }));
+}
+
+// Registrar el pago de una alerta (ej: el comprobante llegó por WhatsApp)
+function cobrarAlerta(x) {
+  const esFijo = x.tipo.startsWith('fijo');
+  const que = esFijo ? `Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${rangos(x.horas)} · ${x.consultorio}`
+    : `${fechaLarga(x.fecha_turno)} · ${rangos(x.horas)} · ${x.consultorio}`;
+  const opciones = x.tipo === 'sena' && x.total > x.falta ? [['La seña', x.falta], ['Todo', x.total]]
+    : [[{ sena: 'La seña', saldo: 'El saldo', fijo_inicial: 'El primer mes', fijo_mes: `El mes ${x.periodo || ''}` }[x.tipo], x.falta]];
+  abrirModal(`<h2 id="modal-titulo">Registrar pago</h2>
+    <p style="margin:0"><strong>${esc(x.nombre)}</strong></p>
+    <p class="suave chico" style="margin-top:.2em">${esc(que)}</p>
+    <div class="campo"><label>¿Qué pagó?</label><div class="grupo-grande" id="ca-monto">${opciones.map(([t, m], i) =>
+      `<button type="button" class="chip" data-monto-alerta="${m}" aria-pressed="${i === 0}">${esc(t)} · ${pesos(m)}</button>`).join('')}</div></div>
+    <div class="campo"><label for="ca-medio">Medio</label><select id="ca-medio">${medioOpts('transferencia')}</select></div>
+    ${campoRecibio('ca-recibio')}
+    <p class="ayuda">Registralo solo si viste la plata en la cuenta.</p>
+    <div id="ca-error" class="aviso aviso-error oculto" role="alert"></div>
+    <button class="btn btn-acento btn-bloque" id="ca-ok">Registrar pago</button>`);
+  let monto = opciones[0][1];
+  $$('[data-monto-alerta]').forEach((b) => (b.onclick = () => {
+    monto = Number(b.dataset.montoAlerta);
+    $$('[data-monto-alerta]').forEach((y) => y.setAttribute('aria-pressed', y === b));
+  }));
+  const recibio = conectarRecibio('ca-recibio');
+  const errEl = $('#ca-error');
+  $('#ca-ok').onclick = async () => {
+    if (faltaRecibio(recibio())) return errorEn(errEl, 'Elegí a quién le pagaron.');
+    const medio = $('#ca-medio').value;
+    const b = $('#ca-ok');
+    b.disabled = true;
+    try {
+      let pagoId = null;
+      if (x.reserva_id) {
+        pagoId = await llamar('registrar_pago', { p_monto: monto, p_medio: medio, p_reserva_id: x.reserva_id }, 'Pago registrado');
+      } else if (x.tipo === 'fijo_inicial' && x.pedido_id) {
+        await llamar('registrar_pago_pedido', { p_pedido_id: x.pedido_id, p_monto: monto, p_medio: medio }, 'Pago registrado: fijo activo');
+        const { data } = await sb.from('pagos').select('id').eq('fijo_id', x.fijo_id).order('id', { ascending: false }).limit(1);
+        pagoId = data?.[0]?.id || null;
+      } else {
+        pagoId = await llamar('registrar_pago', { p_monto: monto, p_medio: medio, p_fijo_id: x.fijo_id,
+          p_periodo: x.periodo || String(x.fecha_turno).slice(0, 7) }, 'Pago registrado');
+        if (x.tipo === 'fijo_inicial') await llamar('aprobar_fijo', { p_fijo_id: x.fijo_id });
+      }
+      if (recibio() && pagoId) await llamar('marcar_quien_recibio', { p_recibio: recibio(), p_pago_id: pagoId });
+      cerrarModal(); refrescar();
+    } catch (err) { b.disabled = false; errorEn(errEl, err); }
+  };
 }
 
 async function pintarPendientes() {

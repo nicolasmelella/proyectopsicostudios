@@ -633,9 +633,7 @@ function pantallaPago(p, nombre = '') {
   const elegido = { cuanto: puedeElegir ? (p.preferencia === 'total' ? 'total' : 'sena') : 'total', medio: mpActivo() ? 'mp' : 'transf' };
   if (!esFijo && !puedeElegir && falta.sena > 0) elegido.cuanto = 'sena';
   const n = p.reservas.length;
-  const textoWa = (monto) => `Hola! Soy ${nombre || 'quien hizo el pedido'} #${p.pedido}. ` + (esFijo
-    ? `Te paso el comprobante del primer mes de mi horario fijo (${DIAS[p.fijo.dia].toLowerCase()} ${rangos(p.fijo.horas)}): ${pesos(monto)}.`
-    : `Te paso el comprobante del pago (${pesos(monto)}): ` + p.reservas.map((x) => `${fechaLarga(x.fecha)} ${rangos(x.horas)} (${x.consultorio})`).join('; ') + '.');
+  const textoWa = (monto) => mensajeComprobante(p, nombre, monto);
 
   const resumen = esFijo ? `
     <div class="pago-resumen">
@@ -700,15 +698,19 @@ function pantallaPago(p, nombre = '') {
             ${configurado(estado.cfg.cvu_transferencia) ? fila('CVU', estado.cfg.cvu_transferencia, estado.cfg.cvu_transferencia, false) : ''}
             ${configurado(estado.cfg.titular_transferencia) ? fila('Titular', estado.cfg.titular_transferencia, null, false) : ''}
           </div>` : `<p class="aviso aviso-info">Escribinos por WhatsApp y te pasamos los datos para transferir ${pesos(monto)}.</p>`}
-        <label class="btn btn-acento btn-bloque btn-subir" for="comp-archivo">${ICONO.subir}<span>Ya transferí: subir comprobante</span></label>
-        <input type="file" id="comp-archivo" accept="image/*,application/pdf" class="visualmente-oculto">
-        <div id="comp-estado" role="status" aria-live="polite"></div>
-        <p class="ayuda centro">Foto, captura o PDF. Lo revisamos y te confirmamos por WhatsApp. Mientras tanto, ${esFijo || n === 1 ? 'el horario sigue guardado' : 'los horarios siguen guardados'}.
-          ¿Preferís? <a target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">Mandalo por WhatsApp</a>.</p>`}`;
+        <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Ya transferí: enviar comprobante por WhatsApp</span></a>
+        <p class="ayuda centro">Se abre el chat con tu pedido escrito. Adjuntá la captura con el clip 📎 y enviá: te confirmamos por ahí.
+          Mientras tanto, ${esFijo || n === 1 ? 'el horario queda reservado' : 'los horarios quedan reservados'} a tu nombre.</p>
+        <div class="otra-via">
+          <label class="pago-link" for="comp-archivo">${ICONO.subir}<span>¿Preferís subir el comprobante acá?</span></label>
+          <input type="file" id="comp-archivo" accept="image/*,application/pdf" class="visualmente-oculto">
+          <div id="comp-estado" role="status" aria-live="polite"></div>
+        </div>`}`;
     document.querySelectorAll('[data-cuanto]').forEach((b) => (b.onclick = () => { elegido.cuanto = b.dataset.cuanto; pintar(); $(`[data-cuanto="${elegido.cuanto}"]`).focus(); }));
     document.querySelectorAll('[data-medio]').forEach((b) => (b.onclick = () => { elegido.medio = b.dataset.medio; pintar(); $(`[data-medio="${elegido.medio}"]`).focus(); }));
     $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(p.pedido, p.token, e.currentTarget, $('#aviso-mp'), esFijo ? 'total' : elegido.cuanto));
     $('#link-wa').href = linkWhatsApp(waEquipo(), textoWa(monto));
+    $('#enviar-wa')?.addEventListener('click', () => setTimeout(() => pantallaFinal(p, nombre, monto, true), 300));
     conectarComprobante(p.pedido, p.token, () => {
       const fin = document.createElement('button');
       fin.type = 'button';
@@ -811,23 +813,30 @@ async function mostrarRetorno(id, token, resultado, pagoMP = null) {
   }
   conectarVolver();
 }
-// Cierre después de transferir y subir el comprobante
-function pantallaFinal(p, nombre, monto) {
+// Mensaje para mandar el comprobante por WhatsApp, con todo el pedido
+function mensajeComprobante(p, nombre, monto) {
+  const quien = (nombre || '').trim() || 'quien hizo la reserva';
+  const que = p.tipo === 'fijo' && p.fijo
+    ? `mi horario fijo de los ${DIAS[p.fijo.dia].toLowerCase()}, ${rangos(p.fijo.horas)}, ${p.fijo.consultorio}, desde el ${fechaLarga(p.fijo.desde).toLowerCase()}`
+    : p.reservas.map((x) => `${fechaLarga(x.fecha).toLowerCase()}, ${rangos(x.horas)}, ${x.consultorio}`).join('; ');
+  return `Hola! Soy ${quien}. Hice la reserva #${p.pedido} (${que}). Te envío el comprobante de la transferencia (${pesos(monto)}) para confirmarla.`;
+}
+
+// Cierre: después de mandar el comprobante por WhatsApp (porWa) o de subirlo acá
+function pantallaFinal(p, nombre, monto, porWa = false) {
   clearInterval(reloj);
   const primer = (nombre || '').trim().split(' ')[0];
-  const que = p.tipo === 'fijo' && p.fijo
-    ? `mi horario fijo de los ${DIAS[p.fijo.dia].toLowerCase()}, ${rangos(p.fijo.horas)}, ${p.fijo.consultorio}`
-    : `mi reserva #${p.pedido}: ` + p.reservas.map((x) => `${fechaLarga(x.fecha).toLowerCase()}, ${rangos(x.horas)}, ${x.consultorio}`).join('; ');
-  const textoWa = `Hola! Soy ${(nombre || '').trim() || 'quien hizo la reserva'}. Te envío el comprobante de pago (${pesos(monto)}) para confirmar ${que}.`;
+  const textoWa = mensajeComprobante(p, nombre, monto);
   $('#contenido-resultado').innerHTML = `
     <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
     <div class="icono" aria-hidden="true">✓</div>
     <h2 id="titulo-resultado">¡Listo${primer ? `, ${esc(primer)}` : ''}!</h2>
-    <p>Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.</p>
+    <p>${porWa ? `Se abrió el chat de WhatsApp con tu pedido. <strong>Adjuntá la captura del comprobante (${pesos(monto)}) y enviá.</strong> Apenas veamos la transferencia, te confirmamos por ahí.`
+      : `Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.`}</p>
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(p.pedido)}</strong></p>${listaReservas(p.reservas)}
     <p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>
-    <a class="btn btn-wa btn-bloque btn-subir" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa)}">${ICONO.wa}<span>Avisar por WhatsApp</span></a>
-    <p class="ayuda centro" style="margin:.4em 0 .8em">Se abre el chat con el mensaje listo. Adjuntá la captura del comprobante con el clip 📎 y enviá.</p>
+    <a class="btn btn-wa btn-bloque btn-subir" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa)}">${ICONO.wa}<span>${porWa ? 'Abrir WhatsApp de nuevo' : 'Avisar por WhatsApp'}</span></a>
+    <p class="ayuda centro" style="margin:.4em 0 .8em">${porWa ? '¿No se abrió? Tocá el botón.' : 'Se abre el chat con el mensaje listo.'} Adjuntá la captura con el clip 📎 y enviá.</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
   const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
   $('#cerrar-resultado').onclick = volver;
