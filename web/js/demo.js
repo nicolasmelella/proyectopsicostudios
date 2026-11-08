@@ -20,7 +20,7 @@ export function crearClienteDemo() {
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
-      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'],
+      ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -541,7 +541,7 @@ export function crearClienteDemo() {
       for (const [k, o] of db.ocupaciones) {
         const [c, f, h] = k.split('|');
         if (f < p_desde || f > p_hasta) continue;
-        if (o.bloqueo_id) { bq.push({ fecha: f, hora: Number(h) }); continue; }
+        if (o.bloqueo_id) { bq.push({ fecha: f, hora: Number(h), cons: Number(c) }); continue; }
         const r = o.reserva_id && R.get(o.reserva_id);
         const fj = o.fijo_id && F.get(o.fijo_id);
         if (r && !['pendiente', 'confirmada'].includes(r.estado)) continue;
@@ -558,6 +558,8 @@ export function crearClienteDemo() {
         .map(([v, monto]) => ({ [k]: v, monto })).sort((a, b) => b.monto - a.monto);
       return {
         horas: oc.length,
+        valor: oc.reduce((s, x) => s + precioHora(x.tipo === 'fijo' ? 'fijo' : 'suelta', x.hora, x.fecha), 0),
+        bloq_por_consultorio: [...bq.reduce((m, x) => m.set(x.cons, (m.get(x.cons) || 0) + 1), new Map())].map(([consultorio_id, horas]) => ({ consultorio_id, horas })),
         bloq_por_fecha: [...bq.reduce((m, x) => m.set(x.fecha, (m.get(x.fecha) || 0) + 1), new Map())].map(([fecha, horas]) => ({ fecha, horas })),
         bloq_calor: [...bq.reduce((m, x) => { const k = diaSemana(x.fecha) + '|' + x.hora; return m.set(k, (m.get(k) || 0) + 1); }, new Map())]
           .map(([k, horas]) => ({ dia: Number(k.split('|')[0]), hora: Number(k.split('|')[1]), horas })),
@@ -566,13 +568,60 @@ export function crearClienteDemo() {
         por_semana: [...contar((x) => lunes(x.fecha))].map(([l, horas]) => ({ lunes: l, horas })).sort((a, b) => (a.lunes < b.lunes ? -1 : 1)),
         por_dia: [...contar((x) => diaSemana(x.fecha))].map(([dia, horas]) => ({ dia, horas })).sort((a, b) => a.dia - b.dia),
         calor: [...contar((x) => diaSemana(x.fecha) + '|' + x.hora)].map(([k, horas]) => ({ dia: Number(k.split('|')[0]), hora: Number(k.split('|')[1]), horas })),
-        por_consultorio: [...contar((x) => x.cons)].map(([consultorio_id, horas]) => ({ consultorio_id, horas })).sort((a, b) => a.consultorio_id - b.consultorio_id),
+        por_consultorio: [...contar((x) => x.cons)].map(([consultorio_id, horas]) => ({ consultorio_id, horas, horas_fijo: oc.filter((x) => x.cons === consultorio_id && x.tipo === 'fijo').length }))
+          .sort((a, b) => a.consultorio_id - b.consultorio_id),
         por_tipo: Object.fromEntries(contar((x) => x.tipo)),
         ranking: [...porProf].map(([id, v]) => ({ profesional_id: id, nombre: P.get(id)?.nombre, horas: v.h, horas_fijo: v.hf }))
           .sort((a, b) => b.horas - a.horas || (a.nombre < b.nombre ? -1 : 1)).slice(0, 20),
         cobrado: pg.reduce((s, p) => s + p.monto, 0),
         cobros_por_persona: sumaPor('recibio', 'recibio'),
         cobros_por_medio: sumaPor('medio', 'medio'),
+      };
+    },
+    profesionales_accion() {
+      const R = new Map(db.reservas.map((r) => [r.id, r]));
+      const F = new Map(db.fijos.map((f) => [f.id, f]));
+      const P = new Map(db.profesionales.map((p) => [p.id, p]));
+      const desde = sumarDias(hoy, -111);
+      const oc = [];
+      for (const [k, o] of db.ocupaciones) {
+        const [, f, h] = k.split('|');
+        if (f < desde || o.bloqueo_id) continue;
+        const r = o.reserva_id && R.get(o.reserva_id);
+        const fj = o.fijo_id && F.get(o.fijo_id);
+        if (r && !['pendiente', 'confirmada'].includes(r.estado)) continue;
+        if (fj && fj.estado !== 'activo') continue;
+        const prof = (r || fj)?.profesional_id;
+        if (prof) oc.push({ fecha: f, hora: Number(h), prof, fijo: !!fj || r?.tipo_excel === 'fijo' });
+      }
+      const u = new Map();
+      oc.filter((x) => x.fecha > sumarDias(hoy, -30) && x.fecha <= hoy).forEach((x) => {
+        const v = u.get(x.prof) || { h: 0, hf: 0, vm: 0 };
+        v.h++; if (x.fijo) v.hf++; else if (x.hora < cfg('hora_fin_manana')) v.vm += precioHora('suelta', x.hora, x.fecha);
+        u.set(x.prof, v);
+      });
+      const conFijo = new Set(db.fijos.filter((f) => ['activo', 'solicitud'].includes(f.estado)).map((f) => f.profesional_id));
+      const veces = new Map();
+      oc.filter((x) => !x.fijo && x.fecha > sumarDias(hoy, -56) && x.fecha <= hoy).forEach((x) => {
+        const k = x.prof + '|' + diaSemana(x.fecha); const s = veces.get(k) || new Set(); s.add(x.fecha); veces.set(k, s);
+      });
+      const mejor = new Map();
+      for (const [k, s] of veces) {
+        const [prof, dia] = k.split('|').map(Number);
+        if (s.size >= 3 && !conFijo.has(prof) && (!mejor.has(prof) || mejor.get(prof).veces < s.size)) mejor.set(prof, { dia, veces: s.size });
+      }
+      const futuro = new Set(oc.filter((x) => x.fecha > hoy).map((x) => x.prof));
+      const hist = new Map();
+      oc.filter((x) => x.fecha <= hoy).forEach((x) => { const v = hist.get(x.prof) || { h: 0, ultima: '' }; v.h++; if (x.fecha > v.ultima) v.ultima = x.fecha; hist.set(x.prof, v); });
+      const p = (id) => P.get(id) || {};
+      return {
+        ult30: [...u].map(([id, v]) => ({ profesional_id: id, nombre: p(id).nombre, horas: v.h, horas_fijo: v.hf, valor_suelta_manana: v.vm }))
+          .sort((a, b) => b.horas - a.horas || (a.nombre < b.nombre ? -1 : 1)),
+        candidatos_fijo: [...mejor].map(([id, v]) => ({ profesional_id: id, nombre: p(id).nombre, whatsapp: p(id).whatsapp, ...v }))
+          .sort((a, b) => b.veces - a.veces || (a.nombre < b.nombre ? -1 : 1)),
+        inactivos: [...hist].filter(([id, v]) => v.ultima <= sumarDias(hoy, -28) && v.h >= 8 && !futuro.has(id))
+          .map(([id, v]) => ({ profesional_id: id, nombre: p(id).nombre, whatsapp: p(id).whatsapp, ultima: v.ultima, horas: v.h }))
+          .sort((a, b) => b.horas - a.horas || (a.nombre < b.nombre ? -1 : 1)).slice(0, 25),
       };
     },
     pendientes_cobro() {

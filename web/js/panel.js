@@ -499,13 +499,14 @@ async function pintarNumeros() {
   $('#nu-aviso').textContent = futuro ? 'Período que todavía no empezó: muestra lo que ya está reservado.'
     : enCurso ? `Período en curso: cuenta lo que ya pasó y lo que ya está reservado hasta el ${fechaCorta(sel.fin)}.` : '';
 
-  let S, C, E, P;
+  let S, C, E, P, A;
   try {
-    [S, C, E, P] = await Promise.all([
+    [S, C, E, P, A] = await Promise.all([
       llamar('tablero', { p_desde: sel.ini, p_hasta: sel.fin }),
       llamar('tablero', { p_desde: comp.ini, p_hasta: comp.fin }),
       llamar('tablero', { p_desde: evo[0].ini, p_hasta: sel.fin }),
       llamar('pendientes_cobro', {}),
+      llamar('profesionales_accion', {}),
     ]);
   } catch (err) { $('#nu-kpis').innerHTML = ''; errorEn(null, err); return; }
 
@@ -520,7 +521,11 @@ async function pintarNumeros() {
     <div class="kpi"><div class="t">Ocupación</div><div class="v">${pct(ocS)}</div>
       <div class="d">${flecha(difOc, Math.abs(difOc) + ' puntos')} ${vs} (${pct(ocC)})</div></div>
     <div class="kpi"><div class="t">Horas usadas</div><div class="v">${S.horas.toLocaleString('es-AR')}</div>
-      <div class="d">${difH === null ? '' : flecha(difH, Math.abs(difH) + '%')} ${vs} (${C.horas.toLocaleString('es-AR')})</div></div>
+      <div class="d">${S.por_tipo.fijo || 0} fijas · ${S.por_tipo.suelta || 0} sueltas (${S.horas ? Math.round(((S.por_tipo.fijo || 0) / S.horas) * 100) : 0}% fijas)<br>
+        ${difH === null ? '' : flecha(difH, Math.abs(difH) + '%')} ${vs} (${C.horas.toLocaleString('es-AR')})</div></div>
+    <div class="kpi"><div class="t">Valor de lo alquilado</div><div class="v">${pesos(S.valor)}</div>
+      <div class="d">Horas usadas × precio (fijo o suelta, mañana o tarde). Cobrado: ${pesos(S.cobrado)}${S.valor ? ` (${Math.round((S.cobrado / S.valor) * 100)}%)` : ''}<br>
+        ${varPct(S.valor, C.valor) === null ? '' : flecha(varPct(S.valor, C.valor), Math.abs(varPct(S.valor, C.valor)) + '%')} ${vs}</div></div>
     <div class="kpi"><div class="t">Profesionales que vinieron</div><div class="v">${S.n_profesionales}</div>
       <div class="d">${flecha(difP, Math.abs(difP))} ${vs} (${C.n_profesionales})</div></div>
     <div class="kpi"><div class="t">Cobrado</div><div class="v">${pesos(S.cobrado)}</div>
@@ -575,7 +580,8 @@ async function pintarNumeros() {
   const antes = new Map(C.ranking.map((x) => [x.profesional_id, x.horas]));
   const top = S.ranking.slice(0, 10);
   const maxR = Math.max(...top.map((x) => x.horas), 1);
-  $('#nu-ranking').innerHTML = top.length ? `<div class="barras-h">${top.map((x) => {
+  const top5 = S.ranking.slice(0, 5).reduce((s, x) => s + x.horas, 0);
+  $('#nu-ranking').innerHTML = top.length ? `<p class="conclusion" style="margin:0 0 .8em">Los 5 que más usan el espacio suman el <strong>${pct(top5 / (S.horas || 1))}</strong> de las horas.</p><div class="barras-h">${top.map((x) => {
     const a = antes.get(x.profesional_id) || 0;
     const d = x.horas - a;
     return `<span class="et" title="${esc(x.nombre)}">${esc(x.nombre)}</span>
@@ -583,6 +589,62 @@ async function pintarNumeros() {
       <span class="num"><strong>${x.horas} h</strong> ${d > 0 ? `<span class="sube">▲${d}</span>` : d < 0 ? `<span class="baja">▼${-d}</span>` : ''}</span>`;
   }).join('')}</div><p class="suave chico" style="margin:.6em 0 0">${esc(nombrePeriodo(sel))} · ▲▼ = horas de diferencia con ${esc(nombrePeriodo(comp))}.</p>`
     : '<p class="suave">No hay horas en este período.</p>';
+
+  // ---- por consultorio (fijas y sueltas) ----
+  const bloqCons = new Map((S.bloq_por_consultorio || []).map((x) => [x.consultorio_id, x.horas]));
+  const horasDiaN = Number(st.cfg.hora_cierre || 21) - Number(st.cfg.hora_apertura || 8);
+  const diasSel = capacidadBruta(sel) / (st.consultorios.filter((c) => c.activo).length * horasDiaN || 1);
+  const cons = st.consultorios.filter((c) => c.activo).map((c) => {
+    const x = S.por_consultorio.find((y) => y.consultorio_id === c.id) || { horas: 0, horas_fijo: 0 };
+    const cap = diasSel * horasDiaN - (bloqCons.get(c.id) || 0);
+    return { c, f: x.horas_fijo, s: x.horas - x.horas_fijo, cap, oc: cap > 0 ? x.horas / cap : 0 };
+  });
+  const vacio = cons.filter((x) => x.cap > 0).reduce((a, x) => (x.oc < a.oc ? x : a), cons[0]);
+  $('#nu-cons').innerHTML = `<div class="ley"><span style="--c:#3a8a4f">Horas fijas</span><span style="--c:#d9a21b">Horas sueltas</span><span style="--c:#efe9d6">Libres</span></div>
+    ${cons.map((x) => `<div class="fila-cons" title="${esc(x.c.nombre)}: ${x.f} h fijas, ${x.s} h sueltas de ${x.cap} disponibles">
+      <div class="t"><span><strong>${esc(x.c.nombre)}</strong> ${x === vacio ? '<span class="pill pill-alerta">Más vacío</span>' : ''}</span>
+        <span><strong style="color:var(--texto)">${pct(x.oc)}</strong> · ${x.f} fijas · ${x.s} sueltas</span></div>
+      <div class="apilada"><i class="f" style="width:${x.cap ? (x.f / x.cap) * 100 : 0}%"></i><i class="s" style="width:${x.cap ? (x.s / x.cap) * 100 : 0}%"></i></div></div>`).join('')}`;
+
+  // ---- mañana y tarde ----
+  const finMan = Number(st.cfg.hora_fin_manana || 13);
+  const franja = (T, p, man) => {
+    let usadas = 0, cap = 0;
+    for (let d = 1; d <= 6; d++) for (const h of horasDelDia()) {
+      if ((h < finMan) !== man) continue;
+      usadas += T.calor.find((x) => x.dia === d && x.hora === h)?.horas || 0;
+      cap += cuantos(p, d) * nCons - ((T.bloq_calor || []).find((x) => x.dia === d && x.hora === h)?.horas || 0);
+    }
+    return { usadas, cap, oc: cap ? usadas / cap : 0 };
+  };
+  const mS = franja(S, sel, true), tS = franja(S, sel, false), mC = franja(C, comp, true), tC = franja(C, comp, false);
+  const filaF = (t, a, b) => `<span class="et">${t}</span><div class="dos" title="${t}: ${pct(a.oc)} (${nombrePeriodo(sel)}) · ${pct(b.oc)} (${nombrePeriodo(comp)})">
+      <div class="pista"><div class="bar" style="width:${a.oc * 100}%"></div></div><div class="bar c" style="width:${b.oc * 100}%"></div></div>
+    <span class="num"><strong>${pct(a.oc)}</strong> · ${a.usadas} de ${a.cap} h</span>`;
+  const brecha = Math.round((tS.oc - mS.oc) * 100);
+  $('#nu-franja').innerHTML = `<div class="ley"><span style="--c:var(--azul)">${esc(nombrePeriodo(sel))}</span><span style="--c:#b9c3d6">${esc(nombrePeriodo(comp))}</span></div>
+    <div class="barras-h">${filaF(`Mañana (${st.cfg.hora_apertura || 8} a ${finMan})`, mS, mC)}${filaF(`Tarde (${finMan} a ${st.cfg.hora_cierre || 21})`, tS, tC)}</div>
+    ${brecha >= 10 ? `<p class="conclusion">La mañana tiene <strong>${brecha} puntos menos</strong> de ocupación que la tarde: es la franja para promocionar.</p>`
+      : brecha <= -10 ? `<p class="conclusion">La tarde tiene <strong>${-brecha} puntos menos</strong> de ocupación que la mañana.</p>` : ''}`;
+
+  // ---- para accionar ----
+  const wa = (x, texto) => x.whatsapp && /^\d{8,}$/.test(x.whatsapp) ? `<a class="btn btn-wa btn-chico" href="${waLink(x.whatsapp, texto)}" target="_blank" rel="noopener">WhatsApp</a>` : '';
+  const diasDesde = (f) => Math.round((new Date(hoy + 'T12:00:00Z') - new Date(f + 'T12:00:00Z')) / 864e5);
+  $('#nu-accion').innerHTML = `
+    <div><h4>Candidatos a fijo <span class="badge">${A.candidatos_fijo.length}</span></h4>
+      <p class="suave chico" style="margin:0 0 .4em">Sin fijo, pero reservaron el mismo día de la semana 3 veces o más en las últimas 8 semanas. Ofreceles el horario fijo.</p>
+      ${A.candidatos_fijo.length ? `<ul class="lista-acc">${A.candidatos_fijo.slice(0, 10).map((x) => `<li><span><strong>${esc(x.nombre)}</strong>
+        <small>Vino ${x.veces} ${x.dia === 6 ? "sábados" : DIAS[x.dia].toLowerCase()}</small></span>${wa(x, `Hola ${x.nombre.split(' ')[0]}! Vimos que venís seguido los ${x.dia === 6 ? "sábados" : DIAS[x.dia].toLowerCase()}. ¿Te interesa dejarlo como horario fijo? Te queda más barato.`)}</li>`).join('')}</ul>`
+        : '<p class="suave">Nadie por ahora.</p>'}</div>
+    <div><h4>Dejaron de venir <span class="badge">${A.inactivos.length}</span></h4>
+      <p class="suave chico" style="margin:0 0 .4em">Venían (8 horas o más en los últimos 4 meses) y hace 4 semanas o más que no vienen ni tienen nada reservado.</p>
+      ${A.inactivos.length ? `<ul class="lista-acc">${A.inactivos.slice(0, 10).map((x) => `<li><span><strong>${esc(x.nombre)}</strong>
+        <small>Última vez: ${fechaCorta(x.ultima)} (hace ${diasDesde(x.ultima)} días) · ${x.horas} h en 4 meses</small></span>${wa(x, `Hola ${x.nombre.split(' ')[0]}! Hace un tiempo que no te vemos por Psico Studios. ¿Querés que te guardemos algún horario?`)}</li>`).join('')}</ul>
+        ${A.inactivos.length > 10 ? `<p class="suave chico">Y ${A.inactivos.length - 10} más.</p>` : ''}`
+        : '<p class="suave">Nadie por ahora.</p>'}</div>`;
+
+  // ---- niveles por volumen (simulación) ----
+  pintarNiveles(A);
 
   // ---- falta cobrar ----
   $('#nu-pendientes').innerHTML = P.items.length ? `<ul class="pend-lista">${P.items.map((x, i) => `<li ${i >= 8 ? 'class="oculto" data-mas' : ''}><button data-pend="${i}">
@@ -597,6 +659,43 @@ async function pintarNumeros() {
     const x = P.items[Number(b.dataset.pend)];
     if (x.tipo === 'fijo') detalleFijo(x.id, hoy); else detalleReserva(x.id);
   }));
+}
+
+// Niveles por volumen: se guardan en Precios y ajustes (config 'niveles_volumen')
+function nivelesActuales() {
+  try { const n = JSON.parse(st.cfg.niveles_volumen || ''); if (Array.isArray(n) && n.length) return n; } catch { /* nada */ }
+  return [{ n: 'Base', min: 0, pct: 0 }, { n: 'Frecuente', min: 8, pct: 5 }, { n: 'Destacado', min: 20, pct: 10 }];
+}
+function pintarNiveles(A, niveles = nivelesActuales()) {
+  const nivelDe = (h) => niveles.reduce((a, n) => (h >= n.min ? n : a), niveles[0]);
+  const lista = A.ult30.map((x) => ({ ...x, niv: nivelDe(x.horas) }));
+  const costo = lista.reduce((s, x) => s + Math.round((x.valor_suelta_manana * x.niv.pct) / 100), 0);
+  $('#nu-niveles').innerHTML = `<div class="nu-dos">
+    <div><div style="overflow-x:auto"><table class="tabla niv-tabla"><thead><tr><th>Nivel</th><th>Desde (horas en 30 días)</th><th>Descuento mañana</th><th>Profesionales</th></tr></thead><tbody>
+      ${niveles.map((n, i) => `<tr><td><strong>${esc(n.n)}</strong></td>
+        <td>${i ? `<input type="number" min="1" max="300" data-niv-min="${i}" value="${n.min}" aria-label="Horas mínimas para ${esc(n.n)}">` : '0'}</td>
+        <td>${i ? `<input type="number" min="0" max="50" data-niv-pct="${i}" value="${n.pct}" aria-label="Descuento para ${esc(n.n)}"> %` : '—'}</td>
+        <td>${lista.filter((x) => x.niv === n).length}</td></tr>`).join('')}</tbody></table></div>
+      <p class="conclusion">Con estos valores, el descuento costaría unos <strong>${pesos(costo)} por mes</strong>.</p>
+      <div class="grupo-btn" style="margin-top:.6em"><button class="btn btn-primario btn-chico" id="niv-guardar">Guardar niveles</button>
+        <button class="btn btn-borde btn-chico" id="niv-reset">Volver a los sugeridos</button></div></div>
+    <div>${niveles.slice(1).reverse().map((n) => {
+      const q = lista.filter((x) => x.niv === n);
+      return `<h4>${esc(n.n)} <span class="badge">${q.length}</span></h4><p class="chico" style="margin:0 0 .8em">${q.length ? q.map((x) => `${esc(x.nombre)} (${x.horas} h)`).join(' · ') : '<span class="suave">Nadie</span>'}</p>`;
+    }).join('')}
+    <p class="suave chico">Cerca de subir de nivel: ${lista.filter((x) => { const i = niveles.indexOf(x.niv); return niveles[i + 1] && niveles[i + 1].min - x.horas <= 3; })
+      .map((x) => `${esc(x.nombre)} (le faltan ${niveles[niveles.indexOf(x.niv) + 1].min - x.horas} h)`).join(' · ') || 'nadie'}.</p></div></div>`;
+  const leer = () => niveles.map((n, i) => (i ? { n: n.n, min: Number($(`[data-niv-min="${i}"]`).value) || n.min, pct: Number($(`[data-niv-pct="${i}"]`).value) || 0 } : n));
+  $$('#nu-niveles input').forEach((inp) => (inp.onchange = () => { const v = leer(); setTimeout(() => pintarNiveles(A, v), 0); }));
+  $('#niv-reset').onclick = () => pintarNiveles(A, [{ n: 'Base', min: 0, pct: 0 }, { n: 'Frecuente', min: 8, pct: 5 }, { n: 'Destacado', min: 20, pct: 10 }]);
+  $('#niv-guardar').onclick = async () => {
+    const v = JSON.stringify(leer());
+    const { data, error } = await sb.from('config').update({ valor: v }).eq('clave', 'niveles_volumen').select();
+    if (error) return errorEn(null, error);
+    if (!data?.length) return errorEn(null, 'No se pudo guardar: tu usuario no tiene permiso para cambiar este dato.');
+    st.cfg.niveles_volumen = v;
+    toast('Niveles guardados');
+  };
 }
 
 // ---------- Notas de la semana ----------

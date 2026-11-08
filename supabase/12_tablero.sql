@@ -91,7 +91,7 @@ begin
       and (o.reserva_id is null or r.estado in ('pendiente', 'confirmada'))
       and (o.fijo_id is null or f.estado = 'activo')
   ), bq as (   -- horarios bloqueados: no se pueden alquilar, no cuentan como disponibles
-    select o.fecha, o.hora from public.ocupaciones o
+    select o.fecha, o.hora, o.consultorio_id from public.ocupaciones o
     where o.fecha between p_desde and p_hasta and o.bloqueo_id is not null
   ), pg as (
     select p.monto, p.medio, coalesce(p.recibio, case when p.medio = 'mercadopago' then 'Mercado Pago' else 'Sin indicar' end) as recibio
@@ -100,6 +100,9 @@ begin
   )
   select jsonb_build_object(
     'horas', (select count(*) from oc),
+    'valor', (select coalesce(sum(public.precio_hora(case when tipo = 'fijo' then 'fijo' else 'suelta' end, hora, fecha)), 0) from oc),
+    'bloq_por_consultorio', coalesce((select jsonb_agg(jsonb_build_object('consultorio_id', consultorio_id, 'horas', horas)) from (
+        select consultorio_id, count(*) as horas from bq group by 1) x), '[]'),
     'bloq_por_fecha', coalesce((select jsonb_agg(jsonb_build_object('fecha', fecha, 'horas', horas) order by fecha) from (
         select fecha, count(*) as horas from bq group by 1) x), '[]'),
     'bloq_calor', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'hora', hora, 'horas', horas)) from (
@@ -113,8 +116,8 @@ begin
         select extract(isodow from fecha)::int as dia, count(*) as horas from oc group by 1) x), '[]'),
     'calor', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'hora', hora, 'horas', horas)) from (
         select extract(isodow from fecha)::int as dia, hora, count(*) as horas from oc group by 1, 2) x), '[]'),
-    'por_consultorio', coalesce((select jsonb_agg(jsonb_build_object('consultorio_id', consultorio_id, 'horas', horas) order by consultorio_id) from (
-        select consultorio_id, count(*) as horas from oc group by 1) x), '[]'),
+    'por_consultorio', coalesce((select jsonb_agg(jsonb_build_object('consultorio_id', consultorio_id, 'horas', horas, 'horas_fijo', hf) order by consultorio_id) from (
+        select consultorio_id, count(*) as horas, count(*) filter (where tipo = 'fijo') as hf from oc group by 1) x), '[]'),
     'por_tipo', coalesce((select jsonb_object_agg(tipo, horas) from (select tipo, count(*) as horas from oc group by 1) x), '{}'),
     'ranking', coalesce((select jsonb_agg(jsonb_build_object('profesional_id', x.prof, 'nombre', p.nombre, 'horas', x.horas, 'horas_fijo', x.hf)
                                           order by x.horas desc, p.nombre) from (
@@ -170,8 +173,68 @@ begin
   return v;
 end $$;
 
-revoke execute on function public.tablero(date, date), public.pendientes_cobro() from public, anon, authenticated;
+-- ---------------------------------------------------------------------
+-- 4. PROFESIONALES PARA ACCIONAR (ventanas fijas, contadas hasta hoy)
+--   * ult30: horas de cada profesional en los últimos 30 días (para los niveles)
+--   * candidatos_fijo: sin fijo, reservaron sueltas el mismo día de la semana 3 veces o más en 8 semanas
+--   * inactivos: venían (8 horas o más en 16 semanas), hace 4 semanas o más que no vienen y no tienen nada reservado
+-- ---------------------------------------------------------------------
+insert into public.config (clave, valor, descripcion) values ('niveles_volumen',
+  '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]',
+  'Niveles por volumen: horas en 30 días y % de descuento en horas sueltas de mañana')
+on conflict (clave) do nothing;
+
+create or replace function public.profesionales_accion() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_hoy date := public.hoy_ar();
+  v jsonb;
+begin
+  perform public.exigir_equipo();
+  with oc as (
+    select o.fecha, o.hora, coalesce(r.profesional_id, f.profesional_id) as prof,
+           (o.fijo_id is not null or r.tipo_excel = 'fijo') as es_fijo
+    from public.ocupaciones o
+    left join public.reservas r on r.id = o.reserva_id
+    left join public.fijos f on f.id = o.fijo_id
+    where o.bloqueo_id is null
+      and (o.reserva_id is null or r.estado in ('pendiente', 'confirmada'))
+      and (o.fijo_id is null or f.estado = 'activo')
+      and o.fecha > v_hoy - 112
+  ), u30 as (
+    select prof, count(*) as h, count(*) filter (where es_fijo) as hf,
+           coalesce(sum(public.precio_hora('suelta', hora, fecha)) filter (where not es_fijo and hora < public.cfg('hora_fin_manana')), 0) as valor_man
+    from oc where prof is not null and fecha > v_hoy - 30 and fecha <= v_hoy group by prof
+  ), cand as (
+    select distinct on (prof) prof, dia, veces from (
+      select prof, extract(isodow from fecha)::int as dia, count(distinct fecha) as veces
+      from oc where prof is not null and not es_fijo and fecha > v_hoy - 56 and fecha <= v_hoy group by 1, 2
+    ) x where veces >= 3
+      and not exists (select 1 from public.fijos f where f.profesional_id = x.prof and f.estado in ('activo', 'solicitud'))
+    order by prof, veces desc
+  ), inact as (
+    select prof, max(fecha) as ultima, count(*) as h
+    from oc where prof is not null and fecha <= v_hoy group by prof
+    having max(fecha) <= v_hoy - 28 and count(*) >= 8
+       and prof not in (select prof from oc where prof is not null and fecha > v_hoy)
+  )
+  select jsonb_build_object(
+    'ult30', coalesce((select jsonb_agg(jsonb_build_object('profesional_id', u.prof, 'nombre', p.nombre, 'horas', u.h, 'horas_fijo', u.hf,
+                                                           'valor_suelta_manana', u.valor_man) order by u.h desc, p.nombre)
+                       from u30 u join public.profesionales p on p.id = u.prof), '[]'),
+    'candidatos_fijo', coalesce((select jsonb_agg(jsonb_build_object('profesional_id', c.prof, 'nombre', p.nombre, 'whatsapp', p.whatsapp,
+                                                                     'dia', c.dia, 'veces', c.veces) order by c.veces desc, p.nombre)
+                       from cand c join public.profesionales p on p.id = c.prof), '[]'),
+    'inactivos', coalesce((select jsonb_agg(jsonb_build_object('profesional_id', i.prof, 'nombre', p.nombre, 'whatsapp', p.whatsapp,
+                                                               'ultima', i.ultima, 'horas', i.h) order by i.h desc, p.nombre)
+                       from (select * from inact order by h desc limit 25) i join public.profesionales p on p.id = i.prof), '[]')
+  ) into v;
+  return v;
+end $$;
+
+revoke execute on function public.tablero(date, date), public.pendientes_cobro(), public.profesionales_accion() from public, anon, authenticated;
 grant execute on function public.tablero(date, date) to authenticated;
 grant execute on function public.pendientes_cobro() to authenticated;
+grant execute on function public.profesionales_accion() to authenticated;
 
 select 'Listo: tablero de números' as resultado;

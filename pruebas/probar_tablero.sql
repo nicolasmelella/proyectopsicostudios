@@ -34,6 +34,8 @@ select pg_temp.ok((select coalesce((select sum((x->>'horas')::int) from jsonb_ar
   'devuelve las horas bloqueadas (para no contarlas como disponibles)');
 select pg_temp.ok((select (select sum((x->>'horas')::int) from jsonb_array_elements(j->'por_fecha') x) = (j->>'horas')::int
                       and (j->>'n_profesionales')::int >= 1 from tb), 'horas por día y cantidad de profesionales');
+select pg_temp.ok((select (j->>'valor')::int > 0 and (select sum((x->>'horas_fijo')::int) from jsonb_array_elements(j->'por_consultorio') x) = (j->'por_tipo'->>'fijo')::int from tb),
+  'valor de lo alquilado y horas fijas por consultorio');
 select pg_temp.ok((select (j->>'cobrado')::int = (select coalesce(sum(monto), 0) from public.pagos where not anulado
                      and pagado_en between (select lunes - 7 from sem) and (select lunes + 13 from sem)) from tb), 'cobrado = suma de pagos');
 create temp table tb2 as select public.tablero(current_date - 30, current_date + 30) as j;
@@ -47,7 +49,36 @@ select pg_temp.ok((select not exists (select 1 from jsonb_array_elements(j->'ite
   'la historia del Excel no aparece como deuda');
 select pg_temp.ok((select (j->>'total')::int = coalesce((select sum((x->>'falta')::int) from jsonb_array_elements(j->'items') x), 0) from pcobro),
   'el total pendiente es la suma de la lista');
+-- Para accionar: una profesional que venía todos los martes con sueltas y otra que dejó de venir
+reset role;
+insert into public.profesionales (nombre, whatsapp, origen) values ('Carmen Candidata', '1170005555', 'Excel'), ('Irma Inactiva', '1170006666', 'Excel');
+insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen, tipo_excel)
+select p.id, 5, d::date, array[10]::smallint[], 8500, 'confirmada', 'excel', 'flotante'
+from public.profesionales p, generate_series(public.hoy_ar() - 49, public.hoy_ar() - 1, interval '1 day') d
+where p.nombre = 'Carmen Candidata' and extract(isodow from d) = 2;
+insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen, tipo_excel)
+select p.id, 5, d::date, array[8, 9]::smallint[], 17000, 'confirmada', 'excel', 'flotante'
+from public.profesionales p, generate_series(public.hoy_ar() - 90, public.hoy_ar() - 40, interval '1 day') d
+where p.nombre = 'Irma Inactiva' and extract(isodow from d) = 3;
+insert into public.ocupaciones (consultorio_id, fecha, hora, reserva_id)
+select r.consultorio_id, r.fecha, h, r.id from public.reservas r cross join unnest(r.horas) h
+join public.profesionales p on p.id = r.profesional_id where p.nombre in ('Carmen Candidata', 'Irma Inactiva')
+on conflict do nothing;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'id_bianca', false);
+create temp table pa2 as select public.profesionales_accion() as j;
+grant select on pa2 to authenticated;
+select pg_temp.ok((select exists (select 1 from jsonb_array_elements(j->'candidatos_fijo') x where x->>'nombre' = 'Carmen Candidata' and (x->>'dia')::int = 2 and (x->>'veces')::int >= 3) from pa2),
+  'candidata a fijo: viene siempre el mismo día');
+select pg_temp.ok((select exists (select 1 from jsonb_array_elements(j->'inactivos') x where x->>'nombre' = 'Irma Inactiva') from pa2),
+  'dejó de venir: aparece en la lista');
+select pg_temp.ok((select not exists (select 1 from jsonb_array_elements(j->'inactivos') x where x->>'nombre' = 'Carmen Candidata') from pa2),
+  'quien sigue viniendo no aparece como inactiva');
+select pg_temp.ok((select exists (select 1 from jsonb_array_elements(j->'ult30') x where x->>'nombre' = 'Carmen Candidata' and (x->>'valor_suelta_manana')::int > 0) from pa2),
+  'horas de los últimos 30 días con el valor de las sueltas de mañana (para los niveles)');
+select pg_temp.ok((select valor like '[%' from public.config where clave = 'niveles_volumen'), 'niveles por volumen en los ajustes');
 select set_config('request.jwt.claim.sub', :'id_intruso', false);
+select pg_temp.espera_error($$select public.profesionales_accion()$$, 'NO_AUTORIZADO');
 select pg_temp.espera_error($$select public.tablero(current_date, current_date)$$, 'NO_AUTORIZADO');
 select pg_temp.espera_error($$select public.pendientes_cobro()$$, 'NO_AUTORIZADO');
 reset role;

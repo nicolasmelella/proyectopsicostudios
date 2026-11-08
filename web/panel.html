@@ -149,7 +149,22 @@
     .notas-semana textarea { flex: 1; min-width: 220px; }
     .oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
     /* ---------- Números ---------- */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .nu-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 18px; }
+    .nu-dos > div { min-width: 0; }
+    .nu-dos h4 { margin: 0 0 .4em; font-size: 1rem; }
+    .apilada { display: flex; height: 16px; border-radius: 4px; overflow: hidden; background: #efe9d6; gap: 2px; }
+    .apilada i { display: block; height: 100%; }
+    .apilada .f { background: #3a8a4f; } .apilada .s { background: #d9a21b; }
+    .fila-cons { display: grid; gap: 4px; margin-bottom: 12px; }
+    .fila-cons .t { display: flex; justify-content: space-between; gap: 8px; font-size: .9rem; }
+    .fila-cons .t span:last-child { color: var(--texto-suave); font-size: .82rem; }
+    .lista-acc { list-style: none; margin: 0; padding: 0; }
+    .lista-acc li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: .45em 0; border-bottom: 1px solid var(--borde); }
+    .lista-acc small { display: block; color: var(--texto-suave); }
+    .niv-tabla td, .niv-tabla th { padding: .45em .6em; }
+    .niv-tabla input { width: 80px; min-height: 40px; padding: .3em .5em; }
+    .conclusion { background: #fff8e1; border-radius: 10px; padding: .6em .8em; font-size: .9rem; margin: .8em 0 0; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 14px; }
     .kpi { background: #fffdf4; border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem 1.1rem; }
     .kpi .t { font-size: .85rem; color: var(--texto-suave); font-weight: 600; }
     .kpi .v { font-size: 2rem; font-weight: 800; color: var(--azul); line-height: 1.15; margin: .15em 0; }
@@ -339,6 +354,15 @@
           <article class="nu-card"><h3>¿A qué hora se llena?</h3>
             <p class="suave chico">Más oscuro = más lleno.</p><div id="nu-calor"></div></article>
           <article class="nu-card"><h3>Profesionales con más horas</h3><div id="nu-ranking"></div></article>
+          <article class="nu-card"><h3>Por consultorio</h3><div id="nu-cons"></div></article>
+          <article class="nu-card"><h3>Mañana y tarde</h3><div id="nu-franja"></div></article>
+          <article class="nu-card nu-ancha"><h3>Para accionar</h3>
+            <p class="suave chico">Se calcula siempre hasta hoy, sin importar el período elegido arriba.</p>
+            <div class="nu-dos" id="nu-accion"></div></article>
+          <article class="nu-card nu-ancha"><h3>Niveles por volumen <span class="pill pill-info">Simulación</span></h3>
+            <p class="suave chico">Horas usadas en los últimos 30 días. El descuento sería solo en horas sueltas de mañana, la franja que más cuesta llenar.
+              Cambiá los valores y mirá cuántos quedan en cada nivel y cuánto costaría por mes. Todavía no cambia ningún precio.</p>
+            <div id="nu-niveles"></div></article>
           <article class="nu-card"><h3>Falta cobrar <span class="suave chico">(hoy)</span></h3>
             <p class="suave chico">Turnos ya usados con saldo, y lo que falta del mes de cada fijo. Tocá para cobrar.</p>
             <div id="nu-pendientes"></div></article>
