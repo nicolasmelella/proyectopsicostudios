@@ -218,9 +218,48 @@
     .modal h2 { font-size: 1.3rem; }
     .resultado { text-align: center; }
     .resultado .modal-cerrar { z-index: 1; }
-    .guardar-link { display: flex; align-items: center; gap: .8em; text-align: left; margin-top: 1em; padding: .8em 1em;
-                    border: 1px solid var(--borde); border-radius: 12px; font-size: .9rem; color: var(--texto-suave, #555); }
-    .guardar-link .btn { flex: none; min-width: 7.5em; }
+    /* Pantalla de pago */
+    #contenido-resultado:has(.pago-cab) { text-align: left; background: var(--fondo); }
+    .pasos { list-style: none; display: flex; align-items: center; gap: .5em; padding: 0 44px 0 0; margin: 0 0 1em; font-size: .85rem; font-weight: 600; color: var(--azul); }
+    .pasos li { display: flex; align-items: center; gap: .35em; }
+    .pasos li + li::before { content: ''; width: 18px; height: 2px; background: #c7cfdc; margin-right: .2em; }
+    .pasos .hecho { color: #2e6b3e; }
+    .pasos-n { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: .75rem; background: #dfe3ea; }
+    .pasos .hecho .pasos-n { background: #dcefe0; }
+    .pasos .actual .pasos-n { background: var(--azul); color: #fff; }
+    .pago-cab { display: flex; flex-direction: column; align-items: flex-start; gap: .4em; margin-bottom: .9em; }
+    .pago-cab h2 { margin: 0; font-size: 1.35rem; }
+    .reloj-chip { display: inline-flex; align-items: center; gap: .4em; background: #fff4d6; color: #6b4a00; font-weight: 700; font-size: .9rem; padding: .3em .75em; border-radius: 999px; }
+    .pago-pedido { font-size: .85rem; color: var(--texto-suave); }
+    .pago-resumen, .pago-bloque { background: #fff; border: 1px solid var(--borde); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+    .pago-turno { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--borde); }
+    .pago-turno div { display: flex; flex-direction: column; }
+    .pago-turno div span { color: var(--texto-suave); font-size: .95rem; }
+    .pill-cons { background: var(--rosa); color: var(--azul); font-weight: 700; font-size: .85rem; padding: .2em .6em; border-radius: 8px; white-space: nowrap; }
+    .pago-linea { display: flex; justify-content: space-between; gap: 12px; font-size: .95rem; padding: .15em 0; }
+    .pago-linea span:first-child { color: var(--texto-suave); }
+    .pago-nota { margin: .5em 0 0; font-size: .85rem; color: var(--texto-suave); }
+    .pago-bloque h3 { margin: 0 0 .7em; font-size: 1.1rem; }
+    .selector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; background: #eef1f6; padding: 4px; border-radius: 10px; margin-bottom: .8em; }
+    .selector button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--texto-suave); font: inherit; cursor: pointer;
+                       display: flex; flex-direction: column; align-items: center; justify-content: center; padding: .4em; line-height: 1.2; }
+    .selector button span { font-size: .78rem; }
+    .selector button[aria-pressed="true"] { background: #fff; color: var(--azul); box-shadow: 0 1px 3px rgba(18,39,90,.18); }
+    .selector button:focus-visible { outline: 3px solid var(--celeste); outline-offset: 1px; }
+    .cuenta-datos { border: 1px solid var(--borde); border-radius: 10px; margin-bottom: .8em; }
+    .cuenta-fila { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+    .cuenta-fila + .cuenta-fila { border-top: 1px solid var(--borde); }
+    .cuenta-fila > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .cuenta-fila span { font-size: .8rem; color: var(--texto-suave); }
+    .cuenta-fila strong { font-size: 1.05rem; overflow-wrap: anywhere; }
+    .cuenta-fila .btn { flex: none; min-width: 5.5em; }
+    .btn-subir { display: flex; align-items: center; justify-content: center; gap: .5em; }
+    .pago-links { display: flex; flex-direction: column; margin-top: .4em; }
+    .pago-link { display: flex; align-items: center; gap: .6em; min-height: 44px; background: none; border: 0; padding: 0 .2em; font: inherit;
+                 font-weight: 600; color: var(--azul); text-decoration: none; cursor: pointer; text-align: left; }
+    .pago-link:hover span { text-decoration: underline; }
+    #contenido-resultado:has(.pago-cab) .cancelar-pedido { text-align: left; }
+    #contenido-resultado:has(.pago-cab) .link-cancelar { padding-left: .2em; }
     .cancelar-pedido { margin-top: 1.2em; padding-top: 1em; border-top: 1px solid var(--borde); }
     .link-cancelar { background: none; border: 0; font: inherit; font-size: .9rem; color: var(--error); text-decoration: underline;
                      cursor: pointer; padding: .5em; min-height: 44px; }
@@ -383,7 +422,7 @@
 
       <!-- ===================== FIJO ===================== -->
       <section id="vista-fijo" role="tabpanel" aria-labelledby="tab-fijo" class="oculto">
-        <div class="aviso aviso-info chico">El horario fijo es el mismo día y hora todas las semanas, con precio preferencial. Por la mañana, desde 1 hora; por la tarde (desde las 13 hs), mínimo 2 horas seguidas. Lo confirmamos por WhatsApp.</div>
+        <div class="aviso aviso-info chico">El horario fijo es el mismo día y hora todas las semanas, con precio preferencial. Por la mañana, desde 1 hora; por la tarde (desde las 13 hs), mínimo 2 horas seguidas. Se confirma al pagar el primer mes; después, mes a mes por adelantado.</div>
         <div class="paso">
           <div class="paso-titulo"><span class="paso-num">1</span><h2>¿Qué día de la semana?</h2></div>
           <div class="chips" id="dias-fijo"></div>
@@ -421,7 +460,7 @@
     <section class="seccion" id="precios" aria-labelledby="titulo-precios">
       <header><h2 id="titulo-precios">Precios por hora</h2><p>Mañana de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_fin_manana">13</span> hs · Tarde de <span data-cfg="hora_fin_manana">13</span> a <span data-cfg="hora_cierre">21</span> hs · Lunes a sábados.</p></header>
       <div class="planes" id="tabla-precios"><div class="cargando">Cargando…</div></div>
-      <p class="nota-precios">La reserva se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
+      <p class="nota-precios">Por horas: se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>% (o pagás el total). Fijo: se paga el primer mes.</p>
     </section>
 
     <section class="ayuda-cta" aria-labelledby="titulo-ayuda">

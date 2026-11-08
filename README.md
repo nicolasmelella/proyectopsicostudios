@@ -114,6 +114,11 @@ Después: **Edge Functions → Deploy a new function → Via Editor**, nombre `e
 
 Y `supabase/14_permisos_finos.sql` → **Run** → *"Permisos finos aplicados"* (cierra funciones internas que pide el control de seguridad).
 
+Y `supabase/15_cancelar_pedido.sql` → **Run** (quien reservó desde la web puede cancelar antes de pagar).
+
+Y `supabase/16_pagos_completos.sql` → **Run** (horas sueltas: seña **o** total; horario fijo: se paga el **primer mes**
+y queda activo solo). Después volvé a desplegar la función `mp-crear-pago`.
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

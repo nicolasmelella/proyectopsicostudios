@@ -1,7 +1,8 @@
 // =====================================================================
 // Función del servidor "mp-crear-pago" (Supabase Edge Function)
-// La web la llama con { reserva_id, token } y recibe el link de pago
-// de Mercado Pago para la seña. El monto lo calcula la base de datos.
+// La web la llama con { pedido_id, token, pagar } y recibe el link de pago
+// de Mercado Pago. pagar: 'sena' (default) o 'total' (horas sueltas); un fijo
+// paga siempre el primer mes. El monto lo calcula la base de datos.
 //
 // Secretos que necesita (Supabase → Edge Functions → Secrets):
 //   MP_ACCESS_TOKEN  → Access Token de Mercado Pago
@@ -48,11 +49,12 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return responder({ message: 'METODO_NO_PERMITIDO' }, 405);
 
   // Se paga un pedido (uno o varios días) o, por compatibilidad, una reserva suelta
-  let cuerpo: { pedido_id?: unknown; reserva_id?: unknown; token?: unknown };
+  let cuerpo: { pedido_id?: unknown; reserva_id?: unknown; token?: unknown; pagar?: unknown };
   try { cuerpo = await req.json(); } catch { return responder({ message: 'PEDIDO_INVALIDO' }, 400); }
   const tipo = cuerpo.pedido_id != null ? 'pedido' : 'reserva';
   const id = Number(tipo === 'pedido' ? cuerpo.pedido_id : cuerpo.reserva_id);
   const token = String(cuerpo.token ?? '');
+  const pagar = cuerpo.pagar === 'total' ? 'total' : 'sena';
   if (!Number.isInteger(id) || id <= 0 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
     return responder({ message: 'PEDIDO_INVALIDO', hint: 'Faltan los datos de la reserva' }, 400);
   }
@@ -61,7 +63,7 @@ Deno.serve(async (req: Request) => {
     let datos: { monto: number; expira_en: string | null; descripcion: string };
     try {
       datos = tipo === 'pedido'
-        ? await rpc('preparar_pago_pedido', { p_pedido_id: id, p_token: token })
+        ? await rpc('preparar_pago_pedido', { p_pedido_id: id, p_token: token, p_pagar: pagar })
         : await rpc('preparar_pago_mp', { p_reserva_id: id, p_token: token });
     } catch (e) {
       const err = e as { message: string; hint?: string };

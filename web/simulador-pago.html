@@ -40,6 +40,7 @@
     const q = new URLSearchParams(location.search);
     const id = Number(q.get('pedido'));
     const token = q.get('t');
+    const pagar = q.get('pagar') === 'total' ? 'total' : 'sena';
     const volver = (resultado) => { location.href = `index.html?pago=${resultado}&pedido=${id}&t=${token}`; };
     const caja = document.getElementById('caja');
     const sb = crearClienteDemo();
@@ -49,9 +50,10 @@
       caja.innerHTML = `<h1>No encontramos la reserva</h1><p>${esc(error.hint || error.message)}</p>
         <a class="btn btn-borde btn-bloque" href="index.html">Volver a la web</a>`;
     } else {
-      const monto = Math.max(0, r.sena - r.pagado);
+      const monto = Math.max(0, (pagar === 'total' || r.tipo === 'fijo' ? r.total : r.sena) - r.pagado);
+      const que = r.tipo === 'fijo' ? 'Primer mes del fijo' : pagar === 'total' ? 'Pago total' : 'Seña';
       caja.innerHTML = `
-        <h1>Psico Studios · Seña pedido #${esc(r.id)}</h1>
+        <h1>Psico Studios · ${que} · pedido #${esc(r.id)}</h1>
         <div class="simu-monto">${pesos(monto)}</div>
         <div class="simu-detalle">${r.reservas.map((x) => `${esc(fechaLarga(x.fecha))}, ${esc(rangos(x.horas))} · ${esc(x.consultorio)}`).join('<br>')}</div>
         <div class="simu-tarjeta">💳 Tarjeta de prueba terminada en 4242</div>
@@ -64,13 +66,13 @@
       document.getElementById('aprobar').onclick = (e) => {
         e.currentTarget.disabled = true;
         e.currentTarget.textContent = 'Procesando…';
-        sb.demo.pagoAprobado(id, token);   // lo que hace el aviso de Mercado Pago (webhook)
+        sb.demo.pagoAprobado(id, token, pagar);   // lo que hace el aviso de Mercado Pago (webhook)
         setTimeout(() => volver('ok'), 700);
       };
       document.getElementById('tarde').onclick = (e) => {
         e.currentTarget.disabled = true;
         sb.demo.adelantar(24 * 60);        // pasa el tiempo: la reserva vence y el horario se libera
-        sb.demo.pagoAprobado(id, token);   // llega el pago: si el horario sigue libre, se recupera
+        sb.demo.pagoAprobado(id, token, pagar);   // llega el pago: si el horario sigue libre, se recupera
         setTimeout(() => volver('ok'), 700);
       };
       document.getElementById('rechazar').onclick = () => volver('error');

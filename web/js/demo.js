@@ -210,6 +210,34 @@ export function crearClienteDemo() {
     return 'PAGO_PARCIAL';
   };
 
+  // Fijos pedidos desde la web: se paga el primer mes (copia de 16_pagos_completos.sql)
+  const pagadoFijo = (fid, periodo) => db.pagos.filter((p) => p.fijo_id === fid && p.periodo === periodo && !p.anulado).reduce((s, p) => s + p.monto, 0);
+  const fechasPrimerMes = (f) => {
+    const out = [];
+    const mes = f.desde.slice(0, 7);
+    for (let d = f.desde; d.slice(0, 7) === mes; d = sumarDias(d, 7)) {
+      if (db.fijo_excepciones.some((e) => e.fijo_id === f.id && e.fecha === d)) continue;
+      if (f.horas.some((h) => db.ocupaciones.get(key(f.consultorio_id, d, h))?.bloqueo_id)) continue;
+      out.push(d);
+    }
+    return out;
+  };
+  const estadoFijoWeb = (f) => ({ activo: 'confirmada', solicitud: 'pendiente', vencido: 'vencida' }[f.estado] || 'cancelada');
+  const aplicarPagoFijo = (f, monto, medio, mpId = null) => {
+    if (!['solicitud', 'activo'].includes(f.estado)) {
+      if (!mpId) return err('RESERVA_NO_VIGENTE', 'Este fijo ya no está vigente (venció o se canceló). Si hace falta, cargalo de nuevo desde Fijos.');
+      db.pagos_a_revisar.push({ id: nuevoId(), reserva_id: null, mp_payment_id: mpId, monto, motivo: `Pagó el fijo #${f.id}, que estaba ${f.estado}`, resuelto: false, creado_en: ahoraISO() });
+      return 'A_REVISAR';
+    }
+    db.pagos.push({ id: nuevoId(), reserva_id: null, fijo_id: f.id, periodo: f.periodo_inicial, monto, medio, mp_payment_id: mpId, pagado_en: hoy, anulado: false, creado_en: ahoraISO() });
+    if (f.estado === 'solicitud' && pagadoFijo(f.id, f.periodo_inicial) >= f.pago_inicial) {
+      f.estado = 'activo'; f.expira_en = null; f.aprobado_en = ahoraISO();
+      ocuparFijo(f);
+      return 'CONFIRMADA';
+    }
+    return f.estado === 'activo' ? 'CONFIRMADA' : 'PAGO_PARCIAL';
+  };
+
   const conJoins = (tabla, fila) => {
     if (tabla === 'reservas' || tabla === 'fijos') {
       const p = db.profesionales.find((x) => x.id === fila.profesional_id);
@@ -372,10 +400,20 @@ export function crearClienteDemo() {
       }
       const hasta = ahoraISO(60 * cfg('horas_espera_comprobante'));
       db.reservas.filter((r) => r.pedido_id === pe.id && r.estado === 'pendiente' && r.expira_en).forEach((r) => { if (r.expira_en < hasta) r.expira_en = hasta; });
+      db.fijos.filter((f) => f.pedido_id === pe.id && f.estado === 'solicitud').forEach((f) => { if (f.expira_en < hasta) f.expira_en = hasta; });
       return { id: null, horarios_guardados_hasta: hasta };
     },
     comprobantes_pendientes() {
       return db.comprobantes.filter((c) => c.estado === 'pendiente').map((c) => {
+        const fw = db.fijos.find((x) => x.pedido_id === c.pedido_id);
+        if (fw) {
+          const pf = db.profesionales.find((x) => x.id === fw.profesional_id);
+          const falta = Math.max(0, fw.pago_inicial - pagadoFijo(fw.id, fw.periodo_inicial));
+          const cons = db.consultorios.find((k) => k.id === fw.consultorio_id).nombre;
+          return { ...c, nombre: pf?.nombre, whatsapp: pf?.whatsapp, es_fijo: true, fijo_id: fw.id, total: fw.pago_inicial,
+            pagado: pagadoFijo(fw.id, fw.periodo_inicial), falta_sena: falta, falta_total: falta,
+            reservas: fechasPrimerMes(fw).map((d) => ({ id: null, fecha: d, horas: fw.horas, estado: estadoFijoWeb(fw), consultorio: cons })) };
+        }
         const rs = db.reservas.filter((r) => r.pedido_id === c.pedido_id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
         const vig = rs.filter((r) => ['pendiente', 'confirmada'].includes(r.estado));
         const p = db.profesionales.find((x) => x.id === db.pedidos.find((pe) => pe.id === c.pedido_id)?.profesional_id);
@@ -386,6 +424,13 @@ export function crearClienteDemo() {
       });
     },
     registrar_pago_pedido({ p_pedido_id, p_monto, p_medio }) {
+      const fw = db.fijos.find((x) => x.pedido_id === p_pedido_id);
+      if (fw) {
+        const faltaF = fw.pago_inicial - pagadoFijo(fw.id, fw.periodo_inicial);
+        if (faltaF <= 0) return err('RESERVA_NO_VIGENTE', 'Este fijo ya tiene el primer mes pago.');
+        if (p_monto > faltaF) return err('PAGO_EXCEDE', `Lo que falta pagar del primer mes es $${faltaF}`);
+        return aplicarPagoFijo(fw, p_monto, p_medio);
+      }
       const vig = db.reservas.filter((r) => r.pedido_id === p_pedido_id && ['pendiente', 'confirmada'].includes(r.estado)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
       const falta = vig.reduce((s, r) => s + r.precio_total - pagado(r.id), 0);
       if (!falta) return err('RESERVA_NO_VIGENTE', 'Este pedido no tiene reservas vigentes con saldo.');
@@ -416,6 +461,16 @@ export function crearClienteDemo() {
     cancelar_pedido_web({ p_pedido_id, p_token }) {
       const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
       if (!pe) return err('NO_ENCONTRADO', 'No encontramos ese pedido');
+      const yaPagado = () => err('YA_PAGADO', 'Este pedido ya tiene un pago o un comprobante. Para cancelarlo escribinos por WhatsApp.');
+      const fw = db.fijos.find((x) => x.pedido_id === pe.id);
+      if (fw) {
+        if (db.comprobantes.some((c) => c.pedido_id === pe.id) || fw.estado === 'activo' || pagadoFijo(fw.id, fw.periodo_inicial) > 0) return yaPagado();
+        if (fw.estado === 'solicitud') {
+          fw.estado = 'cancelado'; fw.expira_en = null;
+          for (const [k, o] of db.ocupaciones) if (o.fijo_id === fw.id) db.ocupaciones.delete(k);
+        }
+        return { pedido: pe.id, canceladas: 1 };
+      }
       const rs = db.reservas.filter((r) => r.pedido_id === pe.id);
       if (rs.some((r) => r.estado === 'confirmada' || pagado(r.id) > 0) || db.comprobantes.some((c) => c.pedido_id === pe.id)) {
         return err('YA_PAGADO', 'Este pedido ya tiene un pago o un comprobante. Para cancelarlo escribinos por WhatsApp.');
@@ -428,12 +483,21 @@ export function crearClienteDemo() {
     },
     estado_pago_pedido({ p_pedido_id, p_token }) {
       const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
+      const fw = pe && db.fijos.find((x) => x.pedido_id === pe.id);
+      if (fw) {
+        const est = estadoFijoWeb(fw);
+        const cons = db.consultorios.find((c) => c.id === fw.consultorio_id).nombre;
+        return { id: pe.id, tipo: 'fijo', estado: est, total: fw.pago_inicial, pagado: pagadoFijo(fw.id, fw.periodo_inicial), sena: fw.pago_inicial,
+          expira_en: fw.estado === 'solicitud' ? fw.expira_en : null,
+          fijo: { dia: fw.dia_semana, horas: fw.horas, desde: fw.desde, precio_semanal: fw.precio_semanal, consultorio: cons },
+          reservas: fechasPrimerMes(fw).map((d) => ({ id: null, fecha: d, horas: fw.horas, estado: est, total: fw.precio_semanal, consultorio: cons })) };
+      }
       const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
       if (!rs.length) return err('NO_ENCONTRADO', 'No encontramos ese pedido');
       const estado = rs.every((r) => r.estado === 'confirmada') ? 'confirmada' : rs.some((r) => r.estado === 'pendiente') ? 'pendiente'
         : rs.some((r) => r.estado === 'confirmada') ? 'parcial' : 'vencida';
       return {
-        id: pe.id, estado, total: rs.reduce((s, r) => s + r.precio_total, 0), pagado: rs.reduce((s, r) => s + pagado(r.id), 0),
+        id: pe.id, tipo: 'suelta', estado, total: rs.reduce((s, r) => s + r.precio_total, 0), pagado: rs.reduce((s, r) => s + pagado(r.id), 0),
         sena: rs.reduce((s, r) => s + sena(r.precio_total), 0), expira_en: rs.map((r) => r.expira_en).filter(Boolean).sort()[0] || null,
         reservas: rs.map((r) => ({ id: r.id, fecha: r.fecha, horas: r.horas, estado: r.estado, total: r.precio_total,
           consultorio: db.consultorios.find((c) => c.id === r.consultorio_id).nombre })),
@@ -451,6 +515,19 @@ export function crearClienteDemo() {
         estado: 'solicitud', desde: p_desde, hasta: null, expira_en: ahoraISO(60 * cfg('retencion_fijo_horas')), origen: 'web' };
       db.fijos.push(f); ocuparFijo(f);
       return { id: f.id, consultorio: db.consultorios.find((c) => c.id === cons).nombre, precio_semanal: semanal, precio_mensual_aprox: Math.round((semanal * 4.33) / 100) * 100 };
+    },
+    crear_fijo_web(args) {
+      const v = rpcs.crear_solicitud_fijo(args);
+      if (v?.error) return v;
+      const f = db.fijos.find((x) => x.id === v.id);
+      const pedido = { id: nuevoId(), token: crypto.randomUUID(), profesional_id: f.profesional_id, creado_en: ahoraISO() };
+      db.pedidos.push(pedido);
+      let fechas = fechasPrimerMes(f);
+      if (!fechas.length) fechas = [f.desde];
+      Object.assign(f, { pedido_id: pedido.id, pago_inicial: f.precio_semanal * fechas.length, periodo_inicial: f.desde.slice(0, 7),
+        expira_en: ahoraISO(cfg('retencion_suelta_minutos')) });
+      return { ...v, pedido: pedido.id, token: pedido.token, total: f.pago_inicial, sena: f.pago_inicial, expira_en: f.expira_en,
+        periodo: f.periodo_inicial, reservas: fechas.map((d) => ({ fecha: d, horas: f.horas, consultorio: v.consultorio })) };
     },
     agenda({ p_desde, p_hasta }) {
       const out = [];
@@ -789,7 +866,21 @@ export function crearClienteDemo() {
         liberarVencidas();
         const pe = db.pedidos.find((x) => x.id === body.pedido_id && x.token === body.token);
         const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id) : [];
-        if (nombre !== 'mp-crear-pago' || !rs.length) return { data: null, error: { message: 'NO_ENCONTRADO', hint: 'No encontramos ese pedido' } };
+        const fw = pe && db.fijos.find((x) => x.pedido_id === pe.id);
+        const falla = (message, hint) => ({ data: null, error: { message, hint } });
+        if (nombre !== 'mp-crear-pago' || (!rs.length && !fw)) return falla('NO_ENCONTRADO', 'No encontramos ese pedido');
+        const vencido = 'Se venció el tiempo para pagar y los horarios se liberaron. Hacé una reserva nueva.';
+        if (fw) {
+          if (fw.estado === 'activo') return falla('YA_CONFIRMADA', 'Este horario fijo ya está pago y confirmado.');
+          if (fw.estado !== 'solicitud') return falla('RESERVA_NO_VIGENTE', vencido);
+          return { data: { url: `simulador-pago.html?pedido=${pe.id}&t=${pe.token}` }, error: null };
+        }
+        if (body.pagar === 'total') {
+          const vig = rs.filter((r) => ['pendiente', 'confirmada'].includes(r.estado));
+          if (!vig.length) return falla('RESERVA_NO_VIGENTE', vencido);
+          if (vig.every((r) => pagado(r.id) >= r.precio_total)) return falla('YA_CONFIRMADA', 'Este pedido ya está pago.');
+          return { data: { url: `simulador-pago.html?pedido=${pe.id}&t=${pe.token}&pagar=total` }, error: null };
+        }
         if (!rs.some((r) => r.estado === 'pendiente')) {
           return rs.some((r) => r.estado === 'confirmada')
             ? { data: null, error: { message: 'YA_CONFIRMADA', hint: 'Este pedido ya tiene la seña paga.' } }
@@ -825,12 +916,19 @@ export function crearClienteDemo() {
     // Herramientas del simulador
     demo: {
       // Lo que pasa cuando Mercado Pago aprueba el pago de un pedido: completa la seña de cada día
-      pagoAprobado(pedidoId, token) {
+      pagoAprobado(pedidoId, token, pagar = 'sena') {
         const pe = db.pedidos.find((x) => x.id === pedidoId && x.token === token);
         if (!pe) return 'NO_ENCONTRADO';
         const mpId = String(Date.now());
+        const fw = db.fijos.find((x) => x.pedido_id === pe.id);
+        if (fw) {
+          const res = aplicarPagoFijo(fw, Math.max(0, fw.pago_inicial - pagadoFijo(fw.id, fw.periodo_inicial)), 'mercadopago', mpId);
+          guardar();
+          return res;
+        }
+        const tope = (r) => (pagar === 'total' ? r.precio_total : sena(r.precio_total));
         const resultados = db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))
-          .map((r) => { const falta = sena(r.precio_total) - pagado(r.id); return falta > 0 ? registrarPagoMP(r.id, mpId, falta) : 'CONFIRMADA'; });
+          .map((r) => { const falta = tope(r) - pagado(r.id); return falta > 0 ? registrarPagoMP(r.id, mpId, falta) : 'CONFIRMADA'; });
         guardar();
         return resultados.includes('A_REVISAR') ? 'A_REVISAR' : 'CONFIRMADA';
       },

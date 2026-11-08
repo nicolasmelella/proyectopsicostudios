@@ -1137,6 +1137,7 @@ async function detalleFijo(id, fecha, liberado) {
       <li><span>Desde</span><span>${esc(fechaLarga(f.desde))}</span></li>
       <li><span>Precio semanal</span><span>${pesos(f.precio_semanal)}</span></li>
       ${esSolicitud && f.expira_en ? `<li><span>Se libera en</span><span>${faltan(f.expira_en)}</span></li>` : ''}
+      ${esSolicitud && f.pago_inicial ? `<li><span>Primer mes a pagar</span><span>${pesos(f.pago_inicial)} (al pagarlo se activa solo)</span></li>` : ''}
       ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(f.precio_semanal * veces)} (${veces} semanas)</span></li>` : ''}
     </ul>
     ${bloqueComentario(f.comentario, 'Vale para todas las semanas de este fijo.')}
@@ -1454,6 +1455,7 @@ async function pintarPendientes() {
       <div class="suave chico">Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${esc(rangos(x.horas))} · ${esc(x.consultorios.nombre)}</div>
       <div style="margin-top:.5em">Desde ${esc(fechaLarga(x.desde))} · ${pesos(x.precio_semanal)}/semana
         ${x.expira_en ? `<span class="pill pill-alerta">se libera en ${faltan(x.expira_en)}</span>` : ''}</div>
+      ${x.pago_inicial ? `<div class="chico" style="margin-top:.3em">Pidió por la web: esperando que pague el primer mes (<strong>${pesos(x.pago_inicial)}</strong>). Al pagarlo queda activo solo.</div>` : ''}
       <div class="acciones"><button class="btn btn-acento btn-chico" data-fijo="${x.id}">Ver y aprobar</button></div>
     </div>`).join('') : '<p class="suave">No hay solicitudes de fijo.</p>';
 
@@ -1547,12 +1549,11 @@ const CONFIG_PROTEGIDA = [
   ['email_equipo', 'Mail del equipo (recibe los avisos)'],
 ];
 const CONFIG_VISIBLE = [
-  ['mercadopago_activo', 'Cobrar la seña con Mercado Pago', 'sino'],
+  ['mercadopago_activo', 'Cobrar con Mercado Pago (seña, total o primer mes del fijo)', 'sino'],
   ['avisos_email_activo', 'Avisos por mail a los profesionales', 'sino'],
   ['avisos_whatsapp_activo', 'Avisos por WhatsApp (requiere la API de WhatsApp Business)', 'sino'],
   ['porcentaje_sena', 'Seña para confirmar (%)', 'number'],
-  ['retencion_suelta_minutos', 'Minutos para pagar la seña', 'number'],
-  ['retencion_fijo_horas', 'Horas para aprobar una solicitud de fijo', 'number'],
+  ['retencion_suelta_minutos', 'Minutos para pagar (seña de horas sueltas o primer mes del fijo)', 'number'],
   ['hora_apertura', 'Hora de apertura', 'number'],
   ['hora_cierre', 'Hora de cierre', 'number'],
   ['hora_fin_manana', 'Desde qué hora rige precio de tarde', 'number'],
