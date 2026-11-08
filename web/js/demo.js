@@ -412,6 +412,20 @@ export function crearClienteDemo() {
       c.nota = p_nota;
       return res;
     },
+    // Copia de 15_cancelar_pedido.sql
+    cancelar_pedido_web({ p_pedido_id, p_token }) {
+      const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
+      if (!pe) return err('NO_ENCONTRADO', 'No encontramos ese pedido');
+      const rs = db.reservas.filter((r) => r.pedido_id === pe.id);
+      if (rs.some((r) => r.estado === 'confirmada' || pagado(r.id) > 0) || db.comprobantes.some((c) => c.pedido_id === pe.id)) {
+        return err('YA_PAGADO', 'Este pedido ya tiene un pago o un comprobante. Para cancelarlo escribinos por WhatsApp.');
+      }
+      rs.filter((r) => r.estado === 'pendiente').forEach((r) => {
+        r.estado = 'cancelada'; r.cancelada_en = ahoraISO(); r.motivo_cancelacion = 'La canceló la persona desde la web';
+        for (const [k, o] of db.ocupaciones) if (o.reserva_id === r.id) db.ocupaciones.delete(k);
+      });
+      return { pedido: pe.id, canceladas: rs.filter((r) => r.estado === 'cancelada').length };
+    },
     estado_pago_pedido({ p_pedido_id, p_token }) {
       const pe = db.pedidos.find((x) => x.id === p_pedido_id && x.token === p_token);
       const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];

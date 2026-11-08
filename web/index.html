@@ -217,6 +217,16 @@
     .modal { background: var(--blanco); }
     .modal h2 { font-size: 1.3rem; }
     .resultado { text-align: center; }
+    .resultado .modal-cerrar { z-index: 1; }
+    .guardar-link { display: flex; align-items: center; gap: .8em; text-align: left; margin-top: 1em; padding: .8em 1em;
+                    border: 1px solid var(--borde); border-radius: 12px; font-size: .9rem; color: var(--texto-suave, #555); }
+    .guardar-link .btn { flex: none; min-width: 7.5em; }
+    .cancelar-pedido { margin-top: 1.2em; padding-top: 1em; border-top: 1px solid var(--borde); }
+    .link-cancelar { background: none; border: 0; font: inherit; font-size: .9rem; color: var(--error); text-decoration: underline;
+                     cursor: pointer; padding: .5em; min-height: 44px; }
+    .cancelar-confirmar p { margin: 0 0 .6em; font-size: .95rem; }
+    .cancelar-botones { display: flex; gap: .6em; justify-content: center; flex-wrap: wrap; }
+    .cancelar-pedido .aviso { margin-top: .6em; }
     .resultado .icono { width: 64px; height: 64px; border-radius: 50%; background: var(--ok-fondo); color: var(--ok);
                         display: grid; place-items: center; margin: 0 auto 12px; font-size: 2rem; }
     .dato-pago { background: #f8f9fc; border: 1px dashed var(--celeste); border-radius: 10px; padding: 1em; margin: 1em 0; text-align: left; }

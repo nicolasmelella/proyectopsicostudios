@@ -18,7 +18,8 @@ psql -q -d psicostudios_prueba -v ON_ERROR_STOP=1 \
   -f pruebas/probar_comentarios.sql \
   -f pruebas/probar_tablero.sql \
   -f pruebas/probar_equipo.sql \
-  -f pruebas/probar_permisos.sql
+  -f pruebas/probar_permisos.sql \
+  -f pruebas/probar_cancelar_pedido.sql
 node --experimental-strip-types --no-warnings pruebas/probar_funciones.mjs
 node --experimental-strip-types --no-warnings pruebas/probar_envio_avisos.mjs
 node --experimental-strip-types --no-warnings pruebas/probar_equipo_admin.mjs

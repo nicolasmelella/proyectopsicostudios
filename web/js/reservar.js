@@ -621,6 +621,7 @@ function mostrarResultadoSuelta(r, nombre) {
     <p class="ayuda centro" style="margin:.6em 0 0">¿Preferís mandarlo por WhatsApp? <a target="_blank" rel="noopener" href="${linkWhatsApp(wa, textoWa)}">Enviar por WhatsApp</a></p>`;
 
   $('#contenido-resultado').innerHTML = `
+    <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
     <div class="icono" aria-hidden="true">✓</div>
     <h2 id="titulo-resultado">${r.reservas.length > 1 ? '¡Tus horarios están guardados!' : '¡Tu horario está guardado!'}</h2>
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(r.pedido)}</strong></p>
@@ -633,11 +634,16 @@ function mostrarResultadoSuelta(r, nombre) {
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
       <details class="otra-forma"><summary>¿Preferís transferir?</summary>${transferencia}</details>` : transferencia}
     ${estado.cfg.avisos_email_activo === 'si' ? '<p class="aviso aviso-info chico" style="margin-top:.8em">📧 Te mandamos un mail con el detalle y el link para pagar o subir el comprobante.</p>' : ''}
-    <p class="ayuda" style="margin-top:.8em">¿Vas a transferir más tarde? Guardá este link para subir el comprobante:
-      <button class="btn btn-borde btn-chico" data-copiar="${esc(linkComprobante(r.pedido, r.token))}">Copiar link</button></p>
+    <div class="guardar-link">
+      <span>¿Vas a transferir más tarde? Guardá este link para volver a tu reserva y subir el comprobante.</span>
+      <button class="btn btn-borde btn-chico" data-copiar="${esc(linkComprobante(r.pedido, r.token))}">Copiar link</button>
+    </div>
     <p class="ayuda" style="margin-top:1em">El saldo (${pesos(r.total - r.sena)}) se abona el día de cada turno. Si la seña no llega a tiempo, los horarios se liberan automáticamente.</p>
-    <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Hacer otra reserva</button>`;
+    <button class="btn btn-borde btn-bloque" id="nueva-reserva" style="margin-top:.5em">Hacer otra reserva</button>
+    ${bloqueCancelar()}`;
   abrir('#modal-resultado');
+  conectarCancelar(r.pedido, r.token);
+  $('#cerrar-resultado').onclick = async () => { cerrarVentanas(); await cargarResumen(); if (estado.fecha) elegirFecha(estado.fecha); };
 
   $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(r.pedido, r.token, e.currentTarget, $('#aviso-mp')));
   conectarComprobante(r.pedido, r.token);
@@ -750,15 +756,64 @@ async function mostrarRetorno(id, token, resultado) {
       <p>${varios ? 'Tus horarios siguen guardados' : 'Tu horario sigue guardado'} ${r.expira_en ? `<strong>${faltan(r.expira_en)}</strong> más` : ''}. Podés intentar de nuevo con otra tarjeta o medio de pago.</p>
       <button class="btn btn-mp btn-bloque" id="pagar-mp">Intentar de nuevo · ${pesos(r.sena - r.pagado)}</button>
       <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>
-      <details class="otra-forma"><summary>¿Pagaste por transferencia?</summary>${datosTransferencia(r.sena - r.pagado)}${bloqueComprobante()}</details>${botonVolver()}`;
+      <details class="otra-forma"><summary>¿Pagaste por transferencia?</summary>${datosTransferencia(r.sena - r.pagado)}${bloqueComprobante()}</details>${botonVolver()}
+      ${r.pagado ? '' : bloqueCancelar()}`;
     $('#pagar-mp').onclick = (e) => pagarConMP(id, token, e.currentTarget, $('#aviso-mp'));
     conectarComprobante(id, token);
+    conectarCancelar(id, token);
+  } else if (r.reservas.every((x) => x.estado === 'cancelada')) {
+    caja.innerHTML = `<h2 id="titulo-resultado">${varios ? 'Cancelaste estas reservas' : 'Cancelaste esta reserva'}</h2>${detalle}
+      <p>${varios ? 'Los horarios quedaron libres' : 'El horario quedó libre'}. Podés hacer una reserva nueva cuando quieras.</p>${botonVolver('Hacer una reserva nueva')}`;
   } else {
     caja.innerHTML = `<h2 id="titulo-resultado">${varios ? 'Las reservas ya no están vigentes' : 'La reserva ya no está vigente'}</h2>${detalle}
       <p>Venció el tiempo para pagar la seña y ${varios ? 'los horarios se liberaron' : 'el horario se liberó'}. Si llegaste a pagar, escribinos por WhatsApp con el número de pedido y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
   }
   conectarVolver();
 }
+// ================================================================ CANCELAR (antes de pagar)
+function bloqueCancelar() {
+  return `<div class="cancelar-pedido" id="cancelar-pedido">
+    <button type="button" class="link-cancelar" id="cancelar-paso1">¿Te equivocaste? Cancelar esta reserva</button>
+    <div class="cancelar-confirmar oculto" id="cancelar-paso2" role="group" aria-label="Confirmar cancelación">
+      <p>¿Seguro? Los horarios quedan libres para otra persona.</p>
+      <div class="cancelar-botones">
+        <button type="button" class="btn btn-borde btn-chico" id="cancelar-no">No, mantener</button>
+        <button type="button" class="btn btn-peligro-lleno btn-chico" id="cancelar-si">Sí, cancelar</button>
+      </div>
+    </div>
+    <div id="cancelar-aviso" class="aviso aviso-error oculto" role="alert"></div>
+  </div>`;
+}
+
+function conectarCancelar(pedido, token) {
+  const p1 = $('#cancelar-paso1'), p2 = $('#cancelar-paso2');
+  if (!p1) return;
+  p1.onclick = () => { p1.classList.add('oculto'); p2.classList.remove('oculto'); $('#cancelar-no').focus(); };
+  $('#cancelar-no').onclick = () => { p2.classList.add('oculto'); p1.classList.remove('oculto'); p1.focus(); };
+  $('#cancelar-si').onclick = async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true; b.textContent = 'Cancelando…';
+    const { error } = await sb.rpc('cancelar_pedido_web', { p_pedido_id: Number(pedido), p_token: token });
+    if (error) {
+      const aviso = $('#cancelar-aviso');
+      aviso.textContent = mensajeError(error);
+      aviso.classList.remove('oculto');
+      b.disabled = false; b.textContent = 'Sí, cancelar';
+      return;
+    }
+    clearInterval(reloj);
+    $('#contenido-resultado').innerHTML = `
+      <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
+      <div class="icono" aria-hidden="true">✓</div>
+      <h2 id="titulo-resultado">Listo, cancelaste la reserva</h2>
+      <p>Los horarios quedaron libres. No tenés que pagar nada.</p>
+      <button class="btn btn-primario btn-bloque" id="nueva-reserva">Hacer otra reserva</button>`;
+    const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.fecha) elegirFecha(estado.fecha); };
+    $('#cerrar-resultado').onclick = volver;
+    $('#nueva-reserva').onclick = volver;
+  };
+}
+
 // ================================================================ COMPROBANTE DE PAGO
 const MAX_ARCHIVO = 5 * 1024 * 1024;
 const EXTENSION = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
