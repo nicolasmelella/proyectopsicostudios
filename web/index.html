@@ -58,6 +58,12 @@
     .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; font-size: 1rem; color: rgba(255,255,255,.92); }
     .checks li { display: flex; gap: 10px; align-items: center; }
     .checks svg { color: var(--rosa); }
+    .checks small { font-size: .85em; opacity: .8; }
+    .bajada strong { color: #fff; font-weight: 700; }
+    @media (min-width: 900px) { .checks-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; } }
+    .checks-2 li { align-items: flex-start; }
+    .checks-2 svg { flex: none; margin-top: .2em; }
+    .hero-horario { margin: 16px 0 0; font-size: .95rem; color: rgba(255,255,255,.75); }
 
     /* ---------- Reservador ---------- */
     .contenedor { padding-bottom: 140px; }
@@ -372,13 +378,16 @@
   <header class="hero gutter"><div class="ancho">
     <div>
       <h1>Alquilar un consultorio nunca fue tan fácil <span class="guino">(ni tan rápido)</span></h1>
-      <p class="bajada">Consultorios por hora en el Microcentro. Elegí día y horario, reservá en 2 minutos y atendé. Sin contratos ni permanencia.</p>
-      <ul class="checks">
-        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>5 consultorios y un salón, con aire acondicionado</span></li>
-        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Lunes a sábados, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs</span></li>
-        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Por hora o tu horario fijo de cada semana</span></li>
-        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Confirmás con una seña por transferencia</span></li>
+      <p class="bajada">Más de 15 años alquilando consultorios a profesionales de la salud en el Microcentro. Reservás las horas que necesitás y atendés: <strong>sin contratos ni costos ocultos.</strong></p>
+      <ul class="checks checks-2">
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Espacios amplios y luminosos, con aire acondicionado</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Habilitados por el Ministerio de Salud y para obras sociales</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Wifi de alta velocidad</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Café y snacks para vos y tus pacientes</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Atendido por sus dueños</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Derivación de pacientes <small>(consultanos)</small></span></li>
       </ul>
+      <p class="hero-horario">Lunes a sábados, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs · Por hora o con tu horario fijo de cada semana</p>
     </div>
     <div class="carrusel" id="carrusel" role="region" aria-roledescription="carrusel" aria-label="Fotos de Psico Studios">
       <figure class="activa"><img src="img/consultorios/c3-a.jpg" alt="Consultorio 3, con sofá, sillones y ventanales" width="1400" height="916"><figcaption>Consultorio 3 · sofá, sillones y ventanales</figcaption></figure>
