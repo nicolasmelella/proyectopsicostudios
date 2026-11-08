@@ -8,282 +8,393 @@
   <meta property="og:title" content="Consultorios por hora en Microcentro | Psico Studios">
   <meta property="og:description" content="Consultorios por hora o con horario fijo para profesionales de la salud mental. Reservá online.">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#f3eedc">
+  <meta name="theme-color" content="#12275a">
   <link rel="icon" type="image/png" href="img/logo-azul.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/estilos.css">
   <style>
-    .contenedor { max-width: 760px; margin: 0 auto; padding: 0 16px 140px; }
-    header.marca { text-align: center; padding: 28px 16px 8px; }
-    header.marca img { width: 150px; margin: 0 auto 18px; }
-    header.marca p { color: var(--texto-suave); max-width: 520px; margin: 0 auto; }
+    /* Estilo "Directa": la reserva primero. Franja azul con la propuesta, el reservador como tarjeta blanca encima.
+       Títulos en Montserrat, texto en Source Sans 3. Los colores salen de css/estilos.css. */
+    :root {
+      --fondo-web: #f5f7fb; --linea: #dfe3ea; --gris: #5b6474; --celeste-claro: #e7edf6;
+      --f-titulos: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --f-texto: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    body { background: var(--fondo-web); font-family: var(--f-texto); font-size: 17px; color: #1b2333; }
+    h1, h2, h3 { font-family: var(--f-titulos); color: var(--azul); letter-spacing: -.015em; text-wrap: balance; }
+    .gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    .ancho { max-width: 1140px; margin: 0 auto; }
+    svg.ic { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: var(--crema-claro);
-             border: 1px solid var(--borde); padding: 6px; border-radius: 999px; margin: 24px 0; }
-    .modos button { font: inherit; font-weight: 700; border: 0; border-radius: 999px; padding: .8em .5em;
-                    background: transparent; color: var(--azul); cursor: pointer; min-height: 48px; }
-    .modos button[aria-selected="true"] { background: var(--azul); color: var(--crema); }
+    /* Botones y campos en esta página: esquinas rectas suaves */
+    .btn { border-radius: 8px; font-family: var(--f-titulos); font-size: .95rem; }
+    .btn-acento { background: var(--terracota-osc); }
+    input, select, textarea { border-color: var(--linea); border-radius: 8px; }
+    .aviso { border-radius: 8px; }
 
+    /* ---------- Barra de navegación ---------- */
+    .nav { background: var(--blanco); border-bottom: 1px solid var(--linea); }
+    .nav .ancho { display: flex; align-items: center; gap: 24px; padding-block: 12px; }
+    .nav img { height: 38px; width: auto; }
+    .nav ul { display: flex; gap: 24px; list-style: none; margin: 0 0 0 auto; padding: 0; font-weight: 600; font-size: .95rem; }
+    .nav ul a { text-decoration: none; color: var(--gris); }
+    .nav ul a:hover { color: var(--azul); }
+    .nav .btn { min-height: 42px; padding: .55em 1.2em; }
+
+    /* ---------- Franja principal ---------- */
+    .hero { background: var(--azul); color: #fff; }
+    .hero .ancho { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 48px; align-items: center; padding-block: 52px 120px; }
+    .hero h1 { color: #fff; font-size: clamp(2rem, 4.2vw, 3.2rem); line-height: 1.08; font-weight: 800; margin: 0; }
+    .hero .bajada { font-size: 1.15rem; line-height: 1.55; color: rgba(255,255,255,.84); max-width: 32em; margin: 16px 0 24px; }
+    .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; font-size: 1rem; color: rgba(255,255,255,.92); }
+    .checks li { display: flex; gap: 10px; align-items: center; }
+    .checks svg { color: #9fc0e8; }
+    .hero-fotos { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+    .hero-fotos img { width: 100%; height: 300px; object-fit: cover; border-radius: 10px; }
+
+    /* ---------- Reservador ---------- */
+    .contenedor { padding-bottom: 140px; }
+    .reservador { background: var(--blanco); border-radius: 14px; box-shadow: 0 24px 60px rgba(6,15,40,.18); padding: 26px 28px 28px;
+                  margin-top: -84px; position: relative; }
+    .res-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 18px; }
+    .res-cab h2 { font-size: 1.45rem; margin: 0; }
+    .res-cab p { margin: 4px 0 0; color: var(--gris); }
+    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #eef1f6; padding: 4px; border-radius: 8px; min-width: min(360px, 100%); }
+    .modos button { font: 700 .9rem var(--f-titulos); border: 0; border-radius: 6px; padding: .7em .8em; background: transparent; color: var(--gris); cursor: pointer; min-height: 44px; }
+    .modos button[aria-selected="true"] { background: var(--blanco); color: var(--azul); box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+    .modos button:focus-visible { outline: 3px solid var(--celeste); outline-offset: 1px; }
+    #vista-suelta { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 32px; align-items: start; }
+    #vista-suelta.oculto { display: none; }
     .paso { margin-bottom: 18px; }
-    .paso-titulo { display: flex; align-items: center; gap: .6em; margin-bottom: .75em; }
-    .paso-num { width: 28px; height: 28px; border-radius: 50%; background: var(--terracota); color: var(--crema);
-                display: grid; place-items: center; font-weight: 800; font-size: .9rem; flex: 0 0 auto; }
-    .paso-titulo h2 { margin: 0; font-size: 1.1rem; }
-
-    .horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-    .hora { font: inherit; cursor: pointer; background: var(--blanco); color: var(--azul);
-            border: 1.5px solid var(--borde); border-radius: 12px; padding: .6em .4em; min-height: 60px; text-align: center; }
-    .hora strong { display: block; font-size: 1.05rem; }
-    .hora small { font-size: .72rem; color: var(--texto-suave); }
-    .hora[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: var(--crema); }
-    .hora[aria-pressed="true"] small { color: var(--crema); opacity: .85; }
-    .hora:disabled { background: transparent; color: #a9aec0; border-style: dashed; cursor: not-allowed; }
-    .hora:disabled small { color: #a9aec0; }
-    .leyenda { display: flex; gap: 1em; flex-wrap: wrap; font-size: .8rem; color: var(--texto-suave); margin-top: .75em; }
-
-    .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--azul); color: var(--crema);
-             padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(18,39,90,.25); }
-    .barra-in { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 12px; justify-content: space-between; }
-    .barra .detalle { font-size: .85rem; line-height: 1.35; }
-    .barra .detalle strong { font-size: 1.05rem; }
-    .barra .btn { background: var(--terracota-osc); color: #fff; flex: 0 0 auto; }
-
-    .precios { width: 100%; border-collapse: collapse; font-size: .95rem; }
-    .precios th, .precios td { text-align: left; padding: .55em .4em; border-bottom: 1px solid var(--borde); }
-    .precios td:last-child, .precios th:last-child { text-align: right; }
-
-    .resultado { text-align: center; }
-    .resultado .icono { width: 64px; height: 64px; border-radius: 50%; background: var(--ok-fondo); color: var(--ok);
-                        display: grid; place-items: center; margin: 0 auto 12px; font-size: 2rem; }
-    .dato-pago { background: var(--blanco); border: 1.5px dashed var(--celeste); border-radius: 12px; padding: 1em;
-                 margin: 1em 0; text-align: left; }
-    .dato-pago .fila { display: flex; justify-content: space-between; align-items: center; gap: .5em; padding: .3em 0; }
-    .dato-pago .valor { font-weight: 700; white-space: nowrap; text-align: right; }
-    .dato-pago .valor-largo { white-space: normal; overflow-wrap: anywhere; }
-    .cuenta { font-size: 1.6rem; font-weight: 800; color: var(--terracota-osc); }
-    .resumen-lista { list-style: none; padding: 0; margin: 0 0 1em; text-align: left; }
-    .resumen-lista li { display: flex; justify-content: space-between; gap: 1em; padding: .4em 0; border-bottom: 1px solid var(--borde); }
-    .resumen-lista li span:last-child { font-weight: 700; text-align: right; }
+    .paso-titulo { display: flex; align-items: center; gap: .6em; margin-bottom: .8em; }
+    .paso-num { width: 28px; height: 28px; border-radius: 50%; background: var(--azul); color: #fff; display: grid; place-items: center;
+                font: 800 .85rem var(--f-titulos); flex: 0 0 auto; }
+    .paso-titulo h2 { margin: 0; font-size: 1.05rem; }
 
     /* Calendario */
-    .calendario { background: var(--crema-claro); border: 1px solid var(--borde); border-radius: var(--radius); padding: 12px; max-width: 440px; }
+    .calendario { border: 1px solid var(--linea); border-radius: 10px; padding: 12px; }
     .cal-cabecera { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-    .cal-cabecera strong { text-transform: capitalize; font-size: 1.05rem; }
-    .cal-cabecera button { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--borde); background: var(--blanco);
-                           color: var(--azul); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+    .cal-cabecera strong { text-transform: capitalize; font: 700 1rem var(--f-titulos); }
+    .cal-cabecera button { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--linea); background: var(--blanco);
+                           color: var(--azul); font-size: 1.4rem; line-height: 1; cursor: pointer; }
     .cal-cabecera button:disabled { opacity: .3; cursor: not-allowed; }
     .cal-semana, .cal-dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
-    .cal-semana span { font-size: .7rem; font-weight: 700; color: var(--texto-suave); text-transform: uppercase; padding: 4px 0; letter-spacing: .04em; }
-    .cal-dia { min-height: 44px; border-radius: 10px; border: 1.5px solid var(--borde); font: inherit; font-weight: 700;
-               cursor: pointer; position: relative; background: var(--blanco); color: var(--azul); padding: 0 0 8px; }
+    .cal-semana span { font-size: .7rem; font-weight: 700; color: var(--gris); text-transform: uppercase; padding: 4px 0; letter-spacing: .05em; }
+    .cal-dia { min-height: 44px; border-radius: 8px; border: 1px solid var(--linea); font: 700 .95rem var(--f-texto); cursor: pointer; position: relative;
+               background: var(--blanco); color: var(--azul); padding: 0 0 8px; }
     .cal-dia::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; }
     .cal-dia.n-mucho::after { background: var(--ok); }
     .cal-dia.n-poco::after { background: #d9a21b; }
-    .cal-dia.n-lleno { color: #a9aec0; text-decoration: line-through; background: transparent; border-color: transparent; cursor: not-allowed; }
-    .cal-dia.fuera { background: transparent; border-color: transparent; color: #bfc3cc; font-weight: 500; cursor: default; }
-    .cal-dia[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: var(--crema); }
-    .cal-dia:not(:disabled):hover { border-color: var(--celeste); }
-    .cal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: .75rem; color: var(--texto-suave); margin-top: 10px; }
+    .cal-dia.n-lleno { color: #b4bac5; text-decoration: line-through; background: #f4f5f8; border-color: transparent; cursor: not-allowed; }
+    .cal-dia.fuera { background: transparent; border-color: transparent; color: #c7ccd5; font-weight: 400; cursor: default; }
+    .cal-dia[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: #fff; }
+    .cal-dia:not(:disabled):hover { border-color: var(--azul); }
+    .cal-leyenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: .78rem; color: var(--gris); margin-top: 10px; }
     .cal-leyenda span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
     .l-mucho::before { background: var(--ok); } .l-poco::before { background: #d9a21b; } .l-lleno::before { background: #c3c6cf; }
     .cal-leyenda .l-pedido::before { background: transparent; border-radius: 3px; box-shadow: inset 0 0 0 2px var(--terracota-osc); width: 10px; height: 10px; }
-
-    /* Grilla de horarios por consultorio */
-    .vista-toggle { display: inline-flex; background: var(--crema-claro); border: 1px solid var(--borde); border-radius: 999px; padding: 4px; gap: 4px; margin-bottom: 12px; }
-    .vista-toggle button { font: inherit; font-weight: 600; font-size: .85rem; border: 0; border-radius: 999px; padding: .5em 1em;
-                           background: transparent; color: var(--azul); cursor: pointer; min-height: 40px; }
-    .vista-toggle button[aria-pressed="true"] { background: var(--azul); color: var(--crema); }
-    .grilla-wrap { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radius); background: var(--crema-claro); }
-    table.grilla-h { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 330px; }
-    .grilla-h thead th { font-size: .72rem; color: var(--texto-suave); font-weight: 700; padding: 4px 0; line-height: 1.15; }
-    .grilla-h tbody th { text-align: right; white-space: nowrap; padding-right: 6px; font-size: .82rem; color: var(--azul); width: 1%; }
-    .grilla-h tbody th small { display: block; font-weight: 500; color: var(--texto-suave); font-size: .68rem; }
-    .grilla-h td { padding: 0; }
-    .celda-h { display: block; width: 100%; height: 40px; border-radius: 8px; border: 1.5px solid var(--borde); background: var(--blanco);
-               cursor: pointer; font: inherit; color: var(--crema); font-weight: 800; }
-    .celda-h:hover { border-color: var(--celeste); background: #eef2f8; }
-    .celda-h[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); }
-    .celda-ocupada { display: block; height: 40px; border-radius: 8px;
-                     background: repeating-linear-gradient(135deg, #e6e2d6, #e6e2d6 5px, #dcd6c6 5px, #dcd6c6 10px); }
-    .mini { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid var(--borde); }
-    .mini-libre { background: var(--blanco); }
-    .mini-ocupado { background: repeating-linear-gradient(135deg, #e6e2d6, #e6e2d6 3px, #dcd6c6 3px, #dcd6c6 6px); border-color: transparent; }
-    .mini-elegido { background: var(--azul); border-color: var(--azul); }
-    .seleccion { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: #e6ecf5;
-                 color: var(--azul); border-radius: 10px; padding: .6em .9em; margin-top: 12px; font-size: .92rem; }
-    /* Pedido de varios días */
     .cal-dia.en-pedido { box-shadow: inset 0 0 0 2px var(--terracota-osc); }
     .cal-dia.en-pedido::before { content: "✓"; position: absolute; top: 1px; right: 4px; font-size: .62rem; color: var(--terracota-osc); }
-    .cal-dia.en-pedido[aria-pressed="true"]::before { color: var(--crema); }
-    .seleccion { display: block; }
-    .pedido-cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .4em; }
-    .pedido-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-    .pedido-lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
-                       background: var(--blanco); border-radius: 8px; padding: .55em .7em; font-size: .88rem; }
-    .pedido-lista li.actual { box-shadow: inset 3px 0 0 var(--azul); }
-    .pedido-acc { display: flex; gap: 6px; }
-    .pill-mini { display: inline-block; font-size: .7rem; font-weight: 700; padding: .1em .5em; border-radius: 999px; margin-top: 2px; }
-    .pill-mini.ok { background: var(--ok-fondo); color: var(--ok); }
-    .pill-mini.alerta { background: var(--alerta-fondo); color: var(--alerta); }
-    .pill-mini.error { background: var(--error-fondo); color: var(--error); }
-    .ayuda-cta { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-    #aviso-general a { color: inherit; font-weight: 700; }
+    .cal-dia.en-pedido[aria-pressed="true"]::before { color: #fff; }
 
-    /* Galería de consultorios */
-    .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
-    @media (min-width: 700px) { .galeria { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; } }
-    .card-cons { display: block; text-align: left; font: inherit; color: var(--texto); background: var(--crema-claro); border: 1px solid var(--borde);
-                 border-radius: var(--radius); overflow: hidden; cursor: pointer; padding: 0; }
-    .card-cons:hover { border-color: var(--celeste); }
-    .card-cons img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: var(--borde); }
-    .card-cons span { display: block; padding: 10px 12px 12px; }
-    .card-cons strong { display: block; }
-    .card-cons small { color: var(--texto-suave); font-size: .82rem; line-height: 1.35; display: block; margin-top: 2px; }
-    .modal-fotos { max-width: 760px; }
-    .visor { position: relative; background: #1b2236; border-radius: 12px; overflow: hidden; }
-    .visor img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
-    .visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0;
-                    background: rgba(250, 247, 238, .92); color: var(--azul); font-size: 1.6rem; line-height: 1; cursor: pointer; }
-    .visor-flecha.ant { left: 10px; } .visor-flecha.sig { right: 10px; }
-    .fotos-minis { display: flex; gap: 8px; overflow-x: auto; }
-    .fotos-minis button { flex: 0 0 84px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: none; }
-    .fotos-minis button[aria-current="true"] { border-color: var(--azul); }
-    .fotos-minis img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
-    .col-cons { font: inherit; font-size: .72rem; font-weight: 700; color: var(--azul); background: none; border: 0; cursor: pointer;
+    /* Horarios */
+    #dia-elegido { font-family: var(--f-titulos); }
+    .vista-toggle { display: inline-flex; background: #eef1f6; border-radius: 8px; padding: 4px; gap: 4px; margin-bottom: 12px; }
+    .vista-toggle button { font: 600 .85rem var(--f-titulos); border: 0; border-radius: 6px; padding: .5em 1em; background: transparent; color: var(--gris); cursor: pointer; min-height: 38px; }
+    .vista-toggle button[aria-pressed="true"] { background: var(--blanco); color: var(--azul); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .grilla-wrap { overflow-x: auto; border: 1px solid var(--linea); border-radius: 10px; background: var(--blanco); }
+    table.grilla-h { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 330px; }
+    .grilla-h thead th { font-size: .74rem; color: var(--gris); font-weight: 700; padding: 4px 0; line-height: 1.15; }
+    .grilla-h tbody th { text-align: right; white-space: nowrap; padding-right: 6px; font-size: .85rem; color: var(--azul); width: 1%; font-variant-numeric: tabular-nums; }
+    .grilla-h tbody th small { display: block; font-weight: 400; color: var(--gris); font-size: .7rem; }
+    .grilla-h td { padding: 0; }
+    .celda-h { display: block; width: 100%; height: 38px; border-radius: 6px; border: 1px solid var(--linea); background: var(--blanco);
+               cursor: pointer; font: inherit; color: #fff; font-weight: 800; }
+    .celda-h:hover { border-color: var(--azul); background: var(--celeste-claro); }
+    .celda-h[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); }
+    .celda-ocupada { display: block; height: 38px; border-radius: 6px; background: #f1f2f5; }
+    .horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+    .hora { font: inherit; cursor: pointer; background: var(--blanco); color: var(--azul); border: 1px solid var(--linea); border-radius: 8px;
+            padding: .55em .4em; min-height: 56px; text-align: center; }
+    .hora strong { display: block; font: 700 1rem var(--f-titulos); font-variant-numeric: tabular-nums; }
+    .hora small { font-size: .74rem; color: var(--gris); }
+    .hora[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: #fff; }
+    .hora[aria-pressed="true"] small { color: #fff; opacity: .85; }
+    .hora:disabled { background: #f4f5f8; color: #b4bac5; border-color: transparent; cursor: not-allowed; }
+    .hora:disabled small { color: #b4bac5; }
+    .leyenda { display: flex; gap: .4em 1.1em; flex-wrap: wrap; font-size: .8rem; color: var(--gris); margin-top: .75em; }
+    .mini { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--linea); }
+    .mini-libre { background: var(--blanco); }
+    .mini-ocupado { background: #f1f2f5; border-color: transparent; }
+    .mini-elegido { background: var(--azul); border-color: var(--azul); }
+    .col-cons { font: 700 .74rem var(--f-titulos); color: var(--azul); background: none; border: 0; cursor: pointer;
                 text-decoration: underline dotted; text-underline-offset: 3px; line-height: 1.15; padding: 2px; }
-    .col-resaltada { animation: resaltar 2.2s ease-out; border-radius: 8px; }
+    .col-resaltada { animation: resaltar 2.2s ease-out; border-radius: 6px; }
     @keyframes resaltar { 0%, 60% { background: #f6dccd; } 100% { background: transparent; } }
     @media (prefers-reduced-motion: reduce) { .col-resaltada { animation: none; background: #f6dccd; } }
 
-    /* Cómo reservar en 3 pasos */
-    .como-funciona { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .como-funciona li { display: flex; gap: 10px; align-items: flex-start; background: var(--crema-claro); border: 1px solid var(--borde);
-                        border-radius: 12px; padding: 10px 12px; }
-    .como-funciona strong { display: block; font-size: .92rem; }
-    .como-funciona small { display: block; color: var(--texto-suave); font-size: .8rem; line-height: 1.35; }
-    .cf-num { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--azul); color: var(--crema);
-              display: grid; place-items: center; font-weight: 800; font-size: .85rem; }
-    @media (max-width: 640px) { .como-funciona { grid-template-columns: 1fr; gap: 6px; } .como-funciona li { padding: 8px 12px; } }
+    /* Tu pedido */
+    .seleccion { display: block; background: var(--celeste-claro); color: var(--azul); border-radius: 10px; padding: .7em .9em; margin-top: 14px; font-size: .95rem; }
+    .seleccion:empty { display: none; }
+    .pedido-cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .4em; font-family: var(--f-titulos); }
+    .pedido-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .pedido-lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+                       background: var(--blanco); border-radius: 8px; padding: .55em .7em; font-size: .9rem; }
+    .pedido-lista li.actual { box-shadow: inset 3px 0 0 var(--azul); }
+    .pedido-acc { display: flex; gap: 6px; }
+    .pill-mini { display: inline-block; font-size: .72rem; font-weight: 700; padding: .1em .5em; border-radius: 4px; margin-top: 2px; }
+    .pill-mini.ok { background: var(--ok-fondo); color: var(--ok); }
+    .pill-mini.alerta { background: var(--alerta-fondo); color: var(--alerta); }
+    .pill-mini.error { background: var(--error-fondo); color: var(--error); }
+    #aviso-general a { color: inherit; font-weight: 700; }
 
-    /* Comprobante de pago */
-    .comprobante { display: flex; flex-direction: column; gap: 2px; background: var(--blanco); border: 1.5px solid var(--borde);
-                   border-radius: 12px; padding: 12px 14px; margin-top: 12px; text-align: left; }
+    /* Horario fijo */
+    #vista-fijo .chip { border-radius: 8px; border-color: var(--linea); }
+    #vista-fijo .chip[aria-pressed="true"] { color: #fff; }
+    #vista-fijo .chip[aria-pressed="true"] small { color: #fff; }
+
+    /* ---------- Secciones ---------- */
+    .seccion { padding-block: 60px 0; }
+    .seccion > header { margin-bottom: 22px; }
+    .seccion h2 { font-size: clamp(1.5rem, 2.6vw, 2rem); margin: 0; }
+    .seccion header p { color: var(--gris); margin: 8px 0 0; font-size: 1.05rem; }
+    .como-funciona { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: p; }
+    .como-funciona li { background: var(--blanco); border: 1px solid var(--linea); border-radius: 12px; padding: 20px; display: grid; gap: 6px; align-content: start; }
+    .cf-num { width: 32px; height: 32px; border-radius: 50%; background: var(--azul); color: #fff; display: grid; place-items: center; font: 800 .9rem var(--f-titulos); }
+    .como-funciona strong { font: 700 1.02rem var(--f-titulos); color: var(--azul); }
+    .como-funciona small { color: var(--gris); font-size: .95rem; line-height: 1.45; }
+
+    .galeria { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .card-cons { display: flex; flex-direction: column; text-align: left; font: inherit; color: inherit; background: var(--blanco); border: 1px solid var(--linea);
+                 border-radius: 12px; overflow: hidden; cursor: pointer; padding: 0; }
+    .card-cons:hover { border-color: var(--azul); box-shadow: 0 8px 24px rgba(18,39,90,.08); }
+    .card-cons:focus-visible { outline: 3px solid var(--celeste); outline-offset: 2px; }
+    .card-cons img { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; background: var(--linea); }
+    .card-cons span { display: block; padding: 14px 16px 16px; }
+    .card-cons strong { display: block; font: 700 1.05rem var(--f-titulos); color: var(--azul); }
+    .card-cons small { color: var(--gris); font-size: .95rem; line-height: 1.45; display: block; margin-top: 4px; }
+    .card-cons[data-fotos="espacios"] { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+    .card-cons[data-fotos="espacios"] img { width: 40%; aspect-ratio: 21 / 9; }
+
+    .planes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .plan { background: var(--blanco); border: 1px solid var(--linea); border-radius: 12px; padding: 24px; position: relative; }
+    .plan.dest { border: 2px solid var(--azul); }
+    .plan .tag { position: absolute; top: -12px; left: 22px; background: var(--azul); color: #fff; font: 700 .72rem var(--f-titulos);
+                 padding: 4px 10px; border-radius: 4px; letter-spacing: .04em; text-transform: uppercase; }
+    .plan h3 { font-size: 1.15rem; margin: 0; }
+    .plan p { color: var(--gris); margin: 6px 0 16px; }
+    .plan dl { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; margin: 0; }
+    .plan dt { color: var(--gris); }
+    .plan dd { margin: 0; font: 800 1.35rem var(--f-titulos); color: var(--azul); text-align: right; font-variant-numeric: tabular-nums; }
+    .plan dd small { font: 400 .8rem var(--f-texto); color: var(--gris); }
+    .nota-precios { color: var(--gris); font-size: .95rem; margin: 14px 0 0; }
+
+    .ayuda-cta { margin-top: 60px; background: var(--blanco); border: 1px solid var(--linea); border-radius: 12px; padding: 22px 24px;
+                 display: flex; gap: 14px 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .ayuda-cta h2 { font-size: 1.25rem; margin: 0 0 .2em; }
+    .ayuda-cta p { margin: 0; color: var(--gris); }
+    .ayuda-cta b { color: var(--azul); white-space: nowrap; user-select: all; }
+    .pie { margin-top: 48px; border-top: 1px solid var(--linea); color: var(--gris); font-size: .9rem; }
+    .pie .ancho { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding-block: 22px; }
+
+    /* ---------- Barra inferior ---------- */
+    .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--azul); color: #fff;
+             padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+             box-shadow: 0 -4px 20px rgba(18,39,90,.25); }
+    .barra-in { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+    .barra .detalle { font-size: .9rem; line-height: 1.35; }
+    .barra .detalle strong { font-size: 1.05rem; font-family: var(--f-titulos); }
+    .barra .btn { background: var(--terracota-osc); color: #fff; flex: 0 0 auto; }
+
+    /* ---------- Ventanas ---------- */
+    .modal { background: var(--blanco); }
+    .modal h2 { font-size: 1.3rem; }
+    .resultado { text-align: center; }
+    .resultado .icono { width: 64px; height: 64px; border-radius: 50%; background: var(--ok-fondo); color: var(--ok);
+                        display: grid; place-items: center; margin: 0 auto 12px; font-size: 2rem; }
+    .dato-pago { background: #f8f9fc; border: 1px dashed var(--celeste); border-radius: 10px; padding: 1em; margin: 1em 0; text-align: left; }
+    .dato-pago .fila { display: flex; justify-content: space-between; align-items: center; gap: .5em; padding: .3em 0; }
+    .dato-pago .valor { font-weight: 700; white-space: nowrap; text-align: right; }
+    .dato-pago .valor-largo { white-space: normal; overflow-wrap: anywhere; }
+    .cuenta { font: 800 1.6rem var(--f-titulos); color: var(--terracota-osc); }
+    .resumen-lista { list-style: none; padding: 0; margin: 0 0 1em; text-align: left; }
+    .resumen-lista li { display: flex; justify-content: space-between; gap: 1em; padding: .45em 0; border-bottom: 1px solid var(--linea); }
+    .resumen-lista li span:last-child { font-weight: 700; text-align: right; }
+    .modal-fotos { max-width: 820px; }
+    .visor { position: relative; background: #111a2e; border-radius: 10px; overflow: hidden; }
+    .visor img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+    .visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0;
+                    background: rgba(255,255,255,.92); color: var(--azul); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+    .visor-flecha.ant { left: 10px; } .visor-flecha.sig { right: 10px; }
+    .fotos-minis { display: flex; gap: 8px; overflow-x: auto; }
+    .fotos-minis button { flex: 0 0 84px; padding: 0; border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; background: none; }
+    .fotos-minis button[aria-current="true"] { border-color: var(--azul); }
+    .fotos-minis img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+    .comprobante { display: flex; flex-direction: column; gap: 2px; background: var(--blanco); border: 1px solid var(--linea);
+                   border-radius: 10px; padding: 12px 14px; margin-top: 12px; text-align: left; }
     .comprobante label.btn { cursor: pointer; }
-    .comprobante input:focus-visible + div, .comprobante label:focus-within { outline: 3px solid var(--celeste); }
+    .comprobante label:focus-within { outline: 3px solid var(--celeste); }
     #comp-estado:empty { display: none; }
     #comp-estado { margin: .6em 0 0; }
-
     .btn-mp { background: #007eb5; color: #fff; }
     .btn-mp:hover:not(:disabled) { background: #006a99; }
     .otra-forma { margin-top: 1em; text-align: left; }
     .otra-forma summary { cursor: pointer; font-weight: 600; color: var(--azul); padding: .6em 0; min-height: 44px; }
-    .wa-flotante { position: fixed; right: 16px; bottom: 96px; z-index: 15; width: 56px; height: 56px; border-radius: 50%;
-                   background: #1f8f4e; display: grid; place-items: center; box-shadow: var(--sombra); }
+    .wa-flotante { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 96px; z-index: 15; width: 56px; height: 56px; border-radius: 50%;
+                   background: #1f8f4e; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
     .wa-flotante svg { width: 30px; height: 30px; fill: #fff; }
     @media (min-width: 901px) { .wa-flotante { display: none; } }
-    @media (max-width: 480px) { .barra .detalle { font-size: .78rem; } .barra .btn { padding: .7em 1em; } }
+
+    /* ---------- Celular y tablet ---------- */
+    @media (max-width: 980px) {
+      #vista-suelta { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .calendario { max-width: 460px; }
+    }
+    @media (max-width: 860px) {
+      .nav ul { display: none; }
+      .nav .btn { margin-left: auto; }
+      .hero .ancho { grid-template-columns: minmax(0, 1fr); gap: 26px; padding-block: 34px 100px; }
+      .hero-fotos img { height: 170px; }
+      .reservador { padding: 18px 16px 20px; margin-top: -72px; }
+      .como-funciona, .planes { grid-template-columns: minmax(0, 1fr); }
+      .galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .card-cons[data-fotos="espacios"] { flex-direction: column; }
+      .card-cons[data-fotos="espacios"] img { width: 100%; aspect-ratio: 16 / 10; }
+      .seccion { padding-block: 44px 0; }
+    }
+    @media (max-width: 520px) {
+      .galeria { grid-template-columns: minmax(0, 1fr); }
+      .hero-fotos { grid-template-columns: minmax(0, 1fr); }
+      .hero-fotos img:last-child { display: none; }
+      .modos { min-width: 0; width: 100%; }
+      .barra .detalle { font-size: .8rem; } .barra .btn { padding: .7em 1em; }
+    }
   </style>
 </head>
 <body>
-  <header class="marca">
-    <img src="img/logo-azul.png" alt="Psico Studios" width="150" height="83">
-    <h1>Reservá tu consultorio</h1>
-    <p>Consultorios en Microcentro para profesionales de la salud mental. <a href="#consultorios">Ver fotos</a>. Elegí el día y el horario, y confirmá con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
-  </header>
+  <nav class="nav gutter" aria-label="Principal"><div class="ancho">
+    <img src="img/logo-azul.png" alt="Psico Studios" width="69" height="38">
+    <ul><li><a href="#consultorios">Consultorios</a></li><li><a href="#precios">Precios</a></li><li><a href="#como">Cómo funciona</a></li></ul>
+    <a class="btn btn-acento" href="#reservar">Reservar</a>
+  </div></nav>
 
-  <main class="contenedor">
-    <ol class="como-funciona" aria-label="Cómo reservar">
-      <li><span class="cf-num">1</span><span><strong>Elegí días y horarios</strong><small>Uno o varios días, en el consultorio que quieras.</small></span></li>
-      <li><span class="cf-num">2</span><span><strong>Dejá tus datos</strong><small>Nombre, profesión, celular y mail.</small></span></li>
-      <li><span class="cf-num">3</span><span><strong>Pagá la seña</strong><small>El <span data-cfg="porcentaje_sena">50</span>% con Mercado Pago o transferencia, y listo.</small></span></li>
-    </ol>
-
-    <div class="modos" role="tablist" aria-label="Tipo de reserva">
-      <button role="tab" id="tab-suelta" aria-selected="true" aria-controls="vista-suelta">Por horas</button>
-      <button role="tab" id="tab-fijo" aria-selected="false" aria-controls="vista-fijo">Horario fijo semanal</button>
+  <header class="hero gutter"><div class="ancho">
+    <div>
+      <h1>Consultorios por hora en el Microcentro</h1>
+      <p class="bajada">Para profesionales de la salud mental. Elegí día y horario, pagá la seña online y listo. Sin contratos ni permanencia.</p>
+      <ul class="checks">
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>5 consultorios y un salón, amplios, luminosos y con aire acondicionado</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Lunes a sábados de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Horas sueltas o tu horario fijo todas las semanas</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Seña del <span data-cfg="porcentaje_sena">50</span>% con Mercado Pago o transferencia</span></li>
+      </ul>
     </div>
+    <div class="hero-fotos">
+      <img src="img/consultorios/c3-a-chica.jpg" alt="Consultorio 3, con sofá, sillones y ventanales" width="640" height="419">
+      <img src="img/consultorios/espacio-b-chica.jpg" alt="Vista a la avenida desde el edificio" width="640" height="430">
+    </div>
+  </div></header>
 
-    <div id="aviso-general" class="aviso aviso-error oculto" role="alert"></div>
+  <main class="contenedor gutter"><div class="ancho">
+    <section class="reservador" id="reservar" aria-labelledby="titulo-reservar">
+      <div class="res-cab">
+        <div><h2 id="titulo-reservar">Reservá tu consultorio</h2><p>Elegí el día y los horarios. Ves el precio al instante.</p></div>
+        <div class="modos" role="tablist" aria-label="Tipo de reserva">
+          <button role="tab" id="tab-suelta" aria-selected="true" aria-controls="vista-suelta">Por horas</button>
+          <button role="tab" id="tab-fijo" aria-selected="false" aria-controls="vista-fijo">Horario fijo semanal</button>
+        </div>
+      </div>
 
-    <!-- ===================== POR HORAS ===================== -->
-    <section id="vista-suelta" role="tabpanel" aria-labelledby="tab-suelta">
-      <div class="paso">
-        <div class="paso-titulo"><span class="paso-num">1</span><h2>Elegí el día</h2></div>
-        <div class="calendario">
-          <div class="cal-cabecera">
-            <button type="button" id="cal-ant" aria-label="Mes anterior">‹</button>
-            <strong id="cal-mes" aria-live="polite"></strong>
-            <button type="button" id="cal-sig" aria-label="Mes siguiente">›</button>
+      <div id="aviso-general" class="aviso aviso-error oculto" role="alert"></div>
+
+      <!-- ===================== POR HORAS ===================== -->
+      <section id="vista-suelta" role="tabpanel" aria-labelledby="tab-suelta">
+        <div class="paso">
+          <div class="paso-titulo"><span class="paso-num">1</span><h2>Elegí el día</h2></div>
+          <div class="calendario">
+            <div class="cal-cabecera">
+              <button type="button" id="cal-ant" aria-label="Mes anterior">‹</button>
+              <strong id="cal-mes" aria-live="polite"></strong>
+              <button type="button" id="cal-sig" aria-label="Mes siguiente">›</button>
+            </div>
+            <div class="cal-semana" aria-hidden="true"><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span></div>
+            <div class="cal-dias" id="cal-dias"></div>
+            <div class="cal-leyenda"><span class="l-mucho">Hay lugar</span><span class="l-poco">Queda poco</span><span class="l-lleno">Completo o cerrado</span><span class="l-pedido">En tu pedido</span></div>
           </div>
-          <div class="cal-semana" aria-hidden="true"><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span></div>
-          <div class="cal-dias" id="cal-dias"></div>
-          <div class="cal-leyenda"><span class="l-mucho">Hay lugar</span><span class="l-poco">Queda poco</span><span class="l-lleno">Completo o cerrado</span><span class="l-pedido">En tu pedido</span></div>
+          <p class="ayuda">Se puede reservar hasta el <strong id="fecha-max"></strong>.</p>
         </div>
-        <p class="ayuda">Se puede reservar hasta el <strong id="fecha-max"></strong>.</p>
-      </div>
 
-      <div class="paso" id="paso-horas">
-        <div class="paso-titulo"><span class="paso-num">2</span><h2>Elegí horario y consultorio</h2></div>
-        <p style="margin-bottom:.6em"><strong id="dia-elegido"></strong></p>
-        <div class="vista-toggle" role="group" aria-label="Cómo ver los horarios">
-          <button type="button" data-vista-h="grilla" aria-pressed="true">Por consultorio</button>
-          <button type="button" data-vista-h="lista" aria-pressed="false">Solo horarios</button>
+        <div class="paso" id="paso-horas">
+          <div class="paso-titulo"><span class="paso-num">2</span><h2>Elegí horario y consultorio</h2></div>
+          <p style="margin-bottom:.6em"><strong id="dia-elegido"></strong></p>
+          <div class="vista-toggle" role="group" aria-label="Cómo ver los horarios">
+            <button type="button" data-vista-h="grilla" aria-pressed="true">Por consultorio</button>
+            <button type="button" data-vista-h="lista" aria-pressed="false">Solo horarios</button>
+          </div>
+          <div id="horas-suelta"></div>
+          <div class="leyenda">
+            <span><i class="mini mini-libre"></i>Libre: tocalo para elegir</span><span><i class="mini mini-ocupado"></i>Ocupado</span><span><i class="mini mini-elegido"></i>Elegido</span>
+            <span>Mañana hasta las <span data-cfg="hora_fin_manana">13</span> hs · Tarde desde las <span data-cfg="hora_fin_manana">13</span> hs</span>
+          </div>
+          <div id="seleccion" class="seleccion" aria-live="polite"></div>
         </div>
-        <div id="horas-suelta"></div>
-        <div class="leyenda">
-          <span><i class="mini mini-libre"></i>Libre: tocalo para elegir</span><span><i class="mini mini-ocupado"></i>Ocupado</span><span><i class="mini mini-elegido"></i>Elegido</span>
-          <span>☀️ Mañana hasta las <span data-cfg="hora_fin_manana">13</span> hs · 🌙 Tarde desde las <span data-cfg="hora_fin_manana">13</span> hs</span>
+      </section>
+
+      <!-- ===================== FIJO ===================== -->
+      <section id="vista-fijo" role="tabpanel" aria-labelledby="tab-fijo" class="oculto">
+        <div class="aviso aviso-info chico">El horario fijo es el mismo día y hora todas las semanas, con precio preferencial. Por la mañana, desde 1 hora; por la tarde (desde las 13 hs), mínimo 2 horas seguidas. Lo confirmamos por WhatsApp.</div>
+        <div class="paso">
+          <div class="paso-titulo"><span class="paso-num">1</span><h2>¿Qué día de la semana?</h2></div>
+          <div class="chips" id="dias-fijo"></div>
         </div>
-        <div id="seleccion" class="seleccion" aria-live="polite"></div>
-      </div>
+        <div class="paso oculto" id="paso-inicio-fijo">
+          <div class="paso-titulo"><span class="paso-num">2</span><h2>¿Desde cuándo?</h2></div>
+          <div class="chips" id="inicio-fijo"></div>
+        </div>
+        <div class="paso oculto" id="paso-horas-fijo">
+          <div class="paso-titulo"><span class="paso-num">3</span><h2>Elegí los horarios</h2></div>
+          <p class="suave chico">Se muestran las horas libres <strong>todas las semanas</strong>.</p>
+          <div id="horas-fijo" class="horas"></div>
+          <div id="aviso-bloque" class="aviso aviso-alerta chico oculto">Por la tarde (desde las 13 hs) el horario fijo es de 2 horas seguidas como mínimo.</div>
+        </div>
+      </section>
     </section>
 
-    <!-- ===================== FIJO ===================== -->
-    <section id="vista-fijo" role="tabpanel" aria-labelledby="tab-fijo" class="oculto">
-      <div class="aviso aviso-info chico">El horario fijo es el mismo día y hora todas las semanas, con precio preferencial. Por la mañana, desde 1 hora; por la tarde (desde las 13 hs), mínimo 2 horas seguidas. Lo confirmamos por WhatsApp.</div>
-      <div class="paso">
-        <div class="paso-titulo"><span class="paso-num">1</span><h2>¿Qué día de la semana?</h2></div>
-        <div class="chips" id="dias-fijo"></div>
-      </div>
-      <div class="paso oculto" id="paso-inicio-fijo">
-        <div class="paso-titulo"><span class="paso-num">2</span><h2>¿Desde cuándo?</h2></div>
-        <div class="chips" id="inicio-fijo"></div>
-      </div>
-      <div class="paso oculto" id="paso-horas-fijo">
-        <div class="paso-titulo"><span class="paso-num">3</span><h2>Elegí los horarios</h2></div>
-        <p class="suave chico">Se muestran las horas libres <strong>todas las semanas</strong>.</p>
-        <div id="horas-fijo" class="horas"></div>
-        <div id="aviso-bloque" class="aviso aviso-alerta chico oculto">Por la tarde (desde las 13 hs) el horario fijo es de 2 horas seguidas como mínimo.</div>
-      </div>
+    <!-- ===================== CÓMO FUNCIONA ===================== -->
+    <section class="seccion" id="como" aria-labelledby="titulo-como">
+      <header><h2 id="titulo-como">Cómo funciona</h2></header>
+      <ol class="como-funciona">
+        <li><span class="cf-num">1</span><strong>Elegí días y horarios</strong><small>Hasta dos meses adelante. Podés sumar varios días en un mismo pedido.</small></li>
+        <li><span class="cf-num">2</span><strong>Completá tus datos</strong><small>Nombre, profesión, celular y mail. Los recordamos para la próxima.</small></li>
+        <li><span class="cf-num">3</span><strong>Pagá la seña del <span data-cfg="porcentaje_sena">50</span>%</strong><small>Mercado Pago la confirma al instante. Si transferís, subís el comprobante.</small></li>
+      </ol>
     </section>
 
     <!-- ===================== CONSULTORIOS ===================== -->
-    <section id="consultorios" style="margin-top:28px" aria-labelledby="titulo-galeria">
-      <h2 id="titulo-galeria">Conocé los consultorios</h2>
-      <p class="suave" style="margin-top:-.2em">Todos son amplios, luminosos y tienen aire acondicionado. Tocá uno para ver sus fotos.</p>
+    <section class="seccion" id="consultorios" aria-labelledby="titulo-galeria">
+      <header><h2 id="titulo-galeria">Conocé los consultorios</h2><p>Todos son amplios, luminosos y tienen aire acondicionado. Tocá uno para ver sus fotos.</p></header>
       <div class="galeria" id="galeria"></div>
     </section>
 
     <!-- ===================== PRECIOS ===================== -->
-    <section class="tarjeta" style="margin-top:28px" aria-labelledby="titulo-precios">
-      <h2 id="titulo-precios">Precios por hora</h2>
-      <table class="precios">
-        <thead><tr><th></th><th>Mañana</th><th>Tarde</th></tr></thead>
-        <tbody id="tabla-precios"><tr><td colspan="3"><div class="cargando">Cargando…</div></td></tr></tbody>
-      </table>
-      <p class="ayuda" style="margin-top:.8em">Abierto de lunes a sábado, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs.</p>
+    <section class="seccion" id="precios" aria-labelledby="titulo-precios">
+      <header><h2 id="titulo-precios">Precios por hora</h2><p>Mañana de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_fin_manana">13</span> hs · Tarde de <span data-cfg="hora_fin_manana">13</span> a <span data-cfg="hora_cierre">21</span> hs · Lunes a sábados.</p></header>
+      <div class="planes" id="tabla-precios"><div class="cargando">Cargando…</div></div>
+      <p class="nota-precios">La reserva se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>%.</p>
     </section>
 
-    <section class="tarjeta ayuda-cta" style="margin-top:16px" aria-labelledby="titulo-ayuda">
+    <section class="ayuda-cta" aria-labelledby="titulo-ayuda">
       <div>
-        <h2 id="titulo-ayuda" style="margin-bottom:.2em">¿Tenés algún problema?</h2>
-        <p class="suave" style="margin:0">Escribinos por WhatsApp y te ayudamos: <strong style="white-space:nowrap">+54 9 11 7822-4918</strong></p>
+        <h2 id="titulo-ayuda">¿Tenés algún problema?</h2>
+        <p>Escribinos por WhatsApp y te ayudamos: <b>+54 9 11 7822-4918</b></p>
       </div>
       <a class="btn btn-wa" data-ayuda target="_blank" rel="noopener" href="https://wa.me/5491178224918">Escribinos por WhatsApp</a>
     </section>
-  </main>
+  </div></main>
+
+  <footer class="pie gutter"><div class="ancho"><span>Psico Studios · Consultorios por hora en Microcentro, Buenos Aires</span><span>Lunes a sábados de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs</span></div></footer>
 
   <!-- Barra inferior con el resumen -->
   <div class="barra oculto" id="barra">

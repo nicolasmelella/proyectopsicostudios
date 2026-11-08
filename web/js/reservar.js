@@ -68,10 +68,12 @@ async function cargarBase() {
 function pintarPrecios() {
   const hoy = hoyAR();
   const hm = Number(estado.cfg.hora_apertura), ht = Number(estado.cfg.hora_fin_manana);
-  const fila = (mod, nombre) => `<tr><th scope="row">${nombre}</th>
-    <td>${pesos(precioHora(estado.precios, estado.cfg, mod, hm, hoy))}</td>
-    <td>${pesos(precioHora(estado.precios, estado.cfg, mod, ht, hoy))}</td></tr>`;
-  $('#tabla-precios').innerHTML = fila('suelta', 'Por horas') + fila('fijo', 'Horario fijo');
+  const plan = (mod, nombre, texto, destacado) => `<div class="plan ${destacado ? 'dest' : ''}">
+    ${destacado ? '<span class="tag">Ahorrás todas las semanas</span>' : ''}<h3>${nombre}</h3><p>${texto}</p>
+    <dl><dt>Mañana</dt><dd>${pesos(precioHora(estado.precios, estado.cfg, mod, hm, hoy))} <small>/ hora</small></dd>
+      <dt>Tarde</dt><dd>${pesos(precioHora(estado.precios, estado.cfg, mod, ht, hoy))} <small>/ hora</small></dd></dl></div>`;
+  $('#tabla-precios').innerHTML = plan('suelta', 'Horas sueltas', 'Reservás cuando lo necesitás.', false)
+    + plan('fijo', 'Horario fijo', 'El mismo día, horario y consultorio cada semana.', true);
 }
 
 const mostrarError = (msg) => {
