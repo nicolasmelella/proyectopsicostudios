@@ -125,6 +125,69 @@ function conectarComentario(params) {
   });
 }
 
+// Compartir la reserva con el profesional (mensaje listo para copiar o mandar por WhatsApp)
+const primerNombre = (n) => String(n || '').trim().split(' ')[0];
+const diaCorto = (f) => `${DIAS[diaSemana(f)]} ${Number(f.slice(8))}/${Number(f.slice(5, 7))}`;
+function horarioTexto(horas) {
+  const hs = [...horas].map(Number).sort((a, b) => a - b);
+  const tramos = [];
+  for (const h of hs) { const u = tramos.at(-1); if (u && u[1] === h) u[1] = h + 1; else tramos.push([h, h + 1]); }
+  return tramos.map(([a, b]) => `de ${a} a ${b} hs`).join(' y ');
+}
+async function compartirReserva(r, pagado) {
+  // Si es un pedido de varios días, el mensaje los lista todos
+  let lista = [{ ...r, consultorio: r.consultorios?.nombre }];
+  let pagadoTotal = pagado, totalTotal = r.precio_total;
+  if (r.pedido_id) {
+    const { data } = await sb.from('reservas').select('*, consultorios(nombre)').eq('pedido_id', r.pedido_id);
+    const vig = (data || []).filter((x) => ['pendiente', 'confirmada'].includes(x.estado)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    if (vig.length > 1) {
+      lista = vig.map((x) => ({ ...x, consultorio: x.consultorios?.nombre }));
+      const { data: pg } = await sb.from('pagos').select('reserva_id, monto, anulado').in('reserva_id', vig.map((x) => x.id));
+      pagadoTotal = (pg || []).filter((p) => !p.anulado).reduce((s, p) => s + p.monto, 0);
+      totalTotal = vig.reduce((s, x) => s + x.precio_total, 0);
+    }
+  }
+  if (!['pendiente', 'confirmada'].includes(r.estado)) return;
+  const confirmada = lista.every((x) => x.estado === 'confirmada');
+  const lineas = lista.map((x) => `• ${diaCorto(x.fecha)}, ${horarioTexto(x.horas)}, en el ${x.consultorio}`).join('\n');
+  const saldo = totalTotal - pagadoTotal;
+  const senaFalta = Math.max(0, lista.reduce((s, x) => s + sena(x.precio_total), 0) - pagadoTotal);
+  const texto = confirmada
+    ? `Hola ${primerNombre(r.profesionales.nombre)}! Te confirmamos tu reserva en Psico Studios:\n\n${lineas}\n\n${saldo > 0 ? `Saldo a abonar: ${pesos(saldo)}. ¡Te esperamos!` : 'Ya está todo pago. ¡Te esperamos!'}`
+    : `Hola ${primerNombre(r.profesionales.nombre)}! Tenemos guardada tu reserva en Psico Studios:\n\n${lineas}\n\nPara confirmarla falta la seña de ${pesos(senaFalta)}.${st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : ''}`;
+  pintarCompartir(texto, r.profesionales.whatsapp, confirmada ? '' : 'Todavía falta la seña: el mensaje lo avisa.');
+}
+function textoFijo(f) {
+  return `Hola ${primerNombre(f.profesionales.nombre)}! Te confirmamos tu horario fijo en Psico Studios:\n\n`
+    + `• Todos los ${f.dia_semana === 6 ? 'sábados' : DIAS[f.dia_semana].toLowerCase()}, ${horarioTexto(f.horas)}, en el ${f.consultorios.nombre}\n`
+    + `• Desde el ${diaCorto(f.desde).toLowerCase()}\n\n¡Te esperamos!`;
+}
+function pintarCompartir(texto, whatsapp, nota = '') {
+  const cont = $('#compartir');
+  if (!cont) return;
+  const tieneWa = /^\d{8,}$/.test(String(whatsapp || '').replace(/\D/g, ''));
+  cont.innerHTML = `<div class="bloque compartir" style="margin-bottom:1.4em">
+    <label for="compartir-texto"><strong>Compartir con el profesional</strong></label>
+    ${nota ? `<p class="ayuda" style="margin:0 0 .4em">${esc(nota)}</p>` : ''}
+    <textarea id="compartir-texto" rows="7">${esc(texto)}</textarea>
+    <div class="grupo-btn" style="margin-top:.6em">
+      <button type="button" class="btn btn-primario btn-chico" id="compartir-copiar">Copiar mensaje</button>
+      ${tieneWa ? '<a class="btn btn-wa btn-chico" id="compartir-wa" target="_blank" rel="noopener" href="#">Enviar por WhatsApp</a>' : '<span class="ayuda">Sin WhatsApp cargado: copiá el mensaje y mandalo a mano.</span>'}
+    </div></div>`;
+  const ta = $('#compartir-texto');
+  $('#compartir-copiar').onclick = async () => {
+    try { await navigator.clipboard.writeText(ta.value); toast('Mensaje copiado'); }
+    catch { ta.focus(); ta.select(); toast('Seleccioné el mensaje: copialo con Ctrl+C'); }
+  };
+  const wa = $('#compartir-wa');
+  if (wa) {
+    const actualizar = () => { wa.href = waLink(whatsapp, ta.value); };
+    ta.addEventListener('input', actualizar);
+    actualizar();
+  }
+}
+
 // ================================================================ sesión
 let temporizador = null;
 function reiniciarInactividad() {
@@ -970,6 +1033,7 @@ async function detalleReserva(id) {
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
     ${bloqueComentario(r.comentario)}
+    <div id="compartir"></div>
     ${(pagos || []).length ? `<h3>Pagos</h3><ul class="datos">${pagos.map((p) => `<li><span>${fechaCorta(p.pagado_en)} · ${esc(nombreMedio(p.medio))}${p.recibio ? ` · le pagaron a ${esc(p.recibio)}` : ''}${p.anulado ? ' · <s>anulado</s>' : ''}</span>
       <span>${pesos(p.monto)} ${!p.anulado ? `<button class="btn btn-peligro btn-chico" data-anular="${p.id}" style="margin-left:6px">Anular</button>` : ''}</span></li>`).join('')}</ul>` : ''}
     ${vigente && falta > 0 ? `
@@ -996,6 +1060,7 @@ async function detalleReserva(id) {
   const errEl = $('#det-error');
   $$('[data-monto]').forEach((b) => (b.onclick = () => { $('#pg-monto').value = b.dataset.monto; }));
   conectarComentario({ p_reserva_id: r.id });
+  compartirReserva(r, pagado);
   const recibioPago = conectarRecibio('pg-recibio');
   $('#form-pago')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1069,6 +1134,7 @@ async function detalleFijo(id, fecha, liberado) {
       ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(f.precio_semanal * veces)} (${veces} semanas)</span></li>` : ''}
     </ul>
     ${bloqueComentario(f.comentario, 'Vale para todas las semanas de este fijo.')}
+    <div id="compartir"></div>
     <div id="det-error" class="aviso aviso-error oculto" role="alert"></div>
     ${esSolicitud ? `<div class="grupo-btn"><button class="btn btn-acento" id="btn-aprobar">Aprobar</button><button class="btn btn-peligro" id="btn-rechazar">Rechazar</button></div>` : ''}
     ${f.estado === 'activo' ? `
@@ -1108,6 +1174,7 @@ async function detalleFijo(id, fecha, liberado) {
     act('dar_baja_fijo', { p_fijo_id: f.id, p_desde: desde }, 'Fijo dado de baja');
   });
   conectarComentario({ p_fijo_id: f.id });
+  if (f.estado === 'activo') pintarCompartir(textoFijo(f), f.profesionales.whatsapp);
   const recibioFijo = conectarRecibio('pf-recibio');
   $('#form-pago-fijo')?.addEventListener('submit', async (e) => {
     e.preventDefault();
