@@ -412,6 +412,7 @@ async function pintarSemana() {
   ajustarZoom();
 
   $$('[data-anotar]', cont).forEach((b) => (b.onclick = () => {
+    if (arrastre.recien) { arrastre.recien = false; return; }
     const [d, c, h] = b.dataset.anotar.split('|');
     modalAnotar({ fecha: d, consultorio: Number(c), hora: Number(h) });
   }));
@@ -698,6 +699,60 @@ function pintarNiveles(A, niveles = nivelesActuales()) {
   };
 }
 
+// ---------- Arrastrar con el mouse para elegir varias horas seguidas ----------
+// Se aprieta en un casillero libre, se arrastra hacia arriba o abajo (mismo día y consultorio) y al soltar se abre "Anotar".
+const arrastre = { inicio: null, fin: null, recien: false };
+function rangoArrastre() {
+  if (!arrastre.inicio || !arrastre.fin) return [];
+  const [d, c, h0] = arrastre.inicio.split('|');
+  const h1 = Number(arrastre.fin.split('|')[2]);
+  const paso = h1 >= Number(h0) ? 1 : -1;
+  const out = [];
+  for (let h = Number(h0); ; h += paso) {
+    const b = document.querySelector(`#semana [data-anotar="${d}|${c}|${h}"]`);
+    if (!b) break;                    // un casillero ocupado corta el rango
+    out.push(b);
+    if (h === h1) break;
+  }
+  return out;
+}
+function pintarArrastre() {
+  $$('#semana .sc.arrastre').forEach((b) => { b.classList.remove('arrastre'); delete b.dataset.rango; });
+  const r = rangoArrastre();
+  if (r.length < 2) return;
+  const hs = r.map((b) => Number(b.dataset.anotar.split('|')[2])).sort((a, b) => a - b);
+  r.forEach((b) => b.classList.add('arrastre'));
+  const primero = r.find((b) => Number(b.dataset.anotar.split('|')[2]) === hs[0]);
+  primero.dataset.rango = `${hs[0]} a ${hs.at(-1) + 1} hs`;
+}
+$('#semana').addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('[data-anotar]');
+  if (!b || e.pointerType !== 'mouse' || e.button !== 0) return;
+  e.preventDefault();                 // que no se seleccione texto al arrastrar
+  arrastre.inicio = arrastre.fin = b.dataset.anotar;
+});
+document.addEventListener('pointermove', (e) => {
+  if (!arrastre.inicio) return;
+  const b = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-anotar]');
+  if (!b) return;
+  const [d, c] = arrastre.inicio.split('|');
+  if (!b.dataset.anotar.startsWith(`${d}|${c}|`) || b.dataset.anotar === arrastre.fin) return;
+  arrastre.fin = b.dataset.anotar;
+  pintarArrastre();
+});
+document.addEventListener('pointerup', () => {
+  if (!arrastre.inicio) return;
+  const r = rangoArrastre();
+  arrastre.inicio = arrastre.fin = null;
+  pintarArrastre();
+  if (r.length < 2) return;           // fue un clic común: lo maneja el clic del casillero
+  arrastre.recien = true;
+  setTimeout(() => { arrastre.recien = false; }, 400);
+  const hs = r.map((b) => Number(b.dataset.anotar.split('|')[2])).sort((a, b) => a - b);
+  const [d, c] = r[0].dataset.anotar.split('|');
+  modalAnotar({ fecha: d, consultorio: Number(c), hora: hs[0], horas: hs.length });
+});
+
 // ---------- Notas de la semana ----------
 function pintarNotas() {
   const ul = $('#se-notas');
@@ -724,11 +779,12 @@ $('#form-nota').onsubmit = async (e) => {
 // ---------- Anotar (lo que piden por WhatsApp) ----------
 const normal = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-function modalAnotar({ fecha, consultorio, hora, liberado }) {
+function modalAnotar({ fecha, consultorio, hora, liberado, horas: horasIniciales = 1 }) {
   const c = st.consultorios.find((x) => x.id === consultorio);
   const cierre = Number(st.cfg.hora_cierre || 21);
   const libreEn = (h) => h < cierre && (!datosSemana.mapa.get(`${fecha}|${consultorio}|${h}`) || datosSemana.mapa.get(`${fecha}|${consultorio}|${h}`).tipo === 'liberado');
-  const maxHoras = (() => { let n = 0; while (n < 6 && libreEn(hora + n)) n++; return n; })();
+  const maxHoras = (() => { let n = 0; while (n < 13 && libreEn(hora + n)) n++; return n; })();
+  const opcionesHoras = [...new Set([1, 2, 3, 4, horasIniciales])].sort((a, b) => a - b);
   const nombres = [...new Set(st.profesionales.map((p) => p.nombre))];
   abrirModal(`
     <h2 id="modal-titulo">Anotar</h2>
@@ -748,7 +804,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
       </div>
       <div class="campo">
         <label>¿Cuántas horas?</label>
-        <div class="grupo-grande" id="a-horas">${[1, 2, 3, 4].map((n) => `<button type="button" class="chip" data-n="${n}" aria-pressed="${n === 1}" ${n > maxHoras ? 'disabled title="Esas horas ya están ocupadas o es la hora de cierre"' : ''}>${n}</button>`).join('')}</div>
+        <div class="grupo-grande" id="a-horas">${opcionesHoras.map((n) => `<button type="button" class="chip" data-n="${n}" aria-pressed="${n === horasIniciales}" ${n > maxHoras ? 'disabled title="Esas horas ya están ocupadas o es la hora de cierre"' : ''}>${n}</button>`).join('')}</div>
         <div class="ayuda" id="a-rango"></div>
       </div>
       <div class="campo">
@@ -769,7 +825,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado }) {
       <button class="btn btn-acento btn-bloque" id="a-guardar" style="min-height:56px;font-size:1.1rem">Anotar</button>
     </form>`);
 
-  let horasN = 1, pago = 'nada', persona = null;
+  let horasN = Math.min(horasIniciales, Math.max(maxHoras, 1)), pago = 'nada', persona = null;
   const total = () => { let t = 0; for (let i = 0; i < horasN; i++) t += precioSuelta(fecha, hora + i); return t; };
   const actualizar = () => {
     $('#a-rango').textContent = `De ${hora} a ${hora + horasN} hs · Total ${pesos(total())}`;

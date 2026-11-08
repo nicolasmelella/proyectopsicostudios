@@ -118,6 +118,10 @@
           text-align: left; padding: .25em .35em; color: var(--texto); overflow: hidden; }
     .sc.vacia:hover, .sc.vacia:focus-visible { background: rgba(111,143,184,.18); }
     .sc.vacia:hover::after { content: "+ anotar"; font-size: .72rem; color: var(--azul); font-weight: 700; }
+    #semana table.semana { user-select: none; -webkit-user-select: none; }
+    .sc.vacia.arrastre { background: var(--rosa); box-shadow: inset 2px 0 0 var(--azul), inset -2px 0 0 var(--azul); }
+    .sc.vacia.arrastre::after { content: none; }
+    .sc.vacia.arrastre[data-rango]::after { content: attr(data-rango); font-size: .72rem; font-weight: 800; color: var(--azul); white-space: nowrap; }
     .sc .n { display: block; font-weight: 700; font-size: .8rem; line-height: 1.15; overflow-wrap: anywhere; hyphens: auto; }
     .sc .e { display: block; font-size: .68rem; margin-top: .1em; opacity: .85; }
     .s-fijo { background: #cfe8c4; }
@@ -312,7 +316,7 @@
             <button class="btn btn-borde btn-chico" id="se-imprimir">Imprimir</button>
           </div>
         </div>
-        <p class="como-usar">👉 Tocá un casillero <strong>vacío</strong> para anotar a alguien. Tocá un <strong>nombre</strong> para cobrar, liberar o cancelar.</p>
+        <p class="como-usar">Tocá un casillero <strong>vacío</strong> para anotar a alguien. En la compu podés <strong>apretar y arrastrar hacia abajo</strong> para elegir varias horas de una vez. Tocá un <strong>nombre</strong> para cobrar, liberar o cancelar.</p>
         <div class="grilla-wrap" id="se-wrap"><div id="semana"><div class="cargando" style="padding:1em">Cargando semana…</div></div></div>
         <div class="leyenda-se">
           <span class="l-fijo">Fijo</span><span class="l-suelta">Horas sueltas (señada)</span><span class="l-sinsena">Sin seña</span>
