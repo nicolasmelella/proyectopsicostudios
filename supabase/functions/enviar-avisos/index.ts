@@ -103,7 +103,7 @@ function cajaTransferencia(t: any = {}, monto?: number, titulo = 'Datos para tra
   return `<div style="background:#ffffff;border:1.5px dashed #6f8fb8;border-radius:12px;padding:12px 14px;margin:12px 0">
     <div style="font-weight:bold;margin-bottom:6px">${esc(titulo)}</div>
     ${filas.map(([a, b]) => `<div>${esc(a)}: <strong>${esc(b)}</strong></div>`).join('')}
-    <div style="margin-top:6px;color:${SUAVE};font-size:13px">Transferí desde tu banco o billetera y enviá la reserva con el comprobante por WhatsApp (botón de abajo).</div></div>`;
+    <div style="margin-top:6px;color:${SUAVE};font-size:13px">Enviá la reserva por WhatsApp (botón de abajo), transferí y mandá la captura en ese mismo chat.</div></div>`;
 }
 
 const linkPedido = (sitio: string, d: any) => `${sitio}/?ver=${d.pedido}&t=${d.token}`;
@@ -111,7 +111,11 @@ const linkPedido = (sitio: string, d: any) => `${sitio}/?ver=${d.pedido}&t=${d.t
 function linkWhatsComprobante(d: any, monto: number, que: string) {
   const num = String(d.transferencia?.whatsapp || '').replace(/\D/g, '');
   if (num.length < 8) return null;
-  const texto = `Hola! Soy ${String(d.nombre || '').trim()}. Hice la reserva #${d.pedido} (${que}). Te envío el comprobante de la transferencia (${pesos(monto)}) para confirmarla.`;
+  const t = d.transferencia || {};
+  const datos = [configurado(t.alias) ? `Alias: ${t.alias}` : null, configurado(t.cvu) ? `CVU: ${t.cvu}` : null,
+    configurado(t.titular) ? `Titular: ${t.titular}` : null].filter(Boolean);
+  const texto = [`Hola! Soy ${String(d.nombre || '').trim()}. Reservé por la web (pedido #${d.pedido}):`, `• ${que}`, `A pagar: ${pesos(monto)}`,
+    ...(datos.length ? ['', 'Datos para transferir:', ...datos] : []), '', 'Ahora transfiero y te mando el comprobante por acá 👇'].join('\n');
   return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
 }
 const soloWhats = `<p style="margin:10px 0 0;font-size:13px;color:${SUAVE}">La reserva se confirma cuando recibimos el comprobante por WhatsApp.</p>`;

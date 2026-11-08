@@ -516,7 +516,7 @@ $('#btn-continuar').onclick = () => {
   $('#resumen-datos').innerHTML = filas.map(([a, b]) => `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join('');
   const textoSuelta = () => {
     const todo = document.querySelector('input[name="pagar"]:checked')?.value === 'total';
-    return `Entiendo que ${c.dias > 1 ? 'las reservas se confirman' : 'la reserva se confirma'} cuando transfiero ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}`} y envío el comprobante por WhatsApp${todo ? '' : ', y que el saldo se paga hasta el día anterior al turno'}.`;
+    return `Entiendo que ${c.dias > 1 ? 'las reservas se confirman' : 'la reserva se confirma'} cuando transfiero ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}`} y mando el comprobante por WhatsApp${todo ? '' : ', y que el saldo se paga hasta el día anterior al turno'}.`;
   };
   document.querySelectorAll('input[name="pagar"]').forEach((r) => (r.onchange = () => { $('#acepto-texto').textContent = textoSuelta(); }));
   $('#acepto-texto').textContent = estado.modo === 'suelta'
@@ -633,7 +633,7 @@ function pantallaPago(p, nombre = '') {
   const elegido = { cuanto: puedeElegir ? (p.preferencia === 'total' ? 'total' : 'sena') : 'total', medio: mpActivo() ? 'mp' : 'transf' };
   if (!esFijo && !puedeElegir && falta.sena > 0) elegido.cuanto = 'sena';
   const n = p.reservas.length;
-  const textoWa = (monto) => mensajeComprobante(p, nombre, monto);
+  const textoWa = (monto) => mensajeComprobante(p, nombre, monto, esFijo ? 'total' : elegido.cuanto);
 
   const resumen = esFijo ? `
     <div class="pago-resumen">
@@ -692,24 +692,24 @@ function pantallaPago(p, nombre = '') {
         <button class="btn btn-mp btn-bloque" id="pagar-mp">Pagar ${pesos(monto)} con Mercado Pago</button>
         <p class="ayuda centro">Tarjeta de débito, crédito o dinero en cuenta. Se confirma al instante.</p>
         <div id="aviso-mp" class="aviso aviso-error oculto" role="alert"></div>` : `
-        ${hayDatos ? `<div class="cuenta-datos">
+        <ol class="pasos-pago">
+          <li><span>1</span><div>Tocá <strong>Enviar reserva por WhatsApp</strong>: nos llega tu pedido con los datos para transferir.</div></li>
+          <li><span>2</span><div>Transferí <strong>${pesos(monto)}</strong>.</div></li>
+          <li><span>3</span><div>Mandá la captura de la transferencia <strong>en ese mismo chat</strong>. Te confirmamos por ahí.</div></li>
+        </ol>
+        <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
+        <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong></p>
+        ${hayDatos ? `<p class="cuenta-titulo">Datos para transferir <span>(también te llegan en el chat)</span></p><div class="cuenta-datos">
             ${fila('Monto', pesos(monto), String(monto), false)}
             ${configurado(estado.cfg.alias_transferencia) ? fila('Alias', estado.cfg.alias_transferencia, estado.cfg.alias_transferencia, true) : ''}
             ${configurado(estado.cfg.cvu_transferencia) ? fila('CVU', estado.cfg.cvu_transferencia, estado.cfg.cvu_transferencia, false) : ''}
             ${configurado(estado.cfg.titular_transferencia) ? fila('Titular', estado.cfg.titular_transferencia, null, false) : ''}
-          </div>` : `<p class="aviso aviso-info">Escribinos por WhatsApp y te pasamos los datos para transferir ${pesos(monto)}.</p>`}
-        <ol class="pasos-pago">
-          <li><span>1</span><div>Transferí <strong>${pesos(monto)}</strong> a esta cuenta.</div></li>
-          <li><span>2</span><div>Tocá <strong>Enviar reserva por WhatsApp</strong> y adjuntá la captura de la transferencia.</div></li>
-          <li><span>3</span><div>Te confirmamos la reserva por WhatsApp.</div></li>
-        </ol>
-        <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
-        <p class="ayuda centro">Se abre el chat con tu reserva escrita. <strong>La reserva se confirma cuando recibimos el comprobante.</strong></p>`}`;
+          </div>` : `<p class="aviso aviso-info">Te pasamos los datos para transferir por WhatsApp.</p>`}`}`;
     document.querySelectorAll('[data-cuanto]').forEach((b) => (b.onclick = () => { elegido.cuanto = b.dataset.cuanto; pintar(); $(`[data-cuanto="${elegido.cuanto}"]`).focus(); }));
     document.querySelectorAll('[data-medio]').forEach((b) => (b.onclick = () => { elegido.medio = b.dataset.medio; pintar(); $(`[data-medio="${elegido.medio}"]`).focus(); }));
     $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(p.pedido, p.token, e.currentTarget, $('#aviso-mp'), esFijo ? 'total' : elegido.cuanto));
     $('#link-wa').href = linkWhatsApp(waEquipo(), textoWa(monto));
-    $('#enviar-wa')?.addEventListener('click', () => setTimeout(() => pantallaFinal(p, nombre, monto, true), 300));
+    $('#enviar-wa')?.addEventListener('click', () => setTimeout(() => pantallaFinal(p, nombre, monto, true, esFijo ? 'total' : elegido.cuanto), 300));
     conectarComprobante(p.pedido, p.token, () => {
       const fin = document.createElement('button');
       fin.type = 'button';
@@ -813,29 +813,43 @@ async function mostrarRetorno(id, token, resultado, pagoMP = null) {
   conectarVolver();
 }
 // Mensaje para mandar el comprobante por WhatsApp, con todo el pedido
-function mensajeComprobante(p, nombre, monto) {
+function mensajeComprobante(p, nombre, monto, cuanto = 'sena') {
   const quien = (nombre || '').trim() || 'quien hizo la reserva';
-  const que = p.tipo === 'fijo' && p.fijo
-    ? `mi horario fijo de los ${DIAS[p.fijo.dia].toLowerCase()}, ${rangos(p.fijo.horas)}, ${p.fijo.consultorio}, desde el ${fechaLarga(p.fijo.desde).toLowerCase()}`
-    : p.reservas.map((x) => `${fechaLarga(x.fecha).toLowerCase()}, ${rangos(x.horas)}, ${x.consultorio}`).join('; ');
-  return `Hola! Soy ${quien}. Hice la reserva #${p.pedido} (${que}). Te envío el comprobante de la transferencia (${pesos(monto)}) para confirmarla.`;
+  const c = estado.cfg;
+  const turnos = p.tipo === 'fijo' && p.fijo
+    ? [`Horario fijo: todos los ${DIAS[p.fijo.dia].toLowerCase()}, ${rangos(p.fijo.horas)}, ${p.fijo.consultorio}, desde el ${fechaLarga(p.fijo.desde).toLowerCase()}`]
+    : p.reservas.map((x) => `${fechaLarga(x.fecha)}, ${rangos(x.horas)}, ${x.consultorio}`);
+  const pago = p.tipo === 'fijo' ? `Primer mes: ${pesos(monto)}`
+    : (p.pagado || 0) > 0 ? `Saldo: ${pesos(monto)}`
+    : cuanto === 'total' ? `Pago el total: ${pesos(monto)}` : `Pago la seña: ${pesos(monto)} (total ${pesos(p.total)})`;
+  const datos = [configurado(c.alias_transferencia) ? `Alias: ${c.alias_transferencia}` : null,
+    configurado(c.cvu_transferencia) ? `CVU: ${c.cvu_transferencia}` : null,
+    configurado(c.titular_transferencia) ? `Titular: ${c.titular_transferencia}` : null].filter(Boolean);
+  return [`Hola! Soy ${quien}. Reservé por la web (pedido #${p.pedido}):`, ...turnos.map((t) => `• ${t}`), pago,
+    ...(datos.length ? ['', 'Datos para transferir:', ...datos] : []), '', 'Ahora transfiero y te mando el comprobante por acá 👇'].join('\n');
 }
 
 // Cierre: después de mandar el comprobante por WhatsApp (porWa) o de subirlo acá
-function pantallaFinal(p, nombre, monto, porWa = false) {
+function pantallaFinal(p, nombre, monto, porWa = false, cuanto = 'sena') {
   clearInterval(reloj);
   const primer = (nombre || '').trim().split(' ')[0];
-  const textoWa = mensajeComprobante(p, nombre, monto);
+  const textoWa = mensajeComprobante(p, nombre, monto, cuanto);
+  const c = estado.cfg;
   $('#contenido-resultado').innerHTML = `
     <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
     <div class="icono" aria-hidden="true">✓</div>
     <h2 id="titulo-resultado">¡Listo${primer ? `, ${esc(primer)}` : ''}!</h2>
-    <p>${porWa ? `Se abrió el chat de WhatsApp con tu pedido. <strong>Adjuntá la captura del comprobante (${pesos(monto)}) y enviá.</strong> Apenas veamos la transferencia, te confirmamos por ahí.`
-      : `Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.`}</p>
+    ${porWa ? `<p>Se abrió WhatsApp con tu reserva: <strong>enviá el mensaje</strong>.</p>
+      <ol class="pasos-pago" style="text-align:left">
+        <li><span>1</span><div>Enviá el mensaje que se abrió en WhatsApp.</div></li>
+        <li><span>2</span><div>Transferí <strong>${pesos(monto)}</strong>${configurado(c.alias_transferencia) ? ` al alias <strong>${esc(c.alias_transferencia)}</strong>` : ''}.</div></li>
+        <li><span>3</span><div>Mandá la captura <strong>en ese mismo chat</strong>. Te confirmamos por ahí.</div></li>
+      </ol>`
+      : `<p>Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.</p>`}
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(p.pedido)}</strong></p>${listaReservas(p.reservas)}
     <p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>
     <a class="btn btn-wa btn-bloque btn-subir" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa)}">${ICONO.wa}<span>${porWa ? 'Abrir WhatsApp de nuevo' : 'Avisar por WhatsApp'}</span></a>
-    <p class="ayuda centro" style="margin:.4em 0 .8em">${porWa ? '¿No se abrió? Tocá el botón.' : 'Se abre el chat con el mensaje listo.'} Adjuntá la captura con el clip 📎 y enviá.</p>
+    <p class="ayuda centro" style="margin:.4em 0 .8em">${porWa ? '¿No se abrió o no lo enviaste? Tocá el botón.' : 'Se abre el chat con el mensaje listo.'}</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
   const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
   $('#cerrar-resultado').onclick = volver;
