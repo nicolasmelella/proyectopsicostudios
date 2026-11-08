@@ -218,6 +218,17 @@
     .modal h2 { font-size: 1.3rem; }
     .resultado { text-align: center; }
     .resultado .modal-cerrar { z-index: 1; }
+    /* Seña o total (en "Tus datos") */
+    .elegir-pago { border: 0; padding: 0; margin: 0 0 1em; display: grid; gap: 8px; }
+    .elegir-pago legend { font-weight: 700; margin-bottom: 8px; padding: 0; color: var(--azul); }
+    .opcion-pago { display: flex; gap: .7em; align-items: flex-start; padding: 12px 14px; border: 1.5px solid var(--borde);
+                   border-radius: 12px; cursor: pointer; background: #fff; font-weight: 500; }
+    .opcion-pago input { width: 22px; min-height: 22px; margin: .1em 0 0; flex: 0 0 auto; accent-color: var(--azul); }
+    .opcion-pago span { display: flex; flex-direction: column; }
+    .opcion-pago small { color: var(--texto-suave); font-size: .85rem; }
+    .opcion-pago:has(input:checked) { border-color: var(--azul); box-shadow: 0 0 0 1px var(--azul); }
+    .opcion-pago:has(input:focus-visible) { outline: 3px solid var(--celeste); outline-offset: 2px; }
+    .fin-pago { margin-top: .8em; }
     /* Pantalla de pago */
     #contenido-resultado:has(.pago-cab) { text-align: left; background: var(--fondo); }
     .pasos { list-style: none; display: flex; align-items: center; gap: .5em; padding: 0 44px 0 0; margin: 0 0 1em; font-size: .85rem; font-weight: 600; color: var(--azul); }
@@ -489,6 +500,13 @@
       <h2 id="titulo-datos">Tus datos</h2>
       <ul class="resumen-lista" id="resumen-datos"></ul>
       <form id="form-datos" novalidate>
+        <fieldset class="elegir-pago" id="elegir-pago">
+          <legend>¿Cuánto querés pagar ahora?</legend>
+          <label class="opcion-pago"><input type="radio" name="pagar" value="sena" checked>
+            <span><strong>Dejo la seña · <span id="op-sena"></span></strong><small>El resto lo pago el día del turno.</small></span></label>
+          <label class="opcion-pago"><input type="radio" name="pagar" value="total">
+            <span><strong>Pago todo · <span id="op-total"></span></strong><small>Y no pago nada más.</small></span></label>
+        </fieldset>
         <p class="suave chico" style="margin-top:0">Todos los datos son obligatorios.</p>
         <div class="campo">
           <label for="f-nombre">Nombre y apellido</label>

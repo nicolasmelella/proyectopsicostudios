@@ -507,15 +507,22 @@ $('#btn-continuar').onclick = () => {
   const c = calculo();
   const filas = estado.modo === 'suelta'
     ? [...diasPedido().map(([f, it]) => [fechaLarga(f), `${rangos(it.horas)} · ${it.consultorio ? nombreCons(it.consultorio) : 'te asignamos uno'}`]),
-       ['Total', pesos(c.total)], ['Seña (' + (estado.cfg.porcentaje_sena || 50) + '%)', pesos(c.sena)]]
+       ['Total', pesos(c.total)]]
     : [['Día', 'Todos los ' + DIAS[estado.dia].toLowerCase()], ['Desde', fechaLarga(estado.desde)],
        ['Horario', rangos(c.horas)], ['Por semana', pesos(c.semanal)],
        [`Primer mes (${c.semanas} ${c.semanas === 1 ? 'semana' : 'semanas'})`, pesos(c.primerMes)]];
+  $('#elegir-pago').classList.toggle('oculto', estado.modo !== 'suelta');
+  if (estado.modo === 'suelta') { $('#op-sena').textContent = pesos(c.sena); $('#op-total').textContent = pesos(c.total); }
   $('#resumen-datos').innerHTML = filas.map(([a, b]) => `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join('');
   const min = Number(estado.cfg.retencion_suelta_minutos || 120);
   const tiempo = min % 60 === 0 ? `${min / 60} ${min === 60 ? 'hora' : 'horas'}` : `${min} minutos`;
+  const textoSuelta = () => {
+    const todo = document.querySelector('input[name="pagar"]:checked')?.value === 'total';
+    return `Entiendo que ${c.dias > 1 ? 'los horarios se guardan' : 'el horario se guarda'} ${tiempo} y se ${c.dias > 1 ? 'confirman' : 'confirma'} cuando pago ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}`}. Si no, se ${c.dias > 1 ? 'liberan solos' : 'libera solo'}.`;
+  };
+  document.querySelectorAll('input[name="pagar"]').forEach((r) => (r.onchange = () => { $('#acepto-texto').textContent = textoSuelta(); }));
   $('#acepto-texto').textContent = estado.modo === 'suelta'
-    ? `Entiendo que ${c.dias > 1 ? 'los horarios se guardan' : 'el horario se guarda'} ${tiempo} y se ${c.dias > 1 ? 'confirman' : 'confirma'} cuando pago la seña de ${pesos(c.sena)} (o el total). Si no, se ${c.dias > 1 ? 'liberan solos' : 'libera solo'}.`
+    ? textoSuelta()
     : `Entiendo que el horario se guarda ${tiempo} y se confirma cuando pago el primer mes (${pesos(c.primerMes)}). Después se paga mes a mes, por adelantado. Si no pago, se libera solo.`;
   $('#btn-enviar').textContent = estado.modo === 'suelta' ? 'Reservar y pagar' : 'Reservar fijo y pagar';
   $('#aviso-form').classList.add('oculto');
@@ -577,7 +584,7 @@ $('#form-datos').onsubmit = async (e) => {
       estado.pedido.clear();
       estado.horas.clear();
       estado.consultorio = null;
-      pantallaPago({ ...data, tipo: 'suelta', pagado: 0 }, nombre);
+      pantallaPago({ ...data, tipo: 'suelta', pagado: 0, preferencia: document.querySelector('input[name="pagar"]:checked')?.value }, nombre);
     } else {
       const { data, error } = await sb.rpc('crear_fijo_web', {
         p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion, p_email: email,
@@ -625,7 +632,7 @@ function pantallaPago(p, nombre = '') {
   const pagado = p.pagado || 0;
   const falta = { sena: Math.max(0, p.sena - pagado), total: Math.max(0, p.total - pagado) };
   const puedeElegir = !esFijo && falta.sena > 0 && falta.sena < falta.total;
-  const elegido = { cuanto: puedeElegir ? 'sena' : 'total', medio: mpActivo() ? 'mp' : 'transf' };
+  const elegido = { cuanto: puedeElegir ? (p.preferencia === 'total' ? 'total' : 'sena') : 'total', medio: mpActivo() ? 'mp' : 'transf' };
   if (!esFijo && !puedeElegir && falta.sena > 0) elegido.cuanto = 'sena';
   const n = p.reservas.length;
   const textoWa = (monto) => `Hola! Soy ${nombre || 'quien hizo el pedido'} #${p.pedido}. ` + (esFijo
@@ -702,7 +709,15 @@ function pantallaPago(p, nombre = '') {
     document.querySelectorAll('[data-medio]').forEach((b) => (b.onclick = () => { elegido.medio = b.dataset.medio; pintar(); $(`[data-medio="${elegido.medio}"]`).focus(); }));
     $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(p.pedido, p.token, e.currentTarget, $('#aviso-mp'), esFijo ? 'total' : elegido.cuanto));
     $('#link-wa').href = linkWhatsApp(waEquipo(), textoWa(monto));
-    conectarComprobante(p.pedido, p.token);
+    conectarComprobante(p.pedido, p.token, () => {
+      const fin = document.createElement('button');
+      fin.type = 'button';
+      fin.className = 'btn btn-primario btn-bloque fin-pago';
+      fin.textContent = 'Finalizar';
+      fin.onclick = () => pantallaFinal(p, nombre, falta[elegido.cuanto]);
+      $('#comp-estado').append(fin);
+      fin.focus();
+    });
   };
   pintar();
   abrir('#modal-resultado');
@@ -790,6 +805,24 @@ async function mostrarRetorno(id, token, resultado) {
   }
   conectarVolver();
 }
+// Cierre después de transferir y subir el comprobante
+function pantallaFinal(p, nombre, monto) {
+  clearInterval(reloj);
+  const primer = (nombre || '').trim().split(' ')[0];
+  $('#contenido-resultado').innerHTML = `
+    <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
+    <div class="icono" aria-hidden="true">✓</div>
+    <h2 id="titulo-resultado">¡Listo${primer ? `, ${esc(primer)}` : ''}!</h2>
+    <p>Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.</p>
+    <p style="margin-bottom:.4em">Pedido <strong>#${esc(p.pedido)}</strong></p>${listaReservas(p.reservas)}
+    <p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>
+    <button class="btn btn-acento btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
+  const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
+  $('#cerrar-resultado').onclick = volver;
+  $('#nueva-reserva').onclick = volver;
+  $('#titulo-resultado').focus?.();
+}
+
 // Datos de estado_pago_pedido → pantalla de pago
 const desdeEstado = (r, token, aviso) => ({ pedido: r.id, token, tipo: r.tipo || 'suelta', total: r.total, sena: r.sena, pagado: r.pagado,
   expira_en: r.expira_en, reservas: r.reservas, fijo: r.fijo, aviso });
@@ -880,7 +913,7 @@ function bloqueComprobante() {
   </div>`;
 }
 
-function conectarComprobante(pedido, token) {
+function conectarComprobante(pedido, token, alTerminar) {
   document.querySelectorAll('[data-copiar]').forEach((b) => (b.onclick = async () => {
     try {
       await navigator.clipboard.writeText(b.dataset.copiar);
@@ -902,10 +935,11 @@ function conectarComprobante(pedido, token) {
     try {
       const r = await subirComprobante(pedido, token, archivo);
       const hasta = r?.horarios_guardados_hasta ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires',
-        weekday: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(r.horarios_guardados_hasta)) : null;
+        weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(r.horarios_guardados_hasta)) : null;
       el.className = 'aviso aviso-ok';
       el.innerHTML = `✓ <strong>Recibimos tu comprobante.</strong> Lo revisamos y te confirmamos por WhatsApp.${hasta ? ` Tus horarios quedan guardados hasta el ${esc(hasta)} hs.` : ''}
         <br><span class="chico">¿Te faltó alguno? Podés subir otro.</span>`;
+      alTerminar?.();
     } catch (err) {
       el.className = 'aviso aviso-error';
       el.textContent = mensajeError(err);
