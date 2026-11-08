@@ -370,7 +370,7 @@
         <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>5 consultorios y un salón, amplios, luminosos y con aire acondicionado</span></li>
         <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Lunes a sábados de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs</span></li>
         <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Horas sueltas o tu horario fijo todas las semanas</span></li>
-        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Seña del <span data-cfg="porcentaje_sena">50</span>% con Mercado Pago o transferencia</span></li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Seña del <span data-cfg="porcentaje_sena">50</span>% por transferencia, sin comisiones</span></li>
       </ul>
     </div>
     <div class="carrusel" id="carrusel" role="region" aria-roledescription="carrusel" aria-label="Fotos de Psico Studios">
@@ -457,7 +457,7 @@
       <ol class="como-funciona">
         <li><span class="cf-num">1</span><strong>Elegí días y horarios</strong><small>Hasta dos meses adelante. Podés sumar varios días en un mismo pedido.</small></li>
         <li><span class="cf-num">2</span><strong>Completá tus datos</strong><small>Nombre, profesión, celular y mail. Los recordamos para la próxima.</small></li>
-        <li><span class="cf-num">3</span><strong>Pagá la seña del <span data-cfg="porcentaje_sena">50</span>%</strong><small>Mercado Pago la confirma al instante. Si transferís, subís el comprobante.</small></li>
+        <li><span class="cf-num">3</span><strong>Pagá la seña del <span data-cfg="porcentaje_sena">50</span>%</strong><small>Transferís al alias y subís el comprobante. El saldo, hasta el día anterior al turno.</small></li>
       </ol>
     </section>
 
@@ -471,7 +471,7 @@
     <section class="seccion" id="precios" aria-labelledby="titulo-precios">
       <header><h2 id="titulo-precios">Precios por hora</h2><p>Mañana de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_fin_manana">13</span> hs · Tarde de <span data-cfg="hora_fin_manana">13</span> a <span data-cfg="hora_cierre">21</span> hs · Lunes a sábados.</p></header>
       <div class="planes" id="tabla-precios"><div class="cargando">Cargando…</div></div>
-      <p class="nota-precios">Por horas: se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>% (o pagás el total). Fijo: se paga el primer mes.</p>
+      <p class="nota-precios">Por horas: se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>% (o pagás el total); el saldo, hasta el día anterior al turno. Fijo: se paga el primer mes.</p>
     </section>
 
     <section class="ayuda-cta" aria-labelledby="titulo-ayuda">
@@ -503,7 +503,7 @@
         <fieldset class="elegir-pago" id="elegir-pago">
           <legend>¿Cuánto querés pagar ahora?</legend>
           <label class="opcion-pago"><input type="radio" name="pagar" value="sena" checked>
-            <span><strong>Dejo la seña · <span id="op-sena"></span></strong><small>El resto lo pago el día del turno.</small></span></label>
+            <span><strong>Dejo la seña · <span id="op-sena"></span></strong><small>El resto lo pago hasta el día anterior al turno.</small></span></label>
           <label class="opcion-pago"><input type="radio" name="pagar" value="total">
             <span><strong>Pago todo · <span id="op-total"></span></strong><small>Y no pago nada más.</small></span></label>
         </fieldset>

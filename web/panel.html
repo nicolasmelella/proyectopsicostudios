@@ -260,7 +260,11 @@
       #btn-letra .largo { display: none; }
     }
     @media (max-width: 600px) { .fila2 { grid-template-columns: 1fr; } .barra-herr .der { margin-left: 0; } }
-  </style>
+    .alerta-pago { border-left-width: 1px; }
+  .alerta-cab { display: flex; align-items: center; gap: .5em; flex-wrap: wrap; margin-bottom: .3em; }
+  .alerta-vencida { border-color: #e7b3ae; }
+  .alerta-hoy { border-color: #f0d9a0; }
+</style>
 </head>
 <body>
   <!-- ===================== LOGIN ===================== -->
@@ -435,6 +439,8 @@
 
       <!-- PENDIENTES -->
       <section data-vista="pendientes" class="oculto">
+        <div class="seccion-titulo"><h2>Alertas de pago</h2><span class="suave chico">Nada se cancela solo: ustedes deciden qué hacer</span></div>
+        <div id="lista-alertas" class="lista"></div>
         <div id="bloque-comprobantes" class="oculto">
           <div class="seccion-titulo"><h2>Comprobantes para revisar</h2><span class="suave chico">Transferencias que subieron desde la web</span></div>
           <div id="lista-comprobantes" class="lista"></div>
@@ -443,8 +449,6 @@
           <div class="seccion-titulo"><h2>Pagos de Mercado Pago a revisar</h2><span class="suave chico">Pagaron pero no se pudo aplicar: devolver o reubicar</span></div>
           <div id="lista-revisar" class="lista"></div>
         </div>
-        <div class="seccion-titulo"><h2>Reservas esperando la seña</h2><span class="suave chico">Se liberan solas al vencer</span></div>
-        <div id="lista-pend" class="lista"></div>
         <div class="seccion-titulo"><h2>Solicitudes de horario fijo</h2></div>
         <div id="lista-sol" class="lista"></div>
       </section>

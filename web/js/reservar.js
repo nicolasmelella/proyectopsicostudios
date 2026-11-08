@@ -514,16 +514,14 @@ $('#btn-continuar').onclick = () => {
   $('#elegir-pago').classList.toggle('oculto', estado.modo !== 'suelta');
   if (estado.modo === 'suelta') { $('#op-sena').textContent = pesos(c.sena); $('#op-total').textContent = pesos(c.total); }
   $('#resumen-datos').innerHTML = filas.map(([a, b]) => `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join('');
-  const min = Number(estado.cfg.retencion_suelta_minutos || 120);
-  const tiempo = min % 60 === 0 ? `${min / 60} ${min === 60 ? 'hora' : 'horas'}` : `${min} minutos`;
   const textoSuelta = () => {
     const todo = document.querySelector('input[name="pagar"]:checked')?.value === 'total';
-    return `Entiendo que ${c.dias > 1 ? 'los horarios se guardan' : 'el horario se guarda'} ${tiempo} y se ${c.dias > 1 ? 'confirman' : 'confirma'} cuando pago ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}`}. Si no, se ${c.dias > 1 ? 'liberan solos' : 'libera solo'}.`;
+    return `Entiendo que ${c.dias > 1 ? 'las reservas se confirman' : 'la reserva se confirma'} cuando pago ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}, y que el saldo se paga hasta el día anterior al turno`}.`;
   };
   document.querySelectorAll('input[name="pagar"]').forEach((r) => (r.onchange = () => { $('#acepto-texto').textContent = textoSuelta(); }));
   $('#acepto-texto').textContent = estado.modo === 'suelta'
     ? textoSuelta()
-    : `Entiendo que el horario se guarda ${tiempo} y se confirma cuando pago el primer mes (${pesos(c.primerMes)}). Después se paga mes a mes, por adelantado. Si no pago, se libera solo.`;
+    : `Entiendo que el horario fijo se confirma cuando pago el primer mes (${pesos(c.primerMes)}), y que después se paga cada mes por adelantado.`;
   $('#btn-enviar').textContent = estado.modo === 'suelta' ? 'Reservar y pagar' : 'Reservar fijo y pagar';
   $('#aviso-form').classList.add('oculto');
   cargarMisDatos();
@@ -661,8 +659,10 @@ function pantallaPago(p, nombre = '') {
     ${pasosPago()}
     ${p.aviso ? `<p class="aviso aviso-alerta" role="alert">${esc(p.aviso)}</p>` : ''}
     <div class="pago-cab">
-      <h2 id="titulo-resultado">${esFijo ? 'Tu horario fijo está guardado' : n > 1 ? 'Tus horarios están guardados' : 'Tu horario está guardado'}</h2>
-      ${p.expira_en ? `<span class="reloj-chip">${ICONO.reloj}<span>Te lo guardamos <span id="cuenta">${faltan(p.expira_en)}</span></span></span>` : ''}
+      <h2 id="titulo-resultado">${esFijo ? 'Tu horario fijo está reservado' : pagado ? (n > 1 ? 'Tus reservas están confirmadas' : 'Tu reserva está confirmada')
+        : n > 1 ? 'Tus horarios están reservados' : 'Tu horario está reservado'}</h2>
+      <span class="reloj-chip">${ICONO.reloj}<span>${esFijo ? 'Se confirma al pagar el primer mes' : pagado ? `Saldo: hasta el ${esc(fechaLarga(sumarDias(p.reservas[0].fecha, -1)))}`
+        : `Pagá la seña para confirmar · el saldo, hasta el ${esc(fechaLarga(sumarDias(p.reservas[0].fecha, -1)))}`}</span></span>
       <span class="pago-pedido">Pedido #${esc(p.pedido)}</span>
     </div>
     ${resumen}
@@ -676,14 +676,14 @@ function pantallaPago(p, nombre = '') {
 
   const pintar = () => {
     const monto = falta[elegido.cuanto];
-    const que = esFijo ? 'el primer mes' : elegido.cuanto === 'total' ? 'el total' : 'la seña';
+    const que = esFijo ? 'el primer mes' : pagado ? 'el saldo' : elegido.cuanto === 'total' ? 'el total' : 'la seña';
     const hayDatos = configurado(estado.cfg.alias_transferencia) || configurado(estado.cfg.cvu_transferencia);
     const fila = (etiqueta, valor, copiar, principal) => `<div class="cuenta-fila"><div><span>${etiqueta}</span><strong>${esc(valor)}</strong></div>
       ${copiar ? `<button type="button" class="btn btn-chico ${principal ? 'btn-primario' : 'btn-borde'}" data-copiar="${esc(copiar)}" aria-label="Copiar ${etiqueta.toLowerCase()}">Copiar</button>` : ''}</div>`;
     $('#pago-cuerpo').innerHTML = `
       <h3 id="pago-titulo">Pagá ${que}: ${pesos(monto)}</h3>
       ${puedeElegir ? `<div class="selector" role="group" aria-label="Cuánto pagás ahora">
-          <button type="button" data-cuanto="sena" aria-pressed="${elegido.cuanto === 'sena'}"><strong>Seña ${pesos(falta.sena)}</strong><span>el resto, el día del turno</span></button>
+          <button type="button" data-cuanto="sena" aria-pressed="${elegido.cuanto === 'sena'}"><strong>Seña ${pesos(falta.sena)}</strong><span>el resto, hasta el día anterior</span></button>
           <button type="button" data-cuanto="total" aria-pressed="${elegido.cuanto === 'total'}"><strong>Total ${pesos(falta.total)}</strong><span>y no pagás nada más</span></button>
         </div>` : ''}
       ${mpActivo() ? `<div class="selector selector-medio" role="group" aria-label="Medio de pago">
@@ -807,7 +807,7 @@ async function mostrarRetorno(id, token, resultado, pagoMP = null) {
       <p>${varios ? 'Los horarios quedaron libres' : 'El horario quedó libre'}. Podés hacer una reserva nueva cuando quieras.</p>${botonVolver('Hacer una reserva nueva')}`;
   } else {
     caja.innerHTML = `<h2 id="titulo-resultado">${varios ? 'Las reservas ya no están vigentes' : 'La reserva ya no está vigente'}</h2>${detalle}
-      <p>Venció el tiempo para pagar y ${varios ? 'los horarios se liberaron' : 'el horario se liberó'}. Si llegaste a pagar, escribinos por WhatsApp con el número de pedido y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
+      <p>${varios ? 'Estas reservas ya no están activas' : 'Esta reserva ya no está activa'}. Si tenés dudas o ya pagaste, escribinos por WhatsApp con el número de pedido y lo resolvemos.</p>${botonVolver('Hacer una reserva nueva')}`;
   }
   conectarVolver();
 }
@@ -844,7 +844,7 @@ function confirmado(r, detalle) {
     <div class="dato-pago">
       <div class="fila"><span>Pagaste</span><span class="valor">${pesos(r.pagado)}</span></div>
       ${esFijo ? '<div class="fila"><span>Próximo pago</span><span class="valor">el mes que viene, por adelantado</span></div>'
-        : saldo ? `<div class="fila"><span>Saldo (se abona el día de cada turno)</span><span class="valor">${pesos(saldo)}</span></div>`
+        : saldo ? `<div class="fila"><span>Saldo (hasta el día anterior a cada turno)</span><span class="valor">${pesos(saldo)}</span></div>`
           : '<div class="fila"><span>Saldo</span><span class="valor">No tenés que pagar nada más</span></div>'}
     </div>
     <p class="suave chico">Guardá el número de pedido. ¡Te esperamos!</p>${botonVolver()}`;
@@ -940,7 +940,7 @@ function conectarComprobante(pedido, token, alTerminar) {
       const hasta = r?.horarios_guardados_hasta ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires',
         weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(r.horarios_guardados_hasta)) : null;
       el.className = 'aviso aviso-ok';
-      el.innerHTML = `✓ <strong>Recibimos tu comprobante.</strong> Lo revisamos y te confirmamos por WhatsApp.${hasta ? ` Tus horarios quedan guardados hasta el ${esc(hasta)} hs.` : ''}
+      el.innerHTML = `✓ <strong>Recibimos tu comprobante.</strong> Lo revisamos y te confirmamos por WhatsApp.${hasta ? '' : ''}
         <br><span class="chico">¿Te faltó alguno? Podés subir otro.</span>`;
       alTerminar?.();
     } catch (err) {
@@ -988,7 +988,7 @@ async function mostrarSubirComprobante(id, token) {
   abrir('#modal-resultado');
   const { data: r, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
   if (error) { caja.innerHTML = `<h2 id="titulo-resultado">No encontramos el pedido</h2><p>${esc(mensajeError(error))}</p>${botonVolver()}`; conectarVolver(); return; }
-  if (r.estado === 'pendiente') { pantallaPago(desdeEstado(r, token)); return; }
+  if (r.estado === 'pendiente' || (r.estado === 'confirmada' && r.tipo !== 'fijo' && r.total > r.pagado)) { pantallaPago(desdeEstado(r, token)); return; }
   const detalle = `<p style="margin-bottom:.4em">Pedido <strong>#${esc(r.id)}</strong></p>${listaReservas(r.reservas, true)}`;
   if (r.estado === 'confirmada') caja.innerHTML = confirmado(r, detalle);
   else if (r.reservas.every((x) => x.estado === 'cancelada')) {

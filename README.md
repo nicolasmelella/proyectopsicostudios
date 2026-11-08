@@ -119,6 +119,10 @@ Y `supabase/15_cancelar_pedido.sql` → **Run** (quien reservó desde la web pue
 Y `supabase/16_pagos_completos.sql` → **Run** (horas sueltas: seña **o** total; horario fijo: se paga el **primer mes**
 y queda activo solo). Después volvé a desplegar la función `mp-crear-pago`.
 
+Y `supabase/17_alertas_pago.sql` → **Run**. **Regla: el sistema no cancela nada solo.** Las horas sueltas piden la seña
+al reservar y el saldo se paga hasta el día anterior al turno; los fijos, el primer mes y después mes a mes por adelantado.
+Si falta un pago, aparece en el panel → **Pendientes → Alertas de pago** y el equipo decide.
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

@@ -173,7 +173,10 @@ export function crearClienteDemo() {
       localStorage.setItem(CLAVE_GUARDADO, JSON.stringify({ dia: hoy, seq, db: resto, ocupaciones: [...ocupaciones] }));
     } catch { /* sin almacenamiento */ }
   };
+  // A pedido del equipo: nada se libera ni se cancela solo (ver alertas_pago). Queda sin efecto.
   const liberarVencidas = () => {
+    return;
+    // eslint-disable-next-line no-unreachable
     const ahora = Date.now();
     for (const r of db.reservas) {
       if (r.estado === 'pendiente' && r.expira_en && new Date(r.expira_en) < ahora) {
@@ -730,6 +733,58 @@ export function crearClienteDemo() {
           .map(([id, v]) => ({ profesional_id: id, nombre: p(id).nombre, whatsapp: p(id).whatsapp, ultima: v.ultima, horas: v.h }))
           .sort((a, b) => b.horas - a.horas || (a.nombre < b.nombre ? -1 : 1)).slice(0, 25),
       };
+    },
+    // Copia de 17_alertas_pago.sql
+    alertas_pago() {
+      const dias = Number(cfg('dias_antes_saldo')) || 1;
+      const out = [];
+      const prof = (id) => db.profesionales.find((x) => x.id === id) || {};
+      const cons = (id) => db.consultorios.find((c) => c.id === id)?.nombre;
+      const grav = (limite) => (limite < hoy ? 'vencida' : limite === hoy ? 'hoy' : 'pendiente');
+      for (const r of db.reservas) {
+        if (r.origen === 'excel' || r.fecha < sumarDias(hoy, -30)) continue;
+        const limite = sumarDias(r.fecha, -dias);
+        const p = prof(r.profesional_id);
+        const base = { fecha_turno: r.fecha, horas: r.horas, consultorio: cons(r.consultorio_id), reserva_id: r.id, pedido_id: r.pedido_id, nombre: p.nombre, whatsapp: p.whatsapp };
+        if (r.estado === 'pendiente') {
+          const vencidaSena = r.expira_en && new Date(r.expira_en) < Date.now();
+          out.push({ ...base, tipo: 'sena', texto: 'Falta la seña', gravedad: vencidaSena ? 'vencida' : grav(limite),
+            fecha_limite: r.expira_en ? r.expira_en.slice(0, 10) : limite, falta: sena(r.precio_total) - pagado(r.id), total: r.precio_total - pagado(r.id) });
+        } else if (r.estado === 'confirmada' && limite <= hoy && r.precio_total > pagado(r.id)) {
+          out.push({ ...base, tipo: 'saldo', texto: 'Falta el saldo', gravedad: limite < hoy ? 'vencida' : 'hoy', fecha_limite: limite,
+            falta: r.precio_total - pagado(r.id), total: r.precio_total - pagado(r.id) });
+        }
+      }
+      const pagadoF = (fid, per) => db.pagos.filter((x) => x.fijo_id === fid && x.periodo === per && !x.anulado).reduce((s, x) => s + x.monto, 0);
+      for (const f of db.fijos) {
+        const p = prof(f.profesional_id);
+        const base = { horas: f.horas, consultorio: cons(f.consultorio_id), dia_semana: f.dia_semana, fijo_id: f.id, pedido_id: f.pedido_id, nombre: p.nombre, whatsapp: p.whatsapp };
+        if (f.estado === 'solicitud') {
+          const total = f.pago_inicial || f.precio_semanal;
+          out.push({ ...base, tipo: 'fijo_inicial', texto: 'Falta pagar el primer mes del fijo', gravedad: grav(sumarDias(f.desde, -1)),
+            fecha_turno: f.desde, fecha_limite: sumarDias(f.desde, -1), falta: total - pagadoF(f.id, f.periodo_inicial || f.desde.slice(0, 7)), total });
+        }
+        if (f.estado !== 'activo') continue;
+        const [a, m] = hoy.split('-').map(Number);
+        for (const ini of [new Date(Date.UTC(a, m - 1, 1)), new Date(Date.UTC(a, m, 1))].map((d) => d.toISOString().slice(0, 10))) {
+          const periodo = ini.slice(0, 7);
+          const fechas = [];
+          for (let d = ini; d.slice(0, 7) === periodo; d = sumarDias(d, 1)) {
+            if (d < f.desde || (f.hasta && d > f.hasta) || diaSemana(d) !== f.dia_semana) continue;
+            if (db.fijo_excepciones.some((e) => e.fijo_id === f.id && e.fecha === d)) continue;
+            fechas.push(d);
+          }
+          if (!fechas.length) continue;
+          const monto = f.precio_semanal * fechas.length;
+          const limite = sumarDias(fechas[0], -1);
+          if (monto > pagadoF(f.id, periodo) && limite <= hoy) {
+            out.push({ ...base, tipo: 'fijo_mes', texto: `Falta pagar el mes ${periodo}`, gravedad: limite < hoy ? 'vencida' : 'hoy',
+              fecha_turno: fechas[0], fecha_limite: limite, falta: monto - pagadoF(f.id, periodo), total: monto, periodo });
+          }
+        }
+      }
+      const orden = { vencida: 0, hoy: 1, pendiente: 2 };
+      return out.sort((x, y) => orden[x.gravedad] - orden[y.gravedad] || (x.fecha_turno < y.fecha_turno ? -1 : x.fecha_turno > y.fecha_turno ? 1 : 0));
     },
     pendientes_cobro() {
       const mes = hoy.slice(0, 7);

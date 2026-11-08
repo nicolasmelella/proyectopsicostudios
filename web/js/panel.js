@@ -297,13 +297,12 @@ async function refrescar() {
 }
 
 async function actualizarBadge() {
-  const [r, f, m, c] = await Promise.all([
-    sb.from('reservas').select('id').eq('estado', 'pendiente'),
-    sb.from('fijos').select('id').eq('estado', 'solicitud'),
+  const [a, m, c] = await Promise.all([
+    sb.rpc('alertas_pago'),
     sb.from('pagos_a_revisar').select('id').eq('resuelto', false),
     sb.from('comprobantes').select('id').eq('estado', 'pendiente'),
   ]);
-  const n = (r.data?.length || 0) + (f.data?.length || 0) + (m.data?.length || 0) + (c.data?.length || 0);
+  const n = (a.data?.length || 0) + (m.data?.length || 0) + (c.data?.length || 0);
   const b = $('#badge-pend');
   b.textContent = n;
   b.classList.toggle('oculto', !n);
@@ -368,7 +367,7 @@ function celdaHTML(f, span) {
       estado = f.pagado ? 'Pagada' : `Señada · saldo ${pesos(f.monto_total - f.monto_pagado)}`;
     } else {
       clase = 't-pendiente';
-      estado = f.expira_en ? `Sin seña · vence en ${faltan(f.expira_en)}` : 'Sin seña';
+      estado = 'Sin seña';
     }
   } else if (f.tipo === 'fijo') { clase = 't-fijo'; estado = 'Fijo · ' + (f.pagado ? 'mes pagado ✓' : 'mes sin pagar'); }
   else if (f.tipo === 'solicitud') { clase = 't-solicitud'; estado = 'Solicitud de fijo'; }
@@ -1033,7 +1032,7 @@ async function detalleReserva(id) {
       <li><span>Total</span><span>${pesos(r.precio_total)}</span></li>
       <li><span>Pagado</span><span>${pesos(pagado)}</span></li>
       <li><span>Saldo</span><span>${pesos(falta)}</span></li>
-      ${r.estado === 'pendiente' && r.expira_en ? `<li><span>Vence en</span><span>${faltan(r.expira_en)}</span></li>` : ''}
+
       ${r.motivo_cancelacion ? `<li><span>Motivo</span><span>${esc(r.motivo_cancelacion)}</span></li>` : ''}
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel' + (st.equipo.find((e) => e.user_id === r.creado_por) ? ' por ' + esc(st.equipo.find((e) => e.user_id === r.creado_por).nombre) : '')}</span></li>
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
@@ -1136,7 +1135,7 @@ async function detalleFijo(id, fecha, liberado) {
       <li><span>Consultorio</span><span>${esc(f.consultorios.nombre)}</span></li>
       <li><span>Desde</span><span>${esc(fechaLarga(f.desde))}</span></li>
       <li><span>Precio semanal</span><span>${pesos(f.precio_semanal)}</span></li>
-      ${esSolicitud && f.expira_en ? `<li><span>Se libera en</span><span>${faltan(f.expira_en)}</span></li>` : ''}
+
       ${esSolicitud && f.pago_inicial ? `<li><span>Primer mes a pagar</span><span>${pesos(f.pago_inicial)} (al pagarlo se activa solo)</span></li>` : ''}
       ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(f.precio_semanal * veces)} (${veces} semanas)</span></li>` : ''}
     </ul>
@@ -1433,40 +1432,65 @@ async function pintarComprobantes() {
   }));
 }
 
+// Alertas de pago: lo que falta cobrar y ya está en plazo o vencido. Nunca se cancela nada solo.
+const GRAVEDAD = { vencida: ['pill-error', 'Vencido'], hoy: ['pill-alerta', 'Vence hoy'], pendiente: ['pill-info', 'Pendiente'] };
+function textoAlertaWa(x) {
+  const n = x.nombre.split(' ')[0];
+  const alias = st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : '';
+  const turno = `${fechaLarga(x.fecha_turno)} (${rangos(x.horas)})`;
+  if (x.tipo === 'sena') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Para confirmarla falta la seña de ${pesos(x.falta)}.${alias}`;
+  if (x.tipo === 'saldo') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Te recordamos que el saldo de ${pesos(x.falta)} se paga hasta el ${fechaLarga(x.fecha_limite)}.${alias}`;
+  if (x.tipo === 'fijo_inicial') return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Para confirmarlo falta pagar el primer mes: ${pesos(x.falta)}.${alias}`;
+  return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Te recordamos que falta pagar el mes ${x.periodo}: ${pesos(x.falta)}.${alias}`;
+}
+function pintarAlertas(cont, lista) {
+  if (!lista.length) { cont.innerHTML = '<p class="suave">No hay pagos atrasados ni por vencer. 🎉</p>'; return; }
+  const tieneWa = (w) => /^\d{8,}$/.test(String(w || ''));
+  cont.innerHTML = lista.map((x, i) => {
+    const [clase, etiqueta] = GRAVEDAD[x.gravedad] || GRAVEDAD.pendiente;
+    const esFijo = x.tipo.startsWith('fijo');
+    const que = esFijo ? `Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${rangos(x.horas)} · ${x.consultorio}`
+      : `${fechaLarga(x.fecha_turno)} · ${rangos(x.horas)} · ${x.consultorio}`;
+    return `<div class="item alerta-pago alerta-${esc(x.gravedad)}">
+      <div class="alerta-cab"><span class="pill ${clase}">${etiqueta}</span><strong>${esc(x.texto)}: ${pesos(x.falta)}</strong></div>
+      <h3>${esc(x.nombre)}</h3>
+      <div class="suave chico">${esc(que)}</div>
+      <div class="chico" style="margin-top:.3em">Plazo: hasta el ${esc(fechaLarga(x.fecha_limite))}${x.tipo === 'sena' && x.total > x.falta ? ` · total ${pesos(x.total)}` : ''}</div>
+      <div class="acciones">
+        <button class="btn btn-acento btn-chico" data-alerta="${i}">Ver · registrar pago o cancelar</button>
+        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar por WhatsApp</a>`
+          : '<span class="suave chico">Sin WhatsApp cargado</span>'}
+      </div>
+    </div>`;
+  }).join('');
+  $$('[data-alerta]', cont).forEach((b) => (b.onclick = () => {
+    const x = lista[b.dataset.alerta];
+    if (x.reserva_id) detalleReserva(x.reserva_id); else detalleFijo(x.fijo_id, null, false);
+  }));
+}
+
 async function pintarPendientes() {
   pintarComprobantes();
   pintarPagosRevisar();
-  const lp = $('#lista-pend'), ls = $('#lista-sol');
-  lp.innerHTML = ls.innerHTML = '<div class="cargando">Cargando…</div>';
-  const [r, f] = await Promise.all([
-    sb.from('reservas').select('*, profesionales(nombre, whatsapp), consultorios(nombre)').eq('estado', 'pendiente').order('fecha').order('creado_en'),
+  const la = $('#lista-alertas'), ls = $('#lista-sol');
+  la.innerHTML = ls.innerHTML = '<div class="cargando">Cargando…</div>';
+  const [a, f] = await Promise.all([
+    sb.rpc('alertas_pago'),
     sb.from('fijos').select('*, profesionales(nombre, whatsapp), consultorios(nombre)').eq('estado', 'solicitud').order('creado_en'),
   ]);
-  if (r.error || f.error) { errorEn(null, r.error || f.error); return; }
-
-  lp.innerHTML = r.data.length ? r.data.map((x) => `
-    <div class="item">
-      <h3>${esc(x.profesionales.nombre)}</h3>
-      <div class="suave chico">${esc(fechaLarga(x.fecha))} · ${esc(rangos(x.horas))} · ${esc(x.consultorios.nombre)}</div>
-      <div style="margin-top:.5em">Seña: <strong>${pesos(sena(x.precio_total))}</strong> de ${pesos(x.precio_total)}
-        ${x.expira_en ? `<span class="pill pill-alerta">vence en ${faltan(x.expira_en)}</span>` : '<span class="pill pill-info">cargada en panel</span>'}</div>
-      <div class="acciones">
-        <button class="btn btn-acento btn-chico" data-ver="${x.id}">Registrar seña</button>
-        <a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.profesionales.whatsapp, `Hola ${x.profesionales.nombre.split(' ')[0]}! Te escribimos de Psico Studios por tu reserva del ${fechaLarga(x.fecha)} (${rangos(x.horas)}). Para confirmarla falta la seña de ${pesos(sena(x.precio_total))}. Alias: ${st.cfg.alias_transferencia}.`)}">WhatsApp</a>
-      </div>
-    </div>`).join('') : '<p class="suave">No hay reservas esperando seña. 🎉</p>';
+  if (a.error || f.error) { errorEn(null, a.error || f.error); return; }
+  pintarAlertas(la, a.data || []);
 
   ls.innerHTML = f.data.length ? f.data.map((x) => `
     <div class="item">
       <h3>${esc(x.profesionales.nombre)}</h3>
       <div class="suave chico">Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${esc(rangos(x.horas))} · ${esc(x.consultorios.nombre)}</div>
       <div style="margin-top:.5em">Desde ${esc(fechaLarga(x.desde))} · ${pesos(x.precio_semanal)}/semana
-        ${x.expira_en ? `<span class="pill pill-alerta">se libera en ${faltan(x.expira_en)}</span>` : ''}</div>
+</div>
       ${x.pago_inicial ? `<div class="chico" style="margin-top:.3em">Pidió por la web: esperando que pague el primer mes (<strong>${pesos(x.pago_inicial)}</strong>). Al pagarlo queda activo solo.</div>` : ''}
       <div class="acciones"><button class="btn btn-acento btn-chico" data-fijo="${x.id}">Ver y aprobar</button></div>
     </div>`).join('') : '<p class="suave">No hay solicitudes de fijo.</p>';
 
-  $$('[data-ver]', lp).forEach((b) => (b.onclick = () => detalleReserva(Number(b.dataset.ver))));
   $$('[data-fijo]', ls).forEach((b) => (b.onclick = () => detalleFijo(Number(b.dataset.fijo), null, false)));
 }
 
