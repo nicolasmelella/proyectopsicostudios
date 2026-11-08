@@ -544,7 +544,7 @@ async function pintarNumeros() {
   const barra = (v, clase) => `<div class="col ${clase}" data-ir="${v.p.ini}" title="${nombrePeriodo(v.p)}: ${v.h} horas (${pct(v.oc)})">
       ${clase ? `<span class="val" style="bottom:${(v.oc / max) * 100}%">${pct(v.oc)}</span>` : ''}<div class="bar" style="height:${(v.oc / max) * 100}%"></div></div>`;
   $('#nu-evo').innerHTML = `
-    <div class="ley"><span style="--c:var(--terracota)">${esc(nombrePeriodo(sel))}</span><span style="--c:var(--azul)">${esc(nombrePeriodo(comp))} (comparación)</span><span style="--c:var(--celeste)">Otros</span></div>
+    <div class="ley"><span style="--c:var(--azul)">${esc(nombrePeriodo(sel))}</span><span style="--c:var(--celeste)">${esc(nombrePeriodo(comp))} (comparación)</span><span style="--c:#c9d3e6">Otros</span></div>
     <div class="barras-v">${!enEvo ? barra(compH, 'comp') + '<div style="width:10px"></div>' : ''}${valores.map((v) => barra(v, v.p.ini === sel.ini ? 'actual' : v.p.ini === comp.ini ? 'comp' : '')).join('')}</div>
     <div class="ejes-v">${!enEvo ? `<span>${esc(nombrePeriodo(comp, true))}</span><span style="flex:0 0 10px"></span>` : ''}${valores.map((v) => `<span>${esc(nombrePeriodo(v.p, true))}</span>`).join('')}</div>`;
   $$('#nu-evo [data-ir]').forEach((c) => (c.onclick = () => { nu.sel = periodoDe(c.dataset.ir, nu.tipo); nu.comp = 'anterior'; pintarNumeros(); }));
@@ -600,7 +600,7 @@ async function pintarNumeros() {
     return { c, f: x.horas_fijo, s: x.horas - x.horas_fijo, cap, oc: cap > 0 ? x.horas / cap : 0 };
   });
   const vacio = cons.filter((x) => x.cap > 0).reduce((a, x) => (x.oc < a.oc ? x : a), cons[0]);
-  $('#nu-cons').innerHTML = `<div class="ley"><span style="--c:#3a8a4f">Horas fijas</span><span style="--c:#d9a21b">Horas sueltas</span><span style="--c:#efe9d6">Libres</span></div>
+  $('#nu-cons').innerHTML = `<div class="ley"><span style="--c:#3a8a4f">Horas fijas</span><span style="--c:#d9a21b">Horas sueltas</span><span style="--c:#eef1f6">Libres</span></div>
     ${cons.map((x) => `<div class="fila-cons" title="${esc(x.c.nombre)}: ${x.f} h fijas, ${x.s} h sueltas de ${x.cap} disponibles">
       <div class="t"><span><strong>${esc(x.c.nombre)}</strong> ${x === vacio ? '<span class="pill pill-alerta">Más vacío</span>' : ''}</span>
         <span><strong style="color:var(--texto)">${pct(x.oc)}</strong> · ${x.f} fijas · ${x.s} sueltas</span></div>
