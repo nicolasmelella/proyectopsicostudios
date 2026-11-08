@@ -261,6 +261,7 @@ export function crearClienteDemo() {
     lte(c, v) { this.filtros.push((r) => r[c] <= v); return this; }
     order(c, { ascending = true } = {}) { this.orden.push([c, ascending]); return this; }
     limit(n) { this.lim = n; return this; }
+    range(a, b) { this.rango = [a, b]; return this; }
     update(v) { this.modo = 'update'; this.valores = v; return this; }
     insert(v) { this.modo = 'insert'; this.valores = Array.isArray(v) ? v : [v]; return this; }
     then(ok, mal) { const res = this.ejecutar(); if (this.modo !== 'select') guardar(); return Promise.resolve(res).then(ok, mal); }
@@ -278,6 +279,7 @@ export function crearClienteDemo() {
         filas.sort((a, b) => (a[c] === b[c] ? 0 : (a[c] > b[c]) === asc ? 1 : -1));
       }
       if (this.lim) filas = filas.slice(0, this.lim);
+      if (this.rango) filas = filas.slice(this.rango[0], this.rango[1] + 1);
       return { data: filas, error: null };
     }
   }

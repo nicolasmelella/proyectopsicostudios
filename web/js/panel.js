@@ -1620,6 +1620,82 @@ function editarProfesional(id) {
   };
 }
 
+// ================================================================ COPIA DE SEGURIDAD
+// Lee todo de a tandas (la base entrega hasta 1000 filas por vez)
+async function leerTodo(tabla, campos = '*', orden = 'id') {
+  const filas = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await sb.from(tabla).select(campos).order(orden).range(desde, desde + 999);
+    if (error) throw error;
+    filas.push(...(data || []));
+    if (!data || data.length < 1000) return filas;
+  }
+}
+const nombreDe = (o) => o?.nombre ?? '';
+async function bajarCopia() {
+  const b = $('#btn-copia'), est = $('#copia-estado');
+  b.disabled = true;
+  est.textContent = 'Juntando la información…';
+  try {
+    const [reservas, fijos, pagos, profesionales, bloqueos, excepciones, notas, precios, equipo, consultorios] = await Promise.all([
+      leerTodo('reservas', '*, profesionales(nombre, whatsapp), consultorios(nombre)'),
+      leerTodo('fijos', '*, profesionales(nombre, whatsapp), consultorios(nombre)'),
+      leerTodo('pagos'),
+      leerTodo('profesionales'),
+      leerTodo('bloqueos'),
+      leerTodo('fijo_excepciones', '*', 'fecha'),
+      leerTodo('notas_semana'),
+      leerTodo('precios'),
+      leerTodo('equipo', '*', 'nombre'),
+      leerTodo('consultorios'),
+    ]);
+    est.textContent = 'Armando el Excel…';
+    const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
+    const cons = (id) => consultorios.find((c) => c.id === id)?.nombre || id;
+    const prof = (id) => profesionales.find((p) => p.id === id)?.nombre || '';
+    const pagadoReserva = (id) => pagos.filter((p) => p.reserva_id === id && !p.anulado).reduce((s, p) => s + p.monto, 0);
+    const reservaDe = (id) => reservas.find((r) => r.id === id);
+    const fijoDe = (id) => fijos.find((f) => f.id === id);
+    const hojas = {
+      Reservas: reservas.map((r) => ({ ID: r.id, Fecha: r.fecha, Horario: rangos(r.horas || []), Consultorio: nombreDe(r.consultorios),
+        Profesional: nombreDe(r.profesionales), WhatsApp: r.profesionales?.whatsapp || '', Estado: r.estado, Origen: r.origen,
+        'Tipo (Excel)': r.tipo_excel || '', Total: r.precio_total, Pagado: pagadoReserva(r.id), Falta: r.precio_total - pagadoReserva(r.id),
+        Comentario: r.comentario || '', Pedido: r.pedido_id || '', 'Cargada el': r.creado_en || '' })),
+      Fijos: fijos.map((f) => ({ ID: f.id, Profesional: nombreDe(f.profesionales), WhatsApp: f.profesionales?.whatsapp || '',
+        Día: DIAS[f.dia_semana], Horario: rangos(f.horas || []), Consultorio: nombreDe(f.consultorios), 'Por semana': f.precio_semanal,
+        Estado: f.estado, Desde: f.desde, Hasta: f.hasta || '', Comentario: f.comentario || '' })),
+      Pagos: pagos.map((p) => {
+        const r = p.reserva_id ? reservaDe(p.reserva_id) : null;
+        const f = p.fijo_id ? fijoDe(p.fijo_id) : null;
+        return { ID: p.id, Fecha: p.pagado_en, Monto: p.monto, Medio: p.medio, 'Le pagaron a': p.recibio || '', Anulado: p.anulado ? 'sí' : '',
+          Profesional: nombreDe(r?.profesionales) || nombreDe(f?.profesionales), Es: r ? `Reserva del ${r.fecha}` : f ? `Fijo · mes ${p.periodo}` : '',
+          Reserva: p.reserva_id || '', Fijo: p.fijo_id || '', 'Mercado Pago': p.mp_payment_id || '' };
+      }),
+      Profesionales: profesionales.map((p) => ({ ID: p.id, Nombre: p.nombre, WhatsApp: /^\d+$/.test(p.whatsapp || '') ? p.whatsapp : '',
+        Mail: p.email || '', Profesión: p.profesion || '', Origen: p.origen || '', Notas: p.notas || '' })),
+      Bloqueos: bloqueos.map((x) => ({ Fecha: x.fecha, Consultorio: cons(x.consultorio_id), Desde: `${x.hora_desde}:00`, Hasta: `${x.hora_hasta}:00`, Motivo: x.motivo || '' })),
+      'Fijos que no vienen': excepciones.map((e) => ({ Fecha: e.fecha, Profesional: prof(fijoDe(e.fijo_id)?.profesional_id), Fijo: e.fijo_id, Motivo: e.motivo || '' })),
+      Notas: notas.map((n) => ({ Semana: n.semana, Nota: n.texto, Autor: n.autor_nombre || '' })),
+      Precios: precios.map((p) => ({ Tipo: p.modalidad === 'fijo' ? 'Fijo' : 'Por horas', Franja: p.franja === 'manana' ? 'Mañana' : 'Tarde', 'Precio por hora': p.valor, 'Desde': p.vigente_desde })),
+      Equipo: equipo.map((e) => ({ Nombre: e.nombre, Mail: e.email || '', Rol: e.rol === 'admin' ? 'Administrador' : 'Equipo', Activo: e.activo === false ? 'no' : 'sí' })),
+    };
+    const libro = XLSX.utils.book_new();
+    for (const [nombre, filas] of Object.entries(hojas)) {
+      const hoja = XLSX.utils.json_to_sheet(filas.length ? filas : [{ '(sin datos)': '' }]);
+      hoja['!cols'] = Object.keys(filas[0] || { x: 1 }).map((k) => ({ wch: Math.min(40, Math.max(10, k.length + 2)) }));
+      XLSX.utils.book_append_sheet(libro, hoja, nombre.slice(0, 31));
+    }
+    const archivo = `psicostudios-copia-${hoyAR()}.xlsx`;
+    XLSX.writeFile(libro, archivo);
+    est.textContent = `✓ Listo: se bajó "${archivo}" (${reservas.length} reservas, ${fijos.length} fijos, ${pagos.length} pagos, ${profesionales.length} profesionales).`;
+  } catch (err) {
+    est.textContent = 'No se pudo bajar la copia: ' + mensajeError(err);
+  } finally {
+    b.disabled = false;
+  }
+}
+$('#btn-copia').onclick = bajarCopia;
+
 // ================================================================ AJUSTES
 // Datos de cobro: protegidos en la base, solo se cambian desde Supabase (SQL Editor)
 const CONFIG_PROTEGIDA = [
