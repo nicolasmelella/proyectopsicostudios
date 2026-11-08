@@ -6,6 +6,9 @@ import {
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+// Si se llega desde el link de una invitación o de "olvidé mi contraseña", hay que elegir contraseña.
+// (Se lee antes de crear el cliente, que limpia la dirección.)
+const tipoLink = new URLSearchParams(location.hash.slice(1)).get('type');
 const sb = await crearCliente({ sesionTemporal: true });
 
 const DOMINIO_USUARIOS = 'psicostudios.local';
@@ -234,6 +237,9 @@ async function entrar() {
   }
   $('#login').classList.add('oculto');
   $('#app').classList.remove('oculto');
+  st.admin = !!(await sb.rpc('es_admin')).data;
+  $('#tab-equipo').classList.toggle('oculto', !st.admin);
+  if (!st.admin && st.tab === 'equipo') st.tab = 'semana';
   reiniciarInactividad();
   await cargarBase();
   irA(st.tab);
@@ -281,7 +287,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
+  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -1609,9 +1615,156 @@ $('#form-precio').onsubmit = async (e) => {
   pintarAjustes();
 };
 
+// ================================================================ CONTRASEÑAS
+const ir_al_panel = () => location.origin + location.pathname;
+const ocultarAviso = (el) => { el.classList.add('oculto'); el.textContent = ''; };
+
+// "¿Olvidaste tu contraseña?"
+$('#btn-olvide').onclick = () => {
+  $('#form-login').classList.add('oculto');
+  $('#form-olvide').classList.remove('oculto');
+  const m = $('#l-usuario').value.trim();
+  if (m.includes('@')) $('#o-mail').value = m;
+  ocultarAviso($('#aviso-olvide'));
+  $('#o-mail').focus();
+};
+$('#btn-olvide-volver').onclick = () => {
+  $('#form-olvide').classList.add('oculto');
+  $('#form-login').classList.remove('oculto');
+};
+$('#form-olvide').onsubmit = async (e) => {
+  e.preventDefault();
+  const mail = $('#o-mail').value.trim().toLowerCase();
+  const aviso = $('#aviso-olvide');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
+    aviso.className = 'aviso aviso-error'; aviso.textContent = 'Revisá el mail.'; return;
+  }
+  const btn = $('#btn-olvide-enviar');
+  btn.disabled = true;
+  const { error } = await sb.auth.resetPasswordForEmail(mail, { redirectTo: ir_al_panel() });
+  btn.disabled = false;
+  if (error && /rate|too many|seconds/i.test(error.message || '')) {
+    aviso.className = 'aviso aviso-error'; aviso.textContent = 'Pediste varios links seguidos. Esperá unos minutos y probá de nuevo.'; return;
+  }
+  // Mismo mensaje exista o no el mail (así nadie puede averiguar quién tiene usuario)
+  aviso.className = 'aviso aviso-ok';
+  aviso.textContent = 'Si ese mail tiene usuario, te llegó un correo con un link para elegir una contraseña nueva. Revisá también la carpeta de spam.';
+};
+
+// Pantalla para elegir contraseña (invitación o recuperación)
+function mostrarNuevaClave(tipo) {
+  $('#login').classList.add('oculto');
+  $('#app').classList.add('oculto');
+  $('#nueva-clave').classList.remove('oculto');
+  $('#nc-titulo').textContent = tipo === 'invite' ? '¡Bienvenido/a! Elegí tu contraseña' : 'Elegí tu contraseña nueva';
+  setTimeout(() => $('#nc-1').focus(), 50);
+}
+function validarClave(a, b) {
+  if (a.length < 10) return 'La contraseña tiene que tener 10 caracteres o más.';
+  if (a !== b) return 'Las dos contraseñas no coinciden.';
+  return null;
+}
+$('#form-nueva-clave').onsubmit = async (e) => {
+  e.preventDefault();
+  const aviso = $('#aviso-nc');
+  const problema = validarClave($('#nc-1').value, $('#nc-2').value);
+  if (problema) return errorEn(aviso, problema);
+  const btn = $('#btn-nc');
+  btn.disabled = true;
+  const { error } = await sb.auth.updateUser({ password: $('#nc-1').value });
+  btn.disabled = false;
+  if (error) return errorEn(aviso, /weak|short|length/i.test(error.message || '') ? 'Esa contraseña es muy débil: probá con una más larga.' : error);
+  $('#nc-1').value = $('#nc-2').value = '';
+  history.replaceState(null, '', location.pathname);
+  $('#nueva-clave').classList.add('oculto');
+  toast('Contraseña guardada');
+  await entrar();
+};
+
+// "Mi cuenta": cambiar la propia contraseña
+$('#btn-cuenta').onclick = async () => {
+  const { data } = await sb.auth.getSession();
+  abrirModal(`
+    <h2 id="modal-titulo">Mi cuenta</h2>
+    <ul class="datos"><li><span>Nombre</span><span>${esc(st.yo?.nombre || '—')}</span></li>
+      <li><span>Mail</span><span>${esc(data.session?.user?.email || '—')}</span></li>
+      <li><span>Rol</span><span>${st.admin ? 'Administrador' : 'Equipo'}</span></li></ul>
+    <form id="form-mi-clave" class="bloque" novalidate>
+      <h3>Cambiar mi contraseña</h3>
+      <div class="campo"><label for="mc-1">Contraseña nueva</label><input id="mc-1" type="password" autocomplete="new-password" minlength="10"></div>
+      <div class="campo"><label for="mc-2">Repetila</label><input id="mc-2" type="password" autocomplete="new-password" minlength="10"></div>
+      <p class="ayuda">10 caracteres o más.</p>
+      <div id="mc-error" class="aviso aviso-error oculto" role="alert"></div>
+      <button class="btn btn-primario btn-bloque">Guardar contraseña</button>
+    </form>`);
+  $('#form-mi-clave').onsubmit = async (e) => {
+    e.preventDefault();
+    const problema = validarClave($('#mc-1').value, $('#mc-2').value);
+    if (problema) return errorEn($('#mc-error'), problema);
+    const { error } = await sb.auth.updateUser({ password: $('#mc-1').value });
+    if (error) return errorEn($('#mc-error'), error);
+    cerrarModal();
+    toast('Contraseña cambiada');
+  };
+};
+
+// ================================================================ EQUIPO (solo administradores)
+async function errorDeFuncion(error) {
+  try { return (await error.context?.json?.()) || error; } catch { return error; }
+}
+async function pintarEquipo() {
+  const cont = $('#eq-lista');
+  let lista;
+  try { lista = await llamar('equipo_lista', {}); } catch (err) { cont.innerHTML = ''; errorEn(null, err); return; }
+  const { data: s } = await sb.auth.getSession();
+  const yo = s.session?.user?.id;
+  const fecha = (iso) => (iso ? new Date(iso).toLocaleString('es-AR', { day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' }) : null);
+  cont.innerHTML = `<table class="tabla"><thead><tr><th>Nombre</th><th>Mail</th><th>Rol</th><th>Último ingreso</th><th></th></tr></thead><tbody>
+    ${lista.map((p) => `<tr class="${p.activo ? '' : 'eq-inactivo'}">
+      <td><strong>${esc(p.nombre)}</strong>${p.user_id === yo ? ' <span class="pill pill-info">Vos</span>' : ''}${p.activo ? '' : ' <span class="pill pill-error">Desactivado</span>'}</td>
+      <td>${esc(p.email || '—')}</td>
+      <td>${p.rol === 'admin' ? 'Administrador' : 'Equipo'}</td>
+      <td>${fecha(p.ultimo_ingreso) || '<span class="pill pill-alerta">Todavía no entró</span>'}</td>
+      <td><div class="eq-acc">
+        ${p.email ? `<button class="btn btn-borde btn-chico" data-eq-clave="${esc(p.email)}">Mandar mail para cambiar contraseña</button>` : ''}
+        ${p.user_id !== yo ? `<button class="btn btn-borde btn-chico" data-eq-rol="${p.user_id}" data-rol="${p.rol === 'admin' ? 'equipo' : 'admin'}">${p.rol === 'admin' ? 'Pasar a equipo' : 'Hacer administrador'}</button>
+        <button class="btn ${p.activo ? 'btn-peligro' : 'btn-borde'} btn-chico" data-eq-activo="${p.user_id}" data-activo="${!p.activo}" data-nombre="${esc(p.nombre)}">${p.activo ? 'Desactivar' : 'Reactivar'}</button>` : ''}
+      </div></td></tr>`).join('')}</tbody></table>`;
+  $$('[data-eq-clave]', cont).forEach((b) => (b.onclick = async () => {
+    const { error } = await sb.auth.resetPasswordForEmail(b.dataset.eqClave, { redirectTo: ir_al_panel() });
+    if (error) return errorEn(null, /rate|too many|seconds/i.test(error.message || '') ? 'Se mandaron varios mails seguidos. Esperá unos minutos.' : error);
+    toast('Le mandamos el mail para cambiar la contraseña');
+  }));
+  $$('[data-eq-rol]', cont).forEach((b) => (b.onclick = async () => {
+    try { await llamar('equipo_cambiar', { p_user_id: b.dataset.eqRol, p_rol: b.dataset.rol }, 'Rol cambiado'); pintarEquipo(); } catch (err) { errorEn(null, err); }
+  }));
+  $$('[data-eq-activo]', cont).forEach((b) => (b.onclick = async () => {
+    const activar = b.dataset.activo === 'true';
+    if (!activar && await preguntar({ titulo: `¿Desactivar a ${b.dataset.nombre}?`, texto: 'No va a poder entrar más al panel. Lo que cargó queda guardado. Se puede reactivar cuando quieras.', aceptar: 'Desactivar', peligro: true }) === null) return;
+    try { await llamar('equipo_cambiar', { p_user_id: b.dataset.eqActivo, p_activo: activar }, activar ? 'Reactivado' : 'Desactivado'); pintarEquipo(); } catch (err) { errorEn(null, err); }
+  }));
+}
+$('#form-invitar').onsubmit = async (e) => {
+  e.preventDefault();
+  const aviso = $('#aviso-invitar');
+  ocultarAviso(aviso);
+  const nombre = $('#eq-nombre').value.trim(), email = $('#eq-mail').value.trim().toLowerCase(), rol = $('#eq-rol').value;
+  if (nombre.length < 2) return errorEn(aviso, 'Escribí el nombre.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return errorEn(aviso, 'Revisá el mail.');
+  const btn = $('#btn-invitar');
+  btn.disabled = true; btn.textContent = 'Mandando…';
+  const { error } = await sb.functions.invoke('equipo-admin', { body: { nombre, email, rol } });
+  btn.disabled = false; btn.textContent = 'Mandar invitación';
+  if (error) return errorEn(aviso, await errorDeFuncion(error));
+  $('#eq-nombre').value = $('#eq-mail').value = '';
+  toast(`Invitación enviada a ${email}`);
+  pintarEquipo();
+};
+
 // ================================================================ arranque
 setInterval(() => { if (!$('#app').classList.contains('oculto') && $('#modal').classList.contains('oculto')) refrescar(); }, 60000);
 
 const { data: { session } } = await sb.auth.getSession();
-if (session) await entrar();
+if (session && (tipoLink === 'invite' || tipoLink === 'recovery')) mostrarNuevaClave(tipoLink);
+else if (session) await entrar();
 else $('#login').classList.remove('oculto');

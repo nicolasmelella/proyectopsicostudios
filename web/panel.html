@@ -15,7 +15,13 @@
     /* ---------- Login ---------- */
     #login { min-height: 100vh; display: grid; place-items: center; background: var(--azul); padding: 16px; }
     #login .tarjeta { width: 100%; max-width: 380px; }
-    #login img { width: 170px; margin: 0 auto 24px; }
+    #login img, #nueva-clave img { width: 170px; margin: 0 auto 24px; }
+    #nueva-clave { min-height: 100vh; display: grid; place-items: center; background: var(--azul); padding: 16px; }
+    #nueva-clave .tarjeta, #form-olvide { width: 100%; max-width: 380px; }
+    .link-btn { display: block; margin: 12px auto 0; font: inherit; font-weight: 600; color: var(--azul); background: none; border: 0;
+                text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 6px; }
+    .eq-acc { display: flex; gap: 6px; flex-wrap: wrap; }
+    .eq-inactivo td { color: var(--texto-suave); }
 
     /* ---------- Estructura ---------- */
     .topbar { background: var(--azul); color: var(--crema); position: sticky; top: 0; z-index: 30; }
@@ -263,8 +269,8 @@
       <img src="img/logo-azul.png" alt="Psico Studios" width="170" height="95">
       <h1 style="font-size:1.3rem;text-align:center">Panel del equipo</h1>
       <div class="campo">
-        <label for="l-usuario">Usuario</label>
-        <input id="l-usuario" autocomplete="username" required autocapitalize="none" spellcheck="false">
+        <label for="l-usuario">Mail</label>
+        <input id="l-usuario" type="text" inputmode="email" autocomplete="username" required autocapitalize="none" spellcheck="false" placeholder="tu@mail.com">
       </div>
       <div class="campo">
         <label for="l-clave">Contraseña</label>
@@ -272,7 +278,31 @@
       </div>
       <div id="aviso-login" class="aviso aviso-error oculto" role="alert"></div>
       <button class="btn btn-primario btn-bloque" id="btn-login">Entrar</button>
+      <button type="button" class="link-btn" id="btn-olvide">¿Olvidaste tu contraseña?</button>
       <p class="ayuda centro" style="margin-top:1em">La sesión se cierra sola al cerrar el navegador o tras 60 minutos sin uso.</p>
+    </form>
+    <form class="tarjeta oculto" id="form-olvide" novalidate>
+      <img src="img/logo-azul.png" alt="Psico Studios" width="170" height="95">
+      <h1 style="font-size:1.3rem;text-align:center">Recuperar la contraseña</h1>
+      <p class="suave chico">Escribí tu mail y te mandamos un link para elegir una contraseña nueva.</p>
+      <div class="campo"><label for="o-mail">Mail</label>
+        <input id="o-mail" type="email" inputmode="email" autocomplete="email" required autocapitalize="none" spellcheck="false"></div>
+      <div id="aviso-olvide" class="aviso oculto" role="status"></div>
+      <button class="btn btn-primario btn-bloque" id="btn-olvide-enviar">Mandar el link</button>
+      <button type="button" class="link-btn" id="btn-olvide-volver">← Volver a entrar</button>
+    </form>
+  </section>
+
+  <!-- ===================== ELEGIR CONTRASEÑA (invitación o recuperación) ===================== -->
+  <section id="nueva-clave" class="oculto">
+    <form class="tarjeta" id="form-nueva-clave" novalidate>
+      <img src="img/logo-azul.png" alt="Psico Studios" width="170" height="95">
+      <h1 style="font-size:1.3rem;text-align:center" id="nc-titulo">Elegí tu contraseña</h1>
+      <p class="suave chico">Usá 10 caracteres o más. Mejor si mezcla letras y números, y que no la uses en otro lado.</p>
+      <div class="campo"><label for="nc-1">Contraseña nueva</label><input id="nc-1" type="password" autocomplete="new-password" required minlength="10"></div>
+      <div class="campo"><label for="nc-2">Repetila</label><input id="nc-2" type="password" autocomplete="new-password" required minlength="10"></div>
+      <div id="aviso-nc" class="aviso aviso-error oculto" role="alert"></div>
+      <button class="btn btn-primario btn-bloque" id="btn-nc">Guardar y entrar</button>
     </form>
   </section>
 
@@ -283,8 +313,9 @@
         <img src="img/logo-crema.png" alt="Psico Studios" width="61" height="34">
         <strong>Panel</strong>
         <span class="hola" id="hola"></span>
-        <button class="btn btn-borde btn-chico salir" id="btn-letra" aria-pressed="false" title="Agrandar o achicar la letra">A+ <span class="largo">Letra grande</span></button>
-        <button class="btn btn-borde btn-chico" id="btn-salir" style="color:var(--crema);border-color:rgba(243,238,220,.5)">Cerrar sesión</button>
+        <button class="btn btn-borde btn-chico salir" id="btn-cuenta" style="color:#fff;border-color:rgba(255,255,255,.5)">Mi cuenta</button>
+        <button class="btn btn-borde btn-chico" id="btn-letra" style="color:#fff;border-color:rgba(255,255,255,.5)" aria-pressed="false" title="Agrandar o achicar la letra">A+ <span class="largo">Letra grande</span></button>
+        <button class="btn btn-borde btn-chico" id="btn-salir" style="color:#fff;border-color:rgba(255,255,255,.5)">Cerrar sesión</button>
       </div>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="semana" aria-selected="true">Semana</button>
@@ -294,6 +325,7 @@
         <button role="tab" data-tab="fijos" aria-selected="false">Fijos</button>
         <button role="tab" data-tab="profesionales" aria-selected="false">Profesionales</button>
         <button role="tab" data-tab="ajustes" aria-selected="false">Precios y ajustes</button>
+        <button role="tab" data-tab="equipo" aria-selected="false" id="tab-equipo" class="oculto">Equipo</button>
       </nav>
     </header>
 
@@ -430,6 +462,24 @@
           <span class="suave chico" id="cant-prof"></span>
         </div>
         <div style="overflow-x:auto"><div id="lista-prof"></div></div>
+      </section>
+
+      <!-- EQUIPO (solo administradores) -->
+      <section data-vista="equipo" class="oculto">
+        <div class="seccion-titulo"><h2>Equipo</h2><span class="suave chico">Quiénes pueden entrar al panel. Cada persona entra con su mail y su propia contraseña.</span></div>
+        <form class="tarjeta" id="form-invitar" style="max-width:760px;margin-bottom:18px" novalidate>
+          <h3>Invitar a alguien</h3>
+          <p class="suave chico">Le llega un mail con un link para elegir su contraseña. Nadie más la conoce.</p>
+          <div class="fila2">
+            <div class="campo"><label for="eq-nombre">Nombre y apellido</label><input id="eq-nombre" required maxlength="80"></div>
+            <div class="campo"><label for="eq-mail">Mail</label><input id="eq-mail" type="email" inputmode="email" required maxlength="120" autocapitalize="none"></div>
+            <div class="campo"><label for="eq-rol">Rol</label>
+              <select id="eq-rol"><option value="equipo">Equipo (usa el panel)</option><option value="admin">Administrador (además, maneja el equipo)</option></select></div>
+          </div>
+          <div id="aviso-invitar" class="aviso aviso-error oculto" role="alert"></div>
+          <button class="btn btn-acento" id="btn-invitar">Mandar invitación</button>
+        </form>
+        <div style="overflow-x:auto"><div id="eq-lista"><div class="cargando">Cargando…</div></div></div>
       </section>
 
       <!-- AJUSTES -->

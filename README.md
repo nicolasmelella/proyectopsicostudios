@@ -57,24 +57,27 @@ En Supabase → **SQL Editor** → **New query**. Pegá el archivo entero y toc�
 
 > Si `02` da error con `pg_cron`: Database → Extensions → buscá **pg_cron** → Enable, y corrélo de nuevo.
 
-### Paso 3 · Crear el usuario del equipo
-1. **Authentication → Users → Add user → Create new user**
-   - Email: `psicomel@psicostudios.local`
-   - Password: la contraseña que elijan
-   - Tildá **Auto Confirm User**
-2. **Authentication → Sign In / Providers → Email**: **desactivá "Allow new users to sign up"**.
-   Así nadie puede crearse una cuenta por su cuenta.
+### Paso 3 · Usuarios del equipo (cada persona con su mail real)
+Cada persona entra al panel con **su mail y su propia contraseña**. Nadie más la conoce, y en cada reserva
+queda registrado quién la cargó. Si alguien se olvida la contraseña, la recupera sola desde "¿Olvidaste tu contraseña?".
 
-En el panel se entra escribiendo solo `psicomel` como usuario (el `@psicostudios.local` se agrega solo).
-
-**Un usuario por persona (recomendado, sin costo):** repetí el punto 1 para cada persona del equipo,
-con el formato `nombre@psicostudios.local` (ej: `bianca@psicostudios.local`). Cada una entra con su nombre y
-su propia contraseña, y en cada reserva queda registrado **quién la cargó**. Se habilitan con `09_semana.sql` (paso 4).
+1. **Authentication → Sign In / Providers → Email**:
+   - **desactivá "Allow new users to sign up"** (nadie puede crearse una cuenta por su cuenta);
+   - en **Password requirements**, mínimo **10** caracteres.
+2. **Authentication → URL Configuration**: en **Site URL** poné la dirección de la web y en **Redirect URLs**
+   agregá `https://TU-WEB/panel.html` (a donde llevan los links de invitación y de recuperación).
+3. **Authentication → Emails → SMTP Settings** (recomendado): para que los mails de invitación y de recuperación
+   salgan desde `consultoriospsicostudios@gmail.com` y sin el límite de pocos mails por hora de Supabase.
+   Host `smtp.gmail.com`, puerto `465`, usuario el Gmail y la **contraseña de aplicación** (ver [docs/avisos-mail-y-whatsapp.md](docs/avisos-mail-y-whatsapp.md)).
+4. **Primer administrador:** **Authentication → Users → Invite user** con tu mail. Te llega un mail: tocá el link y elegí tu contraseña.
+   Después, en el paso 4, corré `13_equipo.sql` y el bloque "PRIMER ADMINISTRADOR" que está al final de ese archivo (con tu mail).
+5. **El resto del equipo** lo invita el administrador desde el panel → **Equipo** → "Invitar a alguien"
+   (nombre, mail y rol). Ahí mismo se puede desactivar a alguien, hacerlo administrador o mandarle el mail para cambiar la contraseña.
 
 ### Paso 4 · Aplicar seña, seguridad y Mercado Pago
 SQL Editor → pegá `supabase/03_sena_y_seguridad.sql` → **Run**.
-Tiene que decir *"Listo: ajustes aplicados y usuario psicomel habilitado para el panel"*.
-Si dice que falta el usuario, hacé el paso 3 y volvé a correrlo (se puede correr las veces que haga falta).
+Dice *"Ajustes aplicados…"*. Si además dice que falta el usuario `psicomel`, no pasa nada: ese usuario general
+ya no se usa (ahora cada persona entra con su mail, ver paso 3 y `13_equipo.sql`).
 
 Después, en una consulta nueva: `supabase/04_mercadopago.sql` → **Run** → *"Mercado Pago listo en la base"*.
 (Mercado Pago queda apagado hasta completar la sección de abajo.)
@@ -104,6 +107,10 @@ Y `supabase/11_comentarios.sql` → **Run** → *"Listo: comentarios en reservas
 Y `supabase/12_tablero.sql` → **Run** → *"Listo: tablero de números"*.
 (La pestaña **Números**: ocupación por semana, días y horas más llenos, profesionales con más horas,
 cobrado por persona y lo que falta cobrar. También prepara la base para cargar la historia del Excel.)
+
+Y `supabase/13_equipo.sql` → **Run** → *"Equipo listo: …"* (y el bloque del primer administrador, ver paso 3).
+Después: **Edge Functions → Deploy a new function → Via Editor**, nombre `equipo-admin`, pegá
+`supabase/functions/equipo-admin/index.ts` → **Deploy**. Esta **sí** deja prendido "Enforce JWT verification".
 
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:

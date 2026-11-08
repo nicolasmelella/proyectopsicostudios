@@ -253,7 +253,23 @@ export function crearClienteDemo() {
 
   // ---- funciones (rpc) ----
   const rpcs = {
-    es_equipo: () => !!sesion,
+    es_equipo: () => !!sesion && db.equipo.some((e) => e.user_id === sesion.user.id && e.activo !== false),
+    // ---- 13_equipo.sql ----
+    es_admin: () => !!sesion && db.equipo.some((e) => e.user_id === sesion.user.id && e.activo !== false && e.rol === 'admin'),
+    equipo_lista() {
+      if (!rpcs.es_admin()) return err('NO_AUTORIZADO', 'Solo un administrador puede hacer esto');
+      return db.equipo.map((e) => ({ ...e, activo: e.activo !== false, email: e.email || null, ultimo_ingreso: e.ultimo_ingreso || null }))
+        .sort((a, b) => (b.activo - a.activo) || (a.nombre < b.nombre ? -1 : 1));
+    },
+    equipo_cambiar({ p_user_id, p_activo, p_rol }) {
+      if (!rpcs.es_admin()) return err('NO_AUTORIZADO', 'Solo un administrador puede hacer esto');
+      if (p_rol && !['admin', 'equipo'].includes(p_rol)) return err('ROL_INVALIDO', 'El rol tiene que ser administrador o equipo');
+      if (p_user_id === sesion.user.id && (p_activo === false || p_rol === 'equipo')) return err('NO_A_VOS_MISMO', 'No podés desactivarte ni sacarte el rol de administrador a vos mismo');
+      const e = db.equipo.find((x) => x.user_id === p_user_id);
+      if (!e) return err('NO_ENCONTRADO', 'No se encontró esa persona');
+      if (p_activo !== undefined && p_activo !== null) e.activo = p_activo;
+      if (p_rol) e.rol = p_rol;
+    },
     disponibilidad({ p_desde, p_hasta }) {
       const out = [];
       for (let f = p_desde < hoy ? hoy : p_desde; f <= p_hasta && f <= fechaMax; f = sumarDias(f, 1)) {
@@ -688,19 +704,42 @@ export function crearClienteDemo() {
 
   // ---- login de mentira (cualquier usuario/contraseña entra) ----
   let sesion = null;
+  // Links de invitación o de "olvidé mi contraseña" (en el simulador: panel.html#type=invite&email=...)
+  try {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (['invite', 'recovery'].includes(h.get('type'))) {
+      const mail = (h.get('email') || 'invitado@ejemplo.com').toLowerCase();
+      let e = db.equipo.find((x) => x.email === mail);
+      if (!e) { e = { user_id: 'demo-inv-' + nuevoId(), nombre: mail.split('@')[0], email: mail, rol: 'equipo', activo: true, creado_en: ahoraISO() }; db.equipo.push(e); }
+      sesion = { user: { id: e.user_id, email: mail } };
+    }
+  } catch { /* nada */ }
   const oyentes = [];
   const auth = {
     async signInWithPassword({ email }) {
-      const local = email.split('@')[0] || 'equipo';
-      sesion = { user: { id: 'demo-' + local, email } };
-      if (!db.equipo.some((e) => e.user_id === sesion.user.id)) {
-        db.equipo.push({ user_id: sesion.user.id, nombre: local[0].toUpperCase() + local.slice(1), rol: 'equipo' });
-        guardar();
+      const mail = String(email).toLowerCase();
+      const local = mail.split('@')[0] || 'equipo';
+      const existente = db.equipo.find((e) => e.email === mail);
+      sesion = { user: { id: existente?.user_id || 'demo-' + local, email: mail } };
+      let e = db.equipo.find((x) => x.user_id === sesion.user.id);
+      if (!e) {
+        // En el simulador cualquiera entra; la primera persona que entra es administradora
+        e = { user_id: sesion.user.id, nombre: local[0].toUpperCase() + local.slice(1), email: mail,
+          rol: db.equipo.some((x) => x.rol === 'admin') ? 'equipo' : 'admin', activo: true, creado_en: ahoraISO() };
+        db.equipo.push(e);
       }
+      e.ultimo_ingreso = ahoraISO();
+      guardar();
       oyentes.forEach((fn) => fn('SIGNED_IN', sesion));
       return { data: { session: sesion }, error: null };
     },
     async getSession() { return { data: { session: sesion }, error: null }; },
+    async resetPasswordForEmail() { await new Promise((r) => setTimeout(r, 200)); return { data: {}, error: null }; },
+    async updateUser({ password }) {
+      if (!sesion) return { data: null, error: { message: 'Auth session missing!' } };
+      if (String(password || '').length < 6) return { data: null, error: { message: 'Password should be at least 6 characters' } };
+      return { data: { user: sesion.user }, error: null };
+    },
     async signOut() { sesion = null; oyentes.forEach((fn) => fn('SIGNED_OUT', null)); return { error: null }; },
     onAuthStateChange(fn) { oyentes.push(fn); return { data: { subscription: { unsubscribe() {} } } }; },
   };
@@ -723,6 +762,16 @@ export function crearClienteDemo() {
     functions: {
       async invoke(nombre, { body }) {
         await new Promise((r) => setTimeout(r, 400));
+        if (nombre === 'equipo-admin') {
+          const falla = (message, hint) => ({ data: null, error: { message, hint, context: { json: async () => ({ message, hint }) } } });
+          if (!rpcs.es_admin()) return falla('NO_AUTORIZADO', 'Solo un administrador puede invitar personas.');
+          const mail = String(body.email || '').trim().toLowerCase();
+          if (db.equipo.some((e) => e.email === mail)) return falla('YA_EXISTE', 'Ese mail ya tiene usuario. Si no puede entrar, mandale el mail para cambiar la contraseña.');
+          db.equipo.push({ user_id: 'demo-inv-' + nuevoId(), nombre: String(body.nombre).trim(), email: mail, rol: body.rol === 'admin' ? 'admin' : 'equipo',
+            activo: true, creado_en: ahoraISO(), ultimo_ingreso: null });
+          guardar();
+          return { data: { ok: true }, error: null };
+        }
         liberarVencidas();
         const pe = db.pedidos.find((x) => x.id === body.pedido_id && x.token === body.token);
         const rs = pe ? db.reservas.filter((r) => r.pedido_id === pe.id) : [];
