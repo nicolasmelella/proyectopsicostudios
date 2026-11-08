@@ -103,7 +103,7 @@ function cajaTransferencia(t: any = {}, monto?: number, titulo = 'Datos para tra
   return `<div style="background:#ffffff;border:1.5px dashed #6f8fb8;border-radius:12px;padding:12px 14px;margin:12px 0">
     <div style="font-weight:bold;margin-bottom:6px">${esc(titulo)}</div>
     ${filas.map(([a, b]) => `<div>${esc(a)}: <strong>${esc(b)}</strong></div>`).join('')}
-    <div style="margin-top:6px;color:${SUAVE};font-size:13px">Transferí desde tu banco o billetera y mandanos el comprobante con el botón de abajo.</div></div>`;
+    <div style="margin-top:6px;color:${SUAVE};font-size:13px">Transferí desde tu banco o billetera y enviá la reserva con el comprobante por WhatsApp (botón de abajo).</div></div>`;
 }
 
 const linkPedido = (sitio: string, d: any) => `${sitio}/?ver=${d.pedido}&t=${d.token}`;
@@ -114,8 +114,7 @@ function linkWhatsComprobante(d: any, monto: number, que: string) {
   const texto = `Hola! Soy ${String(d.nombre || '').trim()}. Hice la reserva #${d.pedido} (${que}). Te envío el comprobante de la transferencia (${pesos(monto)}) para confirmarla.`;
   return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
 }
-const otraVia = (sitio: string, d: any) => d.pedido && d.token
-  ? `<p style="margin:10px 0 0;font-size:13px;color:${SUAVE}">¿Preferís subir el comprobante en la web? <a href="${esc(linkPedido(sitio, d))}" style="color:${AZUL}">Subilo acá</a>.</p>` : '';
+const soloWhats = `<p style="margin:10px 0 0;font-size:13px;color:${SUAVE}">La reserva se confirma cuando recibimos el comprobante por WhatsApp.</p>`;
 
 export function armarMail(a: Aviso, sitio: string): { asunto: string; html: string; texto: string } {
   const d = a.datos || {};
@@ -134,8 +133,8 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
         ${primero ? `El saldo se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : 'El saldo se paga hasta el día anterior al turno.'}</p>
         ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir la seña')}`;
       const wa = linkWhatsComprobante(d, falta, (d.reservas || []).map((r: any) => `${fechaLarga(r.fecha)}, ${rangos(r.horas)}, ${r.consultorio}`).join('; '));
-      boton = wa ? { texto: 'Enviar comprobante por WhatsApp', url: wa } : { texto: 'Subir el comprobante', url: linkPedido(sitio, d) };
-      if (wa) cuerpo += otraVia(sitio, d);
+      boton = wa ? { texto: 'Enviar reserva por WhatsApp', url: wa } : { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
+      if (wa) cuerpo += soloWhats;
       break;
     }
     case 'reserva_confirmada':
@@ -175,8 +174,8 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       asunto = `No pudimos validar tu comprobante · Pedido #${d.pedido}`;
       titulo = 'No pudimos validar tu comprobante';
       cuerpo = `${hola}${d.motivo ? `<p style="margin:0">Motivo: <strong>${esc(d.motivo)}</strong></p>` : ''}
-        <p style="margin:10px 0 0">Podés subir otro comprobante desde el botón de abajo, o respondé este mail.</p>${tablaTurnos(d.reservas)}`;
-      boton = { texto: 'Subir otro comprobante', url: linkPedido(sitio, d) };
+        <p style="margin:10px 0 0">Mandanos el comprobante correcto por WhatsApp, o respondé este mail.</p>${tablaTurnos(d.reservas)}`;
+      boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       break;
     case 'fijo_solicitado':
     case 'fijo_aprobado':
@@ -190,8 +189,8 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
             Después se paga cada mes por adelantado.</p>${cajaTransferencia(d.transferencia, d.pago_inicial, 'Datos para transferir el primer mes')}`
             : '<p style="margin:10px 0 0">Te escribimos para coordinar el pago.</p>'}`;
         const wa = d.pago_inicial ? linkWhatsComprobante(d, d.pago_inicial, `horario fijo de los ${DIAS_FIJO[d.dia]}, ${rangos(d.horas || [])}, ${d.consultorio}`) : null;
-        if (wa) { boton = { texto: 'Enviar comprobante por WhatsApp', url: wa }; cuerpo += otraVia(sitio, d); }
-        else if (d.pedido && d.token) boton = { texto: 'Subir el comprobante', url: linkPedido(sitio, d) };
+        if (wa) { boton = { texto: 'Enviar reserva por WhatsApp', url: wa }; cuerpo += soloWhats; }
+        else if (d.pedido && d.token) boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       } else if (a.tipo === 'fijo_aprobado') {
         asunto = '¡Tu horario fijo está confirmado!'; titulo = '¡Tu horario fijo está confirmado!';
         cuerpo = `${hola}<p style="margin:0">Recibimos el pago. Desde ahora tenés reservado ${desc}.</p>

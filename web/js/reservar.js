@@ -516,12 +516,12 @@ $('#btn-continuar').onclick = () => {
   $('#resumen-datos').innerHTML = filas.map(([a, b]) => `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join('');
   const textoSuelta = () => {
     const todo = document.querySelector('input[name="pagar"]:checked')?.value === 'total';
-    return `Entiendo que ${c.dias > 1 ? 'las reservas se confirman' : 'la reserva se confirma'} cuando pago ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}, y que el saldo se paga hasta el día anterior al turno`}.`;
+    return `Entiendo que ${c.dias > 1 ? 'las reservas se confirman' : 'la reserva se confirma'} cuando transfiero ${todo ? `el total de ${pesos(c.total)}` : `la seña de ${pesos(c.sena)}`} y envío el comprobante por WhatsApp${todo ? '' : ', y que el saldo se paga hasta el día anterior al turno'}.`;
   };
   document.querySelectorAll('input[name="pagar"]').forEach((r) => (r.onchange = () => { $('#acepto-texto').textContent = textoSuelta(); }));
   $('#acepto-texto').textContent = estado.modo === 'suelta'
     ? textoSuelta()
-    : `Entiendo que el horario fijo se confirma cuando pago el primer mes (${pesos(c.primerMes)}), y que después se paga cada mes por adelantado.`;
+    : `Entiendo que el horario fijo se confirma cuando transfiero el primer mes (${pesos(c.primerMes)}) y envío el comprobante por WhatsApp, y que después se paga cada mes por adelantado.`;
   $('#btn-enviar').textContent = estado.modo === 'suelta' ? 'Reservar y pagar' : 'Reservar fijo y pagar';
   $('#aviso-form').classList.add('oculto');
   cargarMisDatos();
@@ -698,14 +698,13 @@ function pantallaPago(p, nombre = '') {
             ${configurado(estado.cfg.cvu_transferencia) ? fila('CVU', estado.cfg.cvu_transferencia, estado.cfg.cvu_transferencia, false) : ''}
             ${configurado(estado.cfg.titular_transferencia) ? fila('Titular', estado.cfg.titular_transferencia, null, false) : ''}
           </div>` : `<p class="aviso aviso-info">Escribinos por WhatsApp y te pasamos los datos para transferir ${pesos(monto)}.</p>`}
-        <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Ya transferí: enviar comprobante por WhatsApp</span></a>
-        <p class="ayuda centro">Se abre el chat con tu pedido escrito. Adjuntá la captura con el clip 📎 y enviá: te confirmamos por ahí.
-          Mientras tanto, ${esFijo || n === 1 ? 'el horario queda reservado' : 'los horarios quedan reservados'} a tu nombre.</p>
-        <div class="otra-via">
-          <label class="pago-link" for="comp-archivo">${ICONO.subir}<span>¿Preferís subir el comprobante acá?</span></label>
-          <input type="file" id="comp-archivo" accept="image/*,application/pdf" class="visualmente-oculto">
-          <div id="comp-estado" role="status" aria-live="polite"></div>
-        </div>`}`;
+        <ol class="pasos-pago">
+          <li><span>1</span><div>Transferí <strong>${pesos(monto)}</strong> a esta cuenta.</div></li>
+          <li><span>2</span><div>Tocá <strong>Enviar reserva por WhatsApp</strong> y adjuntá la captura de la transferencia.</div></li>
+          <li><span>3</span><div>Te confirmamos la reserva por WhatsApp.</div></li>
+        </ol>
+        <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
+        <p class="ayuda centro">Se abre el chat con tu reserva escrita. <strong>La reserva se confirma cuando recibimos el comprobante.</strong></p>`}`;
     document.querySelectorAll('[data-cuanto]').forEach((b) => (b.onclick = () => { elegido.cuanto = b.dataset.cuanto; pintar(); $(`[data-cuanto="${elegido.cuanto}"]`).focus(); }));
     document.querySelectorAll('[data-medio]').forEach((b) => (b.onclick = () => { elegido.medio = b.dataset.medio; pintar(); $(`[data-medio="${elegido.medio}"]`).focus(); }));
     $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(p.pedido, p.token, e.currentTarget, $('#aviso-mp'), esFijo ? 'total' : elegido.cuanto));
@@ -1010,9 +1009,8 @@ async function mostrarSubirComprobante(id, token) {
     caja.innerHTML = `<h2 id="titulo-resultado">Cancelaste esta reserva</h2>${detalle}<p>Los horarios quedaron libres.</p>${botonVolver('Hacer una reserva nueva')}`;
   } else {
     caja.innerHTML = `<h2 id="titulo-resultado">${r.estado === 'parcial' ? 'Tu reserva' : 'Tu reserva se venció'}</h2>${detalle}
-      ${r.estado === 'vencida' ? `<p class="aviso aviso-alerta">Este pedido venció. Si ya transferiste, subí el comprobante igual y lo resolvemos.</p>
-        ${bloqueComprobante()}` : ''}${botonVolver()}`;
-    conectarComprobante(id, token);
+      ${r.estado === 'vencida' ? `<p class="aviso aviso-alerta">Esta reserva ya no está activa. Si ya transferiste, escribinos por WhatsApp con el comprobante y lo resolvemos.</p>
+        <a class="btn btn-wa btn-bloque" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), `Hola! Te escribo por la reserva #${r.id}.`)}">Escribinos por WhatsApp</a>` : ''}${botonVolver()}`;
   }
   conectarVolver();
 }

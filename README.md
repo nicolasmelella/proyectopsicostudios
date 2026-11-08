@@ -126,6 +126,9 @@ Si falta un pago, aparece en el panel → **Pendientes → Alertas de pago** y e
 Y `supabase/18_mails.sql` → **Run** (el mail del horario fijo trae el primer mes a pagar y el link para el comprobante).
 Después volvé a desplegar la función `enviar-avisos`.
 
+Y `supabase/19_sin_subida_web.sql` → **Run**. **Un solo camino:** la persona transfiere y **envía la reserva por WhatsApp**
+con el comprobante; desde la web no se puede subir nada. El equipo registra el pago en **Pendientes → Alertas de pago → Registrar pago**.
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

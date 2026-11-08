@@ -91,7 +91,7 @@ const fijo = mod.armarMail({ id: 1, tipo: 'fijo_solicitado', canal: 'email', des
 assert.match(fijo.texto, /primer mes: \$49\.200/);
 const conWa = { ...ej, total: 18000, sena: 9000, pagado: 0, pedido: 7, token: 'abc', transferencia: { ...ej.transferencia, whatsapp: '5491178224918' } };
 const creadaWa = mod.armarMail({ id: 1, tipo: 'reserva_creada', canal: 'email', destino: 'x', datos: conWa }, 'https://s');
-assert.match(creadaWa.texto, /Enviar comprobante por WhatsApp: https:\/\/wa\.me\/5491178224918\?text=/);
-assert.match(decodeURIComponent(creadaWa.texto), /Hice la reserva #7/); assert.match(creadaWa.html, /Subilo acá/);
+assert.match(creadaWa.texto, /Enviar reserva por WhatsApp: https:\/\/wa\.me\/5491178224918\?text=/);
+assert.match(decodeURIComponent(creadaWa.texto), /Hice la reserva #7/); assert.ok(!/Subilo|subir el comprobante/i.test(creadaWa.html));
 ok('textos con la regla nueva: transferencia, saldo hasta el día anterior, fijo paga el primer mes, nada "se libera"');
 console.log('PRUEBAS DE ENVÍO DE AVISOS PASARON');
