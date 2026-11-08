@@ -1389,10 +1389,12 @@ async function pintarComprobantes() {
       <div class="suave chico">Pedido #${c.pedido_id} · subido ${esc(new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(c.creado_en)))}</div>
       <ul class="datos" style="margin:.5em 0">${(c.reservas || []).map((r) => `<li><span>${esc(fechaLarga(r.fecha))} · ${esc(rangos(r.horas))} · ${esc(r.consultorio)}</span>
         <span><span class="pill ${estadoPill[r.estado] || 'pill-info">' + esc(r.estado)}</span></span></li>`).join('')}</ul>
-      ${vigente ? `<div>Falta de seña: <strong>${pesos(c.falta_sena)}</strong> · Saldo total: ${pesos(c.falta_total)}</div>`
+      ${vigente ? (c.es_fijo ? `<div>Horario fijo · primer mes: <strong>${pesos(c.falta_total)}</strong></div>`
+        : `<div>Seña: <strong>${pesos(c.falta_sena)}</strong> · Total: <strong>${pesos(c.falta_total)}</strong></div>`)
         : '<p class="aviso aviso-alerta chico">Las reservas de este pedido ya no están vigentes (vencidas o pagas). Si corresponde, cargalas de nuevo desde "+ Reserva".</p>'}
       <div class="acciones">
-        ${vigente && c.falta_sena > 0 ? `<button class="btn btn-acento btn-chico" data-comp-sena="${i}">Registrar seña ${pesos(c.falta_sena)}</button>` : ''}
+        ${vigente && c.falta_sena > 0 && c.falta_sena < c.falta_total ? `<button class="btn btn-acento btn-chico" data-comp-sena="${i}">Aceptar: pagó la seña ${pesos(c.falta_sena)}</button>` : ''}
+        ${vigente ? `<button class="btn btn-acento btn-chico" data-comp-total="${i}">Aceptar: pagó ${c.es_fijo ? 'el mes' : 'todo'} ${pesos(c.falta_total)}</button>` : ''}
         ${vigente ? `<button class="btn btn-borde btn-chico" data-comp-otro="${i}">Otro monto</button>` : ''}
         <button class="btn btn-peligro btn-chico" data-comp-rechazar="${i}">${vigente ? 'Rechazar' : 'Archivar'}</button>
         <a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(c.whatsapp, `Hola ${c.nombre.split(' ')[0]}! Te escribimos de Psico Studios por el comprobante del pedido #${c.pedido_id}.`)}">WhatsApp</a>
@@ -1409,6 +1411,11 @@ async function pintarComprobantes() {
     const c = lista[b.dataset.compSena];
     if (await preguntar({ titulo: `¿Registrar la seña de ${pesos(c.falta_sena)}?`, texto: `Se confirma el pedido #${c.pedido_id} de ${c.nombre}. Confirmalo solo si viste la transferencia en la cuenta.`, aceptar: 'Registrar seña' }) === null) return;
     revisar(c, true, c.falta_sena, null, 'Seña registrada: pedido confirmado');
+  }));
+  $$('[data-comp-total]').forEach((b) => (b.onclick = async () => {
+    const c = lista[b.dataset.compTotal];
+    if (await preguntar({ titulo: `¿Registrar el pago de ${pesos(c.falta_total)}?`, texto: `${c.es_fijo ? 'Se activa el horario fijo del' : 'Queda todo pago el'} pedido #${c.pedido_id} de ${c.nombre}. Confirmalo solo si viste la transferencia en la cuenta.`, aceptar: 'Registrar pago' }) === null) return;
+    revisar(c, true, c.falta_total, null, c.es_fijo ? 'Pago registrado: fijo activo' : 'Pago registrado: pedido confirmado y pago');
   }));
   $$('[data-comp-otro]').forEach((b) => (b.onclick = async () => {
     const c = lista[b.dataset.compOtro];

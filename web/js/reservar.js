@@ -1,6 +1,6 @@
 // Web pública de reservas (sin login).
 import {
-  crearCliente, esDemo, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
+  crearCliente, esDemo, copiarTexto, idAlAzar, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
   faltan, precioHora, mensajeError, linkWhatsApp, DIAS, DIAS_CORTOS,
 } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
@@ -921,13 +921,10 @@ function bloqueComprobante() {
 
 function conectarComprobante(pedido, token, alTerminar) {
   document.querySelectorAll('[data-copiar]').forEach((b) => (b.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(b.dataset.copiar);
-      const el = b.querySelector('span') || b;
-      const antes = el.textContent;
-      el.textContent = b.dataset.copiado || '¡Copiado!';
-      setTimeout(() => { el.textContent = antes; }, 2500);
-    } catch { /* sin permiso */ }
+    const el = b.querySelector('span') || b;
+    const antes = el.textContent;
+    el.textContent = (await copiarTexto(b.dataset.copiar)) ? (b.dataset.copiado || '¡Copiado!') : 'No se pudo copiar: mantené apretado el texto';
+    setTimeout(() => { el.textContent = antes; }, 2500);
   }));
   const input = $('#comp-archivo');
   if (!input) return;
@@ -972,7 +969,7 @@ async function subirComprobante(pedido, token, archivo) {
   }
   if (!EXTENSION[tipo]) throw { hint: 'Ese formato de imagen no se puede subir. Probá con una captura de pantalla o un PDF.' };
   if (datos.size > MAX_ARCHIVO) throw { hint: 'El archivo pesa más de 5 MB. Probá con una captura de pantalla.' };
-  const ruta = `${pedido}/${token}/${crypto.randomUUID()}.${EXTENSION[tipo]}`;
+  const ruta = `${pedido}/${token}/${idAlAzar()}.${EXTENSION[tipo]}`;
   const subida = await sb.storage.from('comprobantes').upload(ruta, datos, { contentType: tipo, upsert: false });
   if (subida.error) {
     throw /row-level security|policy/i.test(subida.error.message || '')
