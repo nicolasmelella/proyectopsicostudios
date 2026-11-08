@@ -78,4 +78,16 @@ for (const t of tipos) {
   if (!t.startsWith('equipo_')) assert.ok(mod.armarWhatsApp({ id: 1, tipo: t, canal: 'whatsapp', destino: 'x', datos: ej }, 'https://s').plantilla, t);
 }
 ok(`los ${tipos.length} tipos de aviso tienen mail (y WhatsApp los 9 del profesional)`);
+// Regla nueva: ningún mail dice que el horario "se libera solo"; el saldo se paga hasta el día anterior; el fijo pide el primer mes
+for (const t of tipos.filter((x) => x !== 'reserva_vencida')) {
+  const m = mod.armarMail({ id: 1, tipo: t, canal: 'email', destino: 'x', datos: ej }, 'https://s');
+  assert.ok(!/se libera|liberan solos|día de cada turno|día del turno/i.test(m.texto), t + ': ' + m.texto);
+}
+const creada = mod.armarMail({ id: 1, tipo: 'reserva_creada', canal: 'email', destino: 'x', datos: { ...ej, total: 18000, sena: 9000, pagado: 0 } }, 'https://s');
+assert.match(creada.texto, /saldo se paga hasta el/); assert.match(creada.texto, /psico\.alias/);
+const conf = mod.armarMail({ id: 1, tipo: 'reserva_confirmada', canal: 'email', destino: 'x', datos: { ...ej, total: 18000, pagado: 18000 } }, 'https://s');
+assert.match(conf.texto, /No tenés que pagar nada más/);
+const fijo = mod.armarMail({ id: 1, tipo: 'fijo_solicitado', canal: 'email', destino: 'x', datos: { ...ej, pago_inicial: 49200, pedido: 7, token: 'abc' } }, 'https://s');
+assert.match(fijo.texto, /primer mes: \$49\.200/); assert.match(fijo.texto, /Subir el comprobante/);
+ok('textos con la regla nueva: transferencia, saldo hasta el día anterior, fijo paga el primer mes, nada "se libera"');
 console.log('PRUEBAS DE ENVÍO DE AVISOS PASARON');

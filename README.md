@@ -123,6 +123,9 @@ Y `supabase/17_alertas_pago.sql` → **Run**. **Regla: el sistema no cancela nad
 al reservar y el saldo se paga hasta el día anterior al turno; los fijos, el primer mes y después mes a mes por adelantado.
 Si falta un pago, aparece en el panel → **Pendientes → Alertas de pago** y el equipo decide.
 
+Y `supabase/18_mails.sql` → **Run** (el mail del horario fijo trae el primer mes a pagar y el link para el comprobante).
+Después volvé a desplegar la función `enviar-avisos`.
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**

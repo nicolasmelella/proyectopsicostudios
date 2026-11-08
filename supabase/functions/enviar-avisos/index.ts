@@ -64,19 +64,22 @@ const unaLinea = (t: string) => t.replace(/\s+/g, ' ').trim();  // WhatsApp no a
 const DIAS_FIJO = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
 
 // ---------------------------------------------------------------- mails
-const AZUL = '#12275a', CREMA = '#f3eedc', TERRACOTA = '#a5532f';
+const AZUL = '#12275a', FONDO = '#f5f7fb', ROSA = '#eed2e2', LINEA = '#dfe3ea', SUAVE = '#4a597b', ALERTA = '#8a4b00';
+// El día anterior a una fecha ('2026-11-19' → '2026-11-18')
+const diaAnterior = (f: string) => { const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+const primerTurno = (reservas: any[] = []) => reservas.map((r) => r.fecha).filter(Boolean).sort()[0];
 
 function plantillaMail(titulo: string, cuerpo: string, boton?: { texto: string; url: string }) {
-  return `<!doctype html><html lang="es"><body style="margin:0;background:${CREMA};font-family:Arial,Helvetica,sans-serif;color:${AZUL}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CREMA};padding:24px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#faf7ee;border-radius:14px;overflow:hidden">
-<tr><td style="background:${AZUL};padding:18px 24px;color:${CREMA};font-size:20px;font-weight:bold;letter-spacing:1px">PSICO <span style="font-weight:normal;letter-spacing:3px">STUDIOS</span></td></tr>
+  return `<!doctype html><html lang="es"><body style="margin:0;background:${FONDO};font-family:Arial,Helvetica,sans-serif;color:${AZUL}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${FONDO};padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ${LINEA}">
+<tr><td style="background:${AZUL};padding:18px 24px;color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:1px">PSICO <span style="font-weight:normal;letter-spacing:3px">STUDIOS</span></td></tr>
 <tr><td style="padding:24px">
 <h1 style="margin:0 0 14px;font-size:21px;line-height:1.3">${titulo}</h1>
 <div style="font-size:15px;line-height:1.55">${cuerpo}</div>
-${boton ? `<p style="margin:22px 0 4px"><a href="${esc(boton.url)}" style="display:inline-block;background:${TERRACOTA};color:#ffffff;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:999px">${esc(boton.texto)}</a></p>` : ''}
+${boton ? `<p style="margin:22px 0 4px"><a href="${esc(boton.url)}" style="display:inline-block;background:${ROSA};color:${AZUL};text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:8px">${esc(boton.texto)}</a></p>` : ''}
 </td></tr>
-<tr><td style="padding:14px 24px 22px;font-size:12px;color:#4a597b;border-top:1px solid #e2dbc4">
+<tr><td style="padding:14px 24px 22px;font-size:12px;color:${SUAVE};border-top:1px solid ${LINEA}">
 Psico Studios · Consultorios en Microcentro<br>¿Dudas? Respondé este mail o escribinos por WhatsApp.</td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -84,12 +87,12 @@ Psico Studios · Consultorios en Microcentro<br>¿Dudas? Respondé este mail o e
 function tablaTurnos(reservas: any[] = [], conEstado = false) {
   const etiqueta: Record<string, string> = { confirmada: 'Confirmada', pendiente: 'Sin seña', vencida: 'Vencida', cancelada: 'Cancelada' };
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 14px;border-collapse:collapse">${reservas.map((r) =>
-    `<tr><td style="padding:9px 0;border-bottom:1px solid #e2dbc4"><strong>${esc(mayuscula(fechaLarga(r.fecha)))}</strong><br>
-     <span style="color:#4a597b">${esc(rangos(r.horas))}</span></td>
-     <td style="padding:9px 0;border-bottom:1px solid #e2dbc4;text-align:right"><strong>${esc(r.consultorio)}</strong>${conEstado ? `<br><span style="color:#4a597b">${esc(etiqueta[r.estado] || r.estado)}</span>` : ''}</td></tr>`).join('')}</table>`;
+    `<tr><td style="padding:9px 0;border-bottom:1px solid ${LINEA}"><strong>${esc(mayuscula(fechaLarga(r.fecha)))}</strong><br>
+     <span style="color:${SUAVE}">${esc(rangos(r.horas))}</span></td>
+     <td style="padding:9px 0;border-bottom:1px solid ${LINEA};text-align:right"><strong>${esc(r.consultorio)}</strong>${conEstado ? `<br><span style="color:${SUAVE}">${esc(etiqueta[r.estado] || r.estado)}</span>` : ''}</td></tr>`).join('')}</table>`;
 }
 
-function cajaTransferencia(t: any = {}, monto?: number) {
+function cajaTransferencia(t: any = {}, monto?: number, titulo = 'Datos para transferir') {
   const filas = [
     monto ? ['A transferir', pesos(monto)] : null,
     configurado(t.alias) ? ['Alias', t.alias] : null,
@@ -98,9 +101,9 @@ function cajaTransferencia(t: any = {}, monto?: number) {
   ].filter(Boolean) as string[][];
   if (filas.length < 2) return '';
   return `<div style="background:#ffffff;border:1.5px dashed #6f8fb8;border-radius:12px;padding:12px 14px;margin:12px 0">
-    <div style="font-weight:bold;margin-bottom:6px">Si preferís transferir</div>
+    <div style="font-weight:bold;margin-bottom:6px">${esc(titulo)}</div>
     ${filas.map(([a, b]) => `<div>${esc(a)}: <strong>${esc(b)}</strong></div>`).join('')}
-    <div style="margin-top:6px;color:#4a597b;font-size:13px">Después subí el comprobante desde el botón de abajo.</div></div>`;
+    <div style="margin-top:6px;color:${SUAVE};font-size:13px">Transferí desde tu banco o billetera y después subí el comprobante con el botón de abajo.</div></div>`;
 }
 
 const linkPedido = (sitio: string, d: any) => `${sitio}/?ver=${d.pedido}&t=${d.token}`;
@@ -114,20 +117,27 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
     case 'reserva_creada': {
       const falta = Math.max(0, (d.sena || 0) - (d.pagado || 0));
       asunto = `Recibimos tu reserva · Pedido #${d.pedido}`;
-      titulo = varios ? 'Guardamos tus horarios' : 'Guardamos tu horario';
+      const primero = primerTurno(d.reservas);
+      titulo = varios ? 'Recibimos tu reserva' : 'Recibimos tu reserva';
       cuerpo = `${hola}<p style="margin:0">Estos son los turnos de tu pedido <strong>#${esc(d.pedido)}</strong>:</p>${tablaTurnos(d.reservas)}
         <p style="margin:0">Total: <strong>${pesos(d.total)}</strong> · Seña para confirmar: <strong>${pesos(falta)}</strong></p>
-        ${d.expira_en ? `<p style="margin:10px 0 0;color:${TERRACOTA}"><strong>Pagá la seña antes del ${esc(horaAR(d.expira_en))} hs.</strong> Si no, ${varios ? 'los horarios se liberan solos' : 'el horario se libera solo'}.</p>` : ''}
-        ${cajaTransferencia(d.transferencia, falta)}`;
-      boton = { texto: 'Pagar la seña o subir el comprobante', url: linkPedido(sitio, d) };
+        <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}, transferí la seña (o el total, si preferís) y subí el comprobante.</strong>
+        ${primero ? `El saldo se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : 'El saldo se paga hasta el día anterior al turno.'}</p>
+        ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir la seña')}`;
+      boton = { texto: 'Subir el comprobante', url: linkPedido(sitio, d) };
       break;
     }
     case 'reserva_confirmada':
       asunto = `¡Reserva confirmada! · Pedido #${d.pedido}`;
       titulo = varios ? '¡Tus reservas están confirmadas!' : '¡Tu reserva está confirmada!';
-      cuerpo = `${hola}<p style="margin:0">Recibimos la seña. Estos son tus turnos:</p>${tablaTurnos(d.reservas)}
-        <p style="margin:0">Pagaste: <strong>${pesos(d.pagado)}</strong> · Saldo: <strong>${pesos((d.total || 0) - (d.pagado || 0))}</strong>, se abona el día de cada turno.</p>
-        <p style="margin:10px 0 0">¡Te esperamos!</p>`;
+      {
+        const saldo = Math.max(0, (d.total || 0) - (d.pagado || 0));
+        const primero = primerTurno(d.reservas);
+        cuerpo = `${hola}<p style="margin:0">Recibimos tu pago. Estos son tus turnos:</p>${tablaTurnos(d.reservas)}
+          <p style="margin:0">Pagaste: <strong>${pesos(d.pagado)}</strong>${saldo ? ` · Saldo: <strong>${pesos(saldo)}</strong>, se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : ' · No tenés que pagar nada más.'}</p>
+          ${saldo ? cajaTransferencia(d.transferencia, saldo, 'Datos para transferir el saldo') : ''}
+          <p style="margin:10px 0 0">¡Te esperamos!</p>`;
+      }
       boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       break;
     case 'reserva_vencida':
@@ -147,7 +157,7 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
     case 'comprobante_recibido':
       asunto = `Recibimos tu comprobante · Pedido #${d.pedido}`;
       titulo = 'Recibimos tu comprobante';
-      cuerpo = `${hola}<p style="margin:0">Lo vamos a revisar y te confirmamos. Mientras tanto, ${varios ? 'tus horarios quedan guardados' : 'tu horario queda guardado'}:</p>${tablaTurnos(d.reservas)}`;
+      cuerpo = `${hola}<p style="margin:0">Lo vamos a revisar y te confirmamos. Mientras tanto, ${varios ? 'tus horarios quedan reservados' : 'tu horario queda reservado'} a tu nombre:</p>${tablaTurnos(d.reservas)}`;
       boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       break;
     case 'comprobante_rechazado':
@@ -162,11 +172,17 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
     case 'fijo_rechazado': {
       const desc = `todos los <strong>${esc(DIAS_FIJO[d.dia])}</strong> de <strong>${esc(rangos(d.horas || []))}</strong> en <strong>${esc(d.consultorio)}</strong>, desde el ${esc(fechaLarga(d.desde))}`;
       if (a.tipo === 'fijo_solicitado') {
-        asunto = 'Recibimos tu solicitud de horario fijo'; titulo = 'Recibimos tu solicitud de horario fijo';
-        cuerpo = `${hola}<p style="margin:0">Pediste ${desc} (${pesos(d.precio_semanal)} por semana).</p><p style="margin:10px 0 0">Te escribimos para confirmarla.</p>`;
+        asunto = 'Recibimos tu pedido de horario fijo'; titulo = 'Recibimos tu pedido de horario fijo';
+        const semanas = (d.reservas || []).length;
+        cuerpo = `${hola}<p style="margin:0">Reservaste ${desc} (${pesos(d.precio_semanal)} por semana).</p>
+          ${d.pago_inicial ? `<p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmarlo, transferí el primer mes: ${pesos(d.pago_inicial)}</strong>${semanas ? ` (${semanas} ${semanas === 1 ? 'semana' : 'semanas'})` : ''} y subí el comprobante.
+            Después se paga cada mes por adelantado.</p>${cajaTransferencia(d.transferencia, d.pago_inicial, 'Datos para transferir el primer mes')}`
+            : '<p style="margin:10px 0 0">Te escribimos para coordinar el pago.</p>'}`;
+        if (d.pedido && d.token) boton = { texto: 'Subir el comprobante', url: linkPedido(sitio, d) };
       } else if (a.tipo === 'fijo_aprobado') {
         asunto = '¡Tu horario fijo está confirmado!'; titulo = '¡Tu horario fijo está confirmado!';
-        cuerpo = `${hola}<p style="margin:0">Desde ahora tenés reservado ${desc}.</p><p style="margin:10px 0 0">¡Te esperamos!</p>`;
+        cuerpo = `${hola}<p style="margin:0">Recibimos el pago. Desde ahora tenés reservado ${desc}.</p>
+          <p style="margin:10px 0 0">Cada mes se paga por adelantado, hasta el día anterior a la primera semana del mes. ¡Te esperamos!</p>`;
       } else {
         asunto = 'No pudimos confirmar tu horario fijo'; titulo = 'No pudimos confirmar tu horario fijo';
         cuerpo = `${hola}<p style="margin:0">No pudimos confirmar ${desc}.</p><p style="margin:10px 0 0">Respondé este mail y te ayudamos a encontrar otro horario.</p>`;
@@ -180,16 +196,18 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       const quien = `<p style="margin:0"><strong>${esc(p.nombre)}</strong>${p.profesion ? ` (${esc(p.profesion)})` : ''}<br>WhatsApp: ${esc(p.whatsapp)} · Mail: ${esc(p.email)}</p>`;
       if (a.tipo === 'equipo_reserva_creada') {
         asunto = `Nueva reserva web · ${p.nombre} · Pedido #${d.pedido}`; titulo = 'Nueva reserva desde la web';
-        cuerpo = `${quien}${tablaTurnos(d.reservas)}<p style="margin:0">Total ${pesos(d.total)} · Seña ${pesos(d.sena)}</p>`;
+        cuerpo = `${quien}${tablaTurnos(d.reservas)}<p style="margin:0">Total ${pesos(d.total)} · Seña ${pesos(d.sena)}</p>
+          <p style="margin:10px 0 0">Si no paga, aparece en el panel → Pendientes → Alertas de pago. Nada se cancela solo.</p>`;
       } else if (a.tipo === 'equipo_comprobante_recibido') {
         asunto = `Comprobante para revisar · ${p.nombre} · Pedido #${d.pedido}`; titulo = 'Subieron un comprobante para revisar';
         cuerpo = `${quien}${tablaTurnos(d.reservas)}<p style="margin:0">Revisalo en el panel → Pendientes.</p>`;
       } else {
         asunto = `Nueva solicitud de horario fijo · ${p.nombre}`; titulo = 'Nueva solicitud de horario fijo';
         cuerpo = `${quien}<p style="margin:10px 0 0">Todos los ${esc(DIAS_FIJO[d.dia])} de ${esc(rangos(d.horas || []))} en ${esc(d.consultorio)}, desde el ${esc(fechaLarga(d.desde))}.</p>
-          <p style="margin:10px 0 0">Aprobala o rechazala en el panel → Pendientes.</p>`;
+          ${d.pago_inicial ? `<p style="margin:10px 0 0">Primer mes a pagar: <strong>${pesos(d.pago_inicial)}</strong>. Cuando pague (o aceptes el comprobante) queda activo solo.</p>` : ''}
+          <p style="margin:10px 0 0">Lo ves en el panel → Pendientes.</p>`;
       }
-      boton = { texto: 'Abrir el panel', url: `${sitio}/panel` };
+      boton = { texto: 'Abrir el panel', url: `${sitio}/panel.html` };
       break;
     }
     default:
