@@ -112,6 +112,8 @@ Y `supabase/13_equipo.sql` → **Run** → *"Equipo listo: …"* (y el bloque de
 Después: **Edge Functions → Deploy a new function → Via Editor**, nombre `equipo-admin`, pegá
 `supabase/functions/equipo-admin/index.ts` → **Deploy**. Esta **sí** deja prendido "Enforce JWT verification".
 
+Y `supabase/14_permisos_finos.sql` → **Run** → *"Permisos finos aplicados"* (cierra funciones internas que pide el control de seguridad).
+
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
 - **Project URL**
