@@ -108,13 +108,13 @@ function cajaTransferencia(t: any = {}, monto?: number, titulo = 'Datos para tra
 
 const linkPedido = (sitio: string, d: any) => `${sitio}/?ver=${d.pedido}&t=${d.token}`;
 // WhatsApp del equipo con el pedido ya escrito (la persona adjunta la captura del comprobante)
-function linkWhatsComprobante(d: any, monto: number, que: string) {
+function linkWhatsComprobante(d: any, monto: number, que: string, pago = `A pagar: ${pesos(monto)}`) {
   const num = String(d.transferencia?.whatsapp || '').replace(/\D/g, '');
   if (num.length < 8) return null;
   const t = d.transferencia || {};
   const datos = [configurado(t.alias) ? `Alias: ${t.alias}` : null, configurado(t.cvu) ? `CVU: ${t.cvu}` : null,
     configurado(t.titular) ? `Titular: ${t.titular}` : null].filter(Boolean);
-  const texto = [`Hola! Soy ${String(d.nombre || '').trim()}. Reservé por la web (pedido #${d.pedido}):`, `• ${que}`, `A pagar: ${pesos(monto)}`,
+  const texto = [`Hola! Soy ${String(d.nombre || '').trim()}. Reservé por la web (pedido #${d.pedido}):`, `• ${que}`, pago,
     ...(datos.length ? ['', 'Datos para transferir:', ...datos] : []), '', 'Ahora transfiero y te mando el comprobante por acá 👇'].join('\n');
   return `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
 }
@@ -133,10 +133,11 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       titulo = varios ? 'Recibimos tu reserva' : 'Recibimos tu reserva';
       cuerpo = `${hola}<p style="margin:0">Estos son los turnos de tu pedido <strong>#${esc(d.pedido)}</strong>:</p>${tablaTurnos(d.reservas)}
         <p style="margin:0">Total: <strong>${pesos(d.total)}</strong> · Seña para confirmar: <strong>${pesos(falta)}</strong></p>
-        <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}, transferí la seña (o el total, si preferís) y subí el comprobante.</strong>
+        <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}: enviá la reserva por WhatsApp (botón de abajo), transferí la seña (o el total, si preferís) y mandá la captura en ese chat.</strong>
         ${primero ? `El saldo se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : 'El saldo se paga hasta el día anterior al turno.'}</p>
         ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir la seña')}`;
-      const wa = linkWhatsComprobante(d, falta, (d.reservas || []).map((r: any) => `${fechaLarga(r.fecha)}, ${rangos(r.horas)}, ${r.consultorio}`).join('; '));
+      const wa = linkWhatsComprobante(d, falta, (d.reservas || []).map((r: any) => `${mayuscula(fechaLarga(r.fecha))}, ${rangos(r.horas)}, ${r.consultorio}`).join('; '),
+        `Pago la seña: ${pesos(falta)} (total ${pesos(d.total)})`);
       boton = wa ? { texto: 'Enviar reserva por WhatsApp', url: wa } : { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       if (wa) cuerpo += soloWhats;
       break;
@@ -189,10 +190,11 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
         asunto = 'Recibimos tu pedido de horario fijo'; titulo = 'Recibimos tu pedido de horario fijo';
         const semanas = (d.reservas || []).length;
         cuerpo = `${hola}<p style="margin:0">Reservaste ${desc} (${pesos(d.precio_semanal)} por semana).</p>
-          ${d.pago_inicial ? `<p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmarlo, transferí el primer mes: ${pesos(d.pago_inicial)}</strong>${semanas ? ` (${semanas} ${semanas === 1 ? 'semana' : 'semanas'})` : ''} y subí el comprobante.
+          ${d.pago_inicial ? `<p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmarlo: enviá la reserva por WhatsApp (botón de abajo), transferí el primer mes (${pesos(d.pago_inicial)}${semanas ? `, ${semanas} ${semanas === 1 ? 'semana' : 'semanas'}` : ''}) y mandá la captura en ese chat.</strong>
             Después se paga cada mes por adelantado.</p>${cajaTransferencia(d.transferencia, d.pago_inicial, 'Datos para transferir el primer mes')}`
             : '<p style="margin:10px 0 0">Te escribimos para coordinar el pago.</p>'}`;
-        const wa = d.pago_inicial ? linkWhatsComprobante(d, d.pago_inicial, `horario fijo de los ${DIAS_FIJO[d.dia]}, ${rangos(d.horas || [])}, ${d.consultorio}`) : null;
+        const wa = d.pago_inicial ? linkWhatsComprobante(d, d.pago_inicial,
+          `Horario fijo: todos los ${DIAS_FIJO[d.dia]}, ${rangos(d.horas || [])}, ${d.consultorio}, desde el ${fechaLarga(d.desde)}`, `Primer mes: ${pesos(d.pago_inicial)}`) : null;
         if (wa) { boton = { texto: 'Enviar reserva por WhatsApp', url: wa }; cuerpo += soloWhats; }
         else if (d.pedido && d.token) boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       } else if (a.tipo === 'fijo_aprobado') {
