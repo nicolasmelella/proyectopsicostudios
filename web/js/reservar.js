@@ -1,6 +1,6 @@
 // Web pública de reservas (sin login).
 import {
-  crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
+  crearCliente, esDemo, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
   faltan, precioHora, mensajeError, linkWhatsApp, DIAS, DIAS_CORTOS,
 } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
@@ -762,12 +762,18 @@ async function pagarConMP(id, token, boton, aviso, pagar = 'sena') {
 }
 
 // Pantalla al volver de Mercado Pago (?pago=ok|error|pendiente&pedido=ID&t=CODIGO)
-async function mostrarRetorno(id, token, resultado) {
+async function mostrarRetorno(id, token, resultado, pagoMP = null) {
   clearInterval(reloj);
   cerrar('#modal-datos');
   const caja = $('#contenido-resultado');
   caja.innerHTML = '<h2 id="titulo-resultado">Verificando el pago…</h2><div class="cargando" style="justify-content:center">Esto tarda unos segundos</div>';
   abrir('#modal-resultado');
+
+  // Doble control: si Mercado Pago nos devolvió el número de pago, lo hacemos verificar ya
+  // (por si el aviso automático de Mercado Pago tarda o no llega). El servidor lo consulta a Mercado Pago.
+  if (pagoMP && /^\d+$/.test(pagoMP) && !esDemo()) {
+    try { await sb.functions.invoke('mp-webhook', { body: { type: 'payment', data: { id: pagoMP } } }); } catch { /* sigue con el aviso normal */ }
+  }
 
   let r = null;
   for (let intento = 0; intento < 10; intento++) {
@@ -1018,9 +1024,11 @@ try {
   const q = new URLSearchParams(location.search);
   if (q.has('pago') && q.has('pedido') && q.has('t')) {
     const [resultado, id, token] = [q.get('pago'), Number(q.get('pedido')), q.get('t')];
-    q.delete('pago'); q.delete('pedido'); q.delete('t');
+    const pagoMP = q.get('payment_id') || q.get('collection_id');
+    for (const k of ['pago', 'pedido', 't', 'collection_id', 'collection_status', 'payment_id', 'status', 'external_reference',
+      'payment_type', 'merchant_order_id', 'preference_id', 'site_id', 'processing_mode', 'merchant_account_id']) q.delete(k);
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
-    mostrarRetorno(id, token, resultado);
+    mostrarRetorno(id, token, resultado, pagoMP);
   } else if ((q.has('ver') || q.has('comprobante')) && q.has('t')) {
     // "Mi reserva" (link de los mails) o el link para subir el comprobante
     const [id, token] = [Number(q.get('ver') || q.get('comprobante')), q.get('t')];

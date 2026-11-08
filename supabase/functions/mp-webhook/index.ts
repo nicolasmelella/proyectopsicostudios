@@ -15,7 +15,13 @@ const variable = (nombre: string) => {
   if (!v) throw new Error(`Falta configurar el secreto ${nombre}`);
   return v;
 };
-const texto = (t: string, status = 200) => new Response(t, { status, headers: { 'Content-Type': 'text/plain' } });
+// La web también la llama al volver de Mercado Pago (doble control), por eso acepta pedidos del navegador
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const texto = (t: string, status = 200) => new Response(t, { status, headers: { ...CORS, 'Content-Type': 'text/plain' } });
 
 async function rpc(fn: string, args: Record<string, unknown>) {
   const clave = variable('SUPABASE_SERVICE_ROLE_KEY');
@@ -47,6 +53,7 @@ export async function firmaValida(firma: string, requestId: string, dataId: stri
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return texto('ok');
   try {
     const url = new URL(req.url);
@@ -62,7 +69,10 @@ Deno.serve(async (req: Request) => {
     const secreto = Deno.env.get('MP_WEBHOOK_SECRET');
     if (firma && secreto) {
       const ok = await firmaValida(firma, req.headers.get('x-request-id') ?? '', url.searchParams.get('data.id') ?? pagoId, secreto);
-      if (!ok) return texto('firma invalida', 401);
+      if (!ok) {
+        console.warn(`Pago ${pagoId}: aviso con firma que no coincide, rechazado`);
+        return texto('firma invalida', 401);
+      }
     }
 
     // Fuente de verdad: el pago consultado a Mercado Pago
