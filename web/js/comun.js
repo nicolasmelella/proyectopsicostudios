@@ -7,7 +7,8 @@ export const DIAS_CORTOS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 export const esDemo = () =>
-  SUPABASE_URL === 'COMPLETAR' || new URLSearchParams(location.search).has('demo');
+  SUPABASE_URL === 'COMPLETAR' || new URLSearchParams(location.search).has('demo') ||
+  ['localhost', '127.0.0.1'].includes(location.hostname);
 
 // Crea el cliente de Supabase (o el de demo si todavía no está configurado).
 // sesionTemporal = true: la sesión se borra al cerrar el navegador (para el panel).
