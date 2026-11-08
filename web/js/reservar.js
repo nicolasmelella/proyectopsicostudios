@@ -815,6 +815,10 @@ async function mostrarRetorno(id, token, resultado, pagoMP = null) {
 function pantallaFinal(p, nombre, monto) {
   clearInterval(reloj);
   const primer = (nombre || '').trim().split(' ')[0];
+  const que = p.tipo === 'fijo' && p.fijo
+    ? `mi horario fijo de los ${DIAS[p.fijo.dia].toLowerCase()}, ${rangos(p.fijo.horas)}, ${p.fijo.consultorio}`
+    : `mi reserva #${p.pedido}: ` + p.reservas.map((x) => `${fechaLarga(x.fecha).toLowerCase()}, ${rangos(x.horas)}, ${x.consultorio}`).join('; ');
+  const textoWa = `Hola! Soy ${(nombre || '').trim() || 'quien hizo la reserva'}. Te envío el comprobante de pago (${pesos(monto)}) para confirmar ${que}.`;
   $('#contenido-resultado').innerHTML = `
     <button class="modal-cerrar" id="cerrar-resultado" aria-label="Cerrar">×</button>
     <div class="icono" aria-hidden="true">✓</div>
@@ -822,7 +826,9 @@ function pantallaFinal(p, nombre, monto) {
     <p>Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.</p>
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(p.pedido)}</strong></p>${listaReservas(p.reservas)}
     <p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>
-    <button class="btn btn-acento btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
+    <a class="btn btn-wa btn-bloque btn-subir" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa)}">${ICONO.wa}<span>Avisar por WhatsApp</span></a>
+    <p class="ayuda centro" style="margin:.4em 0 .8em">Se abre el chat con el mensaje listo. Adjuntá la captura del comprobante con el clip 📎 y enviá.</p>
+    <button class="btn btn-borde btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
   const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
   $('#cerrar-resultado').onclick = volver;
   $('#nueva-reserva').onclick = volver;
