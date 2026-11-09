@@ -22,7 +22,12 @@
 //   ASISTENTE_MODELO_AUDIO → (opcional) modelo de transcripción; por defecto whisper-1
 // =====================================================================
 
-const MODELO_POR_DEFECTO = 'claude-opus-5-5';
+// Modelo de Claude según Asistente → Ajustes (el secreto ASISTENTE_MODELO, si está, manda)
+export const MODELOS: Record<string, string> = {
+  economico: 'claude-haiku-5-5',     // el más barato
+  intermedio: 'claude-sonnet-5-5',   // buena conversación a buen precio (por defecto)
+  maximo: 'claude-opus-5-5',         // el más capaz
+};
 const MAX_VUELTAS = 12;           // herramientas por respuesta, como mucho
 const MAX_IMAGEN = 3_700_000;     // bytes: más grande no se le pasa a la IA (igual se guarda como comprobante)
 const ZONA = 'America/Argentina/Buenos_Aires';
@@ -56,6 +61,11 @@ async function rpc(fn: string, args: Record<string, unknown> = {}, jwt?: string)
 }
 
 async function leerConfig(): Promise<Record<string, string>> {
+  const c = await leerConfigBase();
+  cfgModelo = c;   // el modelo elegido vale para todo lo que haga esta llamada (charla, aprender, revisión)
+  return c;
+}
+async function leerConfigBase(): Promise<Record<string, string>> {
   const clave = variable('SUPABASE_SERVICE_ROLE_KEY');
   const r = await fetch(`${variable('SUPABASE_URL')}/rest/v1/config?select=clave,valor`, {
     headers: { apikey: clave, Authorization: `Bearer ${clave}` },
@@ -280,7 +290,8 @@ async function claude() {
   return cliente;
 }
 
-const modelo = () => env('ASISTENTE_MODELO') || MODELO_POR_DEFECTO;
+let cfgModelo: Record<string, string> = {};
+export const modelo = (cfg: Record<string, string> = cfgModelo) => env('ASISTENTE_MODELO') || MODELOS[cfg.asistente_modelo] || MODELOS.intermedio;
 const esfuerzo = (cfg: Record<string, string>) =>
   (['low', 'medium', 'high'].includes(cfg.asistente_esfuerzo) ? cfg.asistente_esfuerzo : 'medium');
 
@@ -954,6 +965,7 @@ const ESQUEMA_PROPUESTA = {
 };
 
 async function pedirJSON(instrucciones: string, contenido: string, esquema: any, cfgEsfuerzo = 'medium') {
+  await leerConfig().catch(() => {});
   const r = await pedirAClaude({
     max_tokens: 16000,
     output_config: { effort: cfgEsfuerzo, format: { type: 'json_schema', schema: esquema } },

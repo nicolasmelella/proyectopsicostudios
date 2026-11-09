@@ -237,12 +237,17 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
 
 ## Costos
 
-- **Claude:** se paga por uso (por “tokens”, pedacitos de texto). Con el modelo por defecto (`claude-opus-5-5`),
-  una charla típica (consultar, reservar, mandar comprobante) cuesta **del orden de 10 a 30 centavos de dólar**:
-  el asistente reutiliza las instrucciones entre mensajes (caché) para que salga más barato. El gasto real se ve en
-  <https://console.anthropic.com> y los tokens en *Asistente → Resumen*.
-  Para gastar menos: *Cuánto piensa → Poco*, o el secreto `ASISTENTE_MODELO` = `claude-sonnet-5-5` (más barato, muy bueno para charlas).
-  Precios actuales: <https://www.anthropic.com/pricing>.
+- **Claude:** se paga por uso. La calidad se elige en *Asistente → Ajustes → Calidad de las respuestas*:
+
+  | Opción | Modelo | Aprox. por mes (hasta ~300 charlas) |
+  |---|---|---|
+  | Económica | Claude Haiku 5.5 | US$3 a 5 |
+  | **Buena (por defecto, recomendada)** | Claude Sonnet 5.5 | **US$30** |
+  | Máxima | Claude Opus 5.5 | US$60 |
+
+  Son estimaciones: el gasto real se ve en <https://console.anthropic.com> y los tokens en *Asistente → Resumen*.
+  Poné un tope de gasto mensual en la consola. Precios: <https://www.anthropic.com/pricing>.
+- **Supabase:** el plan gratis alcanza para este volumen (sin copias automáticas: usen *Bajar copia (Excel)* una vez por semana). El Pro cuesta US$25 por mes.
 - **WhatsApp (Meta):** las respuestas a un mensaje que escribió el cliente (dentro de las 24 hs) no tienen el costo de
   las plantillas. Ver <https://developers.facebook.com/docs/whatsapp/pricing>.
 - WhatsApp **no deja escribir primero** a alguien que no escribió en las últimas 24 hs (salvo con plantillas aprobadas).

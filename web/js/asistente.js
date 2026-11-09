@@ -488,6 +488,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     ['asistente_seguimiento', 'Etapa 2 · Volver a escribirle UNA vez a quien quedó con algo pendiente', 'sino'],
     ['asistente_horas_seguimiento', 'Horas de silencio antes de ese seguimiento', 'number'],
     ['asistente_transcribir_audios', 'Entender audios (los pasa a texto con Whisper)', 'sino'],
+    ['asistente_modelo', 'Calidad de las respuestas (y costo)', 'modelo'],
     ['asistente_esfuerzo', 'Cuánto piensa antes de responder', 'esfuerzo'],
   ];
   async function pintarAjustes() {
@@ -496,6 +497,8 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       <form class="campo" data-asis-cfg="${k}" style="display:flex;gap:8px;align-items:flex-end">
         <div style="flex:1"><label for="ac-${k}">${t}</label>${
           tipo === 'sino' ? `<select id="ac-${k}"><option value="si" ${st.cfg[k] === 'si' ? 'selected' : ''}>Sí</option><option value="no" ${st.cfg[k] !== 'si' ? 'selected' : ''}>No</option></select>`
+          : tipo === 'modelo' ? `<select id="ac-${k}">${[['economico', 'Económica: la más barata (~US$3-5 por mes)'], ['intermedio', 'Buena: conversa bien (~US$30 por mes, recomendado)'],
+              ['maximo', 'Máxima: la mejor y más cara (~US$60 por mes)']].map(([v, x]) => `<option value="${v}" ${(st.cfg[k] || 'intermedio') === v ? 'selected' : ''}>${x}</option>`).join('')}</select>`
           : tipo === 'esfuerzo' ? `<select id="ac-${k}">${[['low', 'Poco (más rápido y barato)'], ['medium', 'Normal (recomendado)'], ['high', 'Mucho (más lento, más cuidadoso)']]
               .map(([v, x]) => `<option value="${v}" ${st.cfg[k] === v ? 'selected' : ''}>${x}</option>`).join('')}</select>`
           : `<input id="ac-${k}" type="${tipo}" value="${esc(st.cfg[k] ?? '')}" required ${tipo === 'number' ? 'min="1" step="1"' : 'maxlength="40"'}>`}</div>

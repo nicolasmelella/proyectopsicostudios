@@ -29,6 +29,7 @@ insert into public.config (clave, valor, descripcion) values
   ('asistente_seguimiento',     'no',  'si = si alguien consultó y quedó con algo pendiente, el asistente le vuelve a escribir UNA vez, sin presión (etapa 2)'),
   ('asistente_horas_seguimiento', '3', 'Horas de silencio después de las que el asistente hace ese seguimiento'),
   ('asistente_transcribir_audios', 'si', 'si = los audios se pasan a texto con Whisper (requiere el secreto OPENAI_API_KEY)'),
+  ('asistente_modelo',          'intermedio', 'Modelo de Claude: economico (el más barato), intermedio (buena conversación, por defecto) o maximo (el más capaz y caro)'),
   ('asistente_toma_reservas',   'no',  'si = el asistente reserva él mismo; no = comparte la disponibilidad y el link de la web para que la persona reserve'),
   ('asistente_horas_anticipacion', '24', 'Horas de anticipación mínimas para que el asistente mueva o libere un horario (con menos, lo pasa al equipo)'),
   ('asistente_dias_horas_a_favor', '30', 'Días que duran las horas a favor de un fijo que avisó que no viene')
