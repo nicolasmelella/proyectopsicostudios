@@ -1663,9 +1663,13 @@ select * from (values
   ('Reservas', '¿Cómo reservo?', 'Desde la web se elige día, horario y consultorio, se dejan los datos y se paga. Si te sirve, te paso el link que abre directo en el día que buscás.', 'inicial'),
   ('Reservas', '¿Cómo se paga una reserva por horas?', 'Podés pagar el total o una seña del 50% y el saldo hasta el día anterior a cada turno. La reserva queda confirmada al recibir el pago.', 'inicial'),
   ('Cancelaciones', '¿Puedo cancelar o cambiar una reserva?', 'Sí, avisando con 24 hs de anticipación o más: se cambia la fecha sin cargo o, si todavía no sabés cuándo, te queda el saldo a favor para otra reserva. Lo pagado no se devuelve en dinero; con menos de 24 hs de aviso lo evalúa el equipo.', 'inicial'),
-  ('Horario fijo', '¿Qué es el horario fijo?', 'Es el mismo día y horario todas las semanas, con precio preferencial. Por la mañana desde 1 hora; por la tarde (desde las 13 hs) mínimo 2 horas seguidas. Se paga por mes, por adelantado.', 'inicial')
+  ('Horario fijo', '¿Qué es el horario fijo?', 'Es el mismo día y horario todas las semanas, con precio preferencial. Por la mañana desde 1 hora; por la tarde (desde las 13 hs) mínimo 2 horas seguidas. Se paga por mes, por adelantado.', 'inicial'),
+  ('Requisitos', '¿Qué requisitos hay para alquilar?', 'Siempre pedimos copia del título profesional y del documento (DNI).', 'inicial')
 ) v(tema, pregunta, respuesta, origen)
 where not exists (select 1 from public.asistente_conocimiento);
+insert into public.asistente_conocimiento (tema, pregunta, respuesta, origen)
+select 'Requisitos', '¿Qué requisitos hay para alquilar?', 'Siempre pedimos copia del título profesional y del documento (DNI).', 'inicial'
+where not exists (select 1 from public.asistente_conocimiento where tema = 'Requisitos');
 
 -- Lo que salió de las charlas de WhatsApp del equipo y conviene que confirmen: queda en Asistente → Aprendizaje → Para aprobar
 insert into public.asistente_propuestas (tema, pregunta, respuesta, motivo, origen)
