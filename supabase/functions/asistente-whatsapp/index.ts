@@ -323,7 +323,7 @@ CÓMO ESCRIBÍS
 REGLAS (no se negocian)
 1. Nunca inventes. Precios, horarios, reglas, disponibilidad y estado de pedidos salen SIEMPRE de tus herramientas. Para dudas sobre el espacio usá buscar_saber. Si no está, no lo supongas: decí que lo consultás y usá pasar_al_equipo.
 2. Disponibilidad: consultala antes de ofrecer. Si lo que pide está ocupado, ofrecé alternativas concretas (otro consultorio a la misma hora, un horario cercano ese día, o el mismo horario otro día).
-3. Antes de reservar, mostrá un resumen (días, horarios, consultorio, total y seña) y esperá un "sí" explícito. Nunca reserves sin confirmación.
+3. Si el contexto dice "RESERVAS POR LA WEB", vos no reservás: compartí la disponibilidad y el link_para_reservar (abre la web en ese día) para que la persona arme su reserva; si te pide que reserves vos, explicale con amabilidad que se hace desde el link en un par de minutos y que, si tiene algún problema, el equipo la ayuda. Si podés reservar: antes mostrá un resumen (días, horarios, consultorio, total y seña) y esperá un "sí" explícito.
 4. Para reservar hacen falta nombre y apellido, profesión y mail. El celular es este WhatsApp. Si ya los tenés en el contexto, confirmalos dentro del resumen en vez de volver a pedirlos.
 5. Después de reservar, pasá los datos de pago tal cual los devuelve la herramienta (cuánto y hasta cuándo) y el link "Mi reserva", y pedí que manden la captura del comprobante por este chat.
 6. No podés: registrar pagos, dar una reserva por pagada, cancelar algo que ya tiene un pago o comprobante, hacer descuentos, excepciones o cambios de precio, ni extender plazos. Para eso usá pasar_al_equipo y avisale a la persona que el equipo le responde por acá.
@@ -496,6 +496,13 @@ const HERRAMIENTAS = [
       required: ['tipo', 'motivo', 'resumen'] },
   },
   {
+    name: 'link_para_reservar',
+    description: 'Link de la web para que la persona reserve ella misma: abre directo en el día consultado (horas sueltas) o en el día de la semana (horario fijo).',
+    input_schema: { type: 'object', properties: {
+      fecha: { type: 'string', description: 'AAAA-MM-DD para horas sueltas (opcional)' },
+      dia_semana_fijo: { type: 'integer', description: '1 lunes … 6 sábado, si busca horario fijo (opcional)' } } },
+  },
+  {
     name: 'pedir_visita',
     description: 'Pide al equipo una visita para que la persona conozca el espacio. El equipo elige día y hora (según la preferencia) y le confirma por WhatsApp.',
     input_schema: { type: 'object', properties: {
@@ -537,6 +544,11 @@ const HERRAMIENTAS = [
       hasta: { type: 'string', description: 'YYYY-MM-DD (por defecto igual a desde)' } }, required: ['que'] },
   },
 ];
+
+// Con "asistente_toma_reservas" en no (por defecto) el asistente no tiene las herramientas para reservar: comparte el link
+const RESERVAR = ['reservar_horas', 'pedir_horario_fijo'];
+export const herramientasSegun = (cfg: Record<string, string>) =>
+  (cfg.asistente_toma_reservas === 'si' ? HERRAMIENTAS : HERRAMIENTAS.filter((h) => !RESERVAR.includes(h.name)));
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const fecha = (v: unknown) => { if (typeof v !== 'string' || !FECHA.test(v)) throw { message: 'FECHA_INVALIDA', hint: 'Usá el formato AAAA-MM-DD' }; return v; };
@@ -695,6 +707,13 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
         p_resumen: String(e.resumen || ''), p_datos: datos, p_nombre: e.nombre || null });
       return { ...r, nota: 'El equipo la aprueba o rechaza desde el panel y la persona recibe la respuesta por acá. No prometas que se aprueba.' };
     }
+    case 'link_para_reservar': {
+      const base = env('SITIO_URL').replace(/\/+$/, '');
+      if (!base) throw { message: 'SIN_SITIO', hint: 'No está configurada la dirección de la web' };
+      const link = e.fecha && FECHA.test(e.fecha) ? `${base}/?dia=${e.fecha}`
+        : Number(e.dia_semana_fijo) >= 1 && Number(e.dia_semana_fijo) <= 6 ? `${base}/?fijo=${Number(e.dia_semana_fijo)}` : `${base}/#reservar`;
+      return { link, nota: 'Abre la web en ese día: la persona elige horario y consultorio, deja sus datos y paga la seña ahí.' };
+    }
     case 'pedir_visita': {
       if (chat.simulado) return { simulado: 'SIMULADOR: la visita no se pidió de verdad (en el sistema real queda en Para aprobar).' };
       const datos: Record<string, unknown> = { preferencia: String(e.preferencia || '').slice(0, 200) };
@@ -745,7 +764,9 @@ export function textoContexto(ctx: any, cfg: Record<string, string>, ahora = new
   const dias = Array.from({ length: 15 }, (_, i) => sumarDias(hoy, i)).map((f) => `${fechaCorta(f)} = ${f}`).join(' · ');
   const l = [`[Contexto — no lo escribió el cliente]`,
     `Ahora: ${fechaCorta(hoy)} ${hoy.slice(0, 4)}, ${hora} hs (Argentina). Próximos días: ${dias}.`,
-    `Tu nombre: ${cfg.asistente_nombre || 'Sofía'}.`];
+    `Tu nombre: ${cfg.asistente_nombre || 'Sofía'}.`,
+    cfg.asistente_toma_reservas === 'si' ? 'RESERVAS: podés reservar vos (con resumen y un "sí").'
+      : 'RESERVAS POR LA WEB: no reservás vos. Compartí la disponibilidad y el link_para_reservar para que la persona arme su reserva.'];
   if (ctx.simulado) l.push('SIMULADOR: es alguien del equipo probándote desde el panel. Las reservas no se crean de verdad.');
   else l.push(`Escribe desde el WhatsApp +${ctx.whatsapp}${ctx.nombre_perfil ? ` (nombre en WhatsApp: ${ctx.nombre_perfil})` : ''}.`);
   if (ctx.equipo) l.push(`Es del EQUIPO de Psico Studios: ${ctx.equipo.nombre}. Podés usar consulta_equipo.`);
@@ -823,7 +844,7 @@ export async function correrTurno(chatId: number, cfg?: Record<string, string>) 
         output_config: { effort: esfuerzo(cfg) },
         cache_control: { type: 'ephemeral' },
         system: [{ type: 'text', text: INSTRUCCIONES }],
-        tools: HERRAMIENTAS,
+        tools: herramientasSegun(cfg),
         messages: mensajes,
       });
       sumarUso(uso, r.usage);

@@ -9,7 +9,9 @@ Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la 
   No apura, no insiste, no usa urgencia ni descuentos. Ofrece reservar solo si la persona muestra interés o lo pide.
 - **Visitas:** si alguien quiere conocer el espacio, le pregunta qué día y horario le queda cómodo y lo deja en
   *Para aprobar*. Ustedes eligen día y hora y aprueban; el asistente le confirma por WhatsApp (con la dirección, si la escriben).
-- **Disponibilidad y reservas:** muestra horarios libres y reserva cuando se lo piden.
+- **Disponibilidad:** muestra horarios libres a quien pregunte y le pasa el **link de la web** que abre directo en ese día
+  (`?dia=AAAA-MM-DD`, o `?fijo=1…6` para horario fijo), para que la persona arme su reserva. Por defecto **no reserva él**;
+  se puede prender en *Ajustes → “Reserva él mismo”*.
 - **Los que ya alquilan:** los ayuda a reagendar o a encontrar más disponibilidad cuando escriben.
 - **Nunca escribe primero**, salvo dos avisos que se pueden apagar en *Ajustes*: un recordatorio de seña a quien reservó
   por el asistente y no pagó, y un seguimiento cordial (sin presión) a quien consultó y quedó con algo pendiente.

@@ -23,7 +23,7 @@ export function crearClienteDemo() {
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
       ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
       ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'si'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
-      ['asistente_seguimiento', 'si'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'],
+      ['asistente_seguimiento', 'si'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'], ['asistente_toma_reservas', 'no'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,

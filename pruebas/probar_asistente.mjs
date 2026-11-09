@@ -119,6 +119,7 @@ const tarea = (accion, secreto = env.ASISTENTE_SECRETO) => manejador(new Request
 pg("update public.config set valor = 'si' where clave = 'asistente_activo'");
 pg("update public.config set valor = 'no' where clave = 'asistente_solo_prueba'");
 pg("update public.config set valor = 'Sofía' where clave = 'asistente_nombre'");
+pg("update public.config set valor = 'si' where clave = 'asistente_toma_reservas'");   // las primeras pruebas reservan; al final se prueba el modo link
 let dia = pg('select public.hoy_ar() + 12');
 if (pg(`select extract(isodow from date '${dia}')`) === '7') dia = pg(`select date '${dia}' + 1`);
 const CEL = '5491166667777';
@@ -152,7 +153,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 23); ok('23 herramientas');
+assert.equal(p.tools.length, 24); ok('24 herramientas (con reservas prendidas)');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -509,6 +510,29 @@ assert.equal(enviados.at(-1).texto, 'Marta | tu horario fijo de los martes (15 a
 ok('si no escribió en 24 hs, va la plantilla aprobada por Meta con nombre, detalle, monto y alias');
 r = await panel({ accion: 'recordar_pago', whatsapp: '123', nombre: 'X', texto: 'x' });
 assert.equal(r.status, 400); ok('sin WhatsApp completo, avisa');
+
+// =====================================================================
+// 18. Modo por defecto: no reserva, comparte disponibilidad y el link de la web
+// =====================================================================
+pg("update public.config set valor = 'no' where clave = 'asistente_toma_reservas'");
+guion = [
+  (q) => {
+    assert.ok(!q.tools.some((t) => t.name === 'reservar_horas' || t.name === 'pedir_horario_fijo'));
+    assert.match(q.messages.at(-1).content[0].text, /RESERVAS POR LA WEB/);
+    return herramienta('link_para_reservar', { fecha: dia });
+  },
+  (q) => {
+    const r = JSON.parse(q.messages.at(-1).content[0].content);
+    assert.equal(r.link, `https://reservas.prueba/?dia=${dia}`);
+    return texto(`Ese día tenés libre de 10 a 12 en el Consultorio 2. Podés reservarlo acá: ${r.link}`);
+  },
+];
+const CEL6 = '5491155550202';
+await deWhatsApp(CEL6, { type: 'text', text: { body: 'Quiero reservar el jueves de 10 a 12' } }, 'Leo');
+assert.match(enviados.at(-1).texto, new RegExp(`reservas\\.prueba/\\?dia=${dia}`));
+assert.equal(pg(`select count(*) from public.asistente_pedidos ap join public.asistente_chats c on c.id = ap.chat_id where c.whatsapp = '${CEL6}'`), '0');
+ok('por defecto no reserva: comparte la disponibilidad y el link que abre la web en ese día');
+assert.equal(mod.herramientasSegun({ asistente_toma_reservas: 'no' }).length, 22); ok('sin las herramientas de reservar');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

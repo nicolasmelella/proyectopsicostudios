@@ -1046,6 +1046,16 @@ try {
   if (primero) await elegirFecha(primero);
   else { pintarCalendario(); $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres en los próximos meses. Escribinos por WhatsApp.</p>'; }
   const q = new URLSearchParams(location.search);
+  // Links que comparte el asistente de WhatsApp: ?dia=AAAA-MM-DD (horas sueltas) o ?fijo=1…6 (horario fijo ese día de la semana)
+  const diaLink = q.get('dia'), fijoLink = q.get('fijo');
+  if (diaLink && /^\d{4}-\d{2}-\d{2}$/.test(diaLink) && diaLink >= hoyAR()) {
+    await elegirFecha(diaLink);
+    document.getElementById('reservar')?.scrollIntoView({ block: 'start' });
+  } else if (fijoLink && /^[1-6]$/.test(fijoLink)) {
+    cambiarModo('fijo');
+    elegirDiaFijo(Number(fijoLink));
+    document.getElementById('reservar')?.scrollIntoView({ block: 'start' });
+  }
   if (q.has('pago') && q.has('pedido') && q.has('t')) {
     const [resultado, id, token] = [q.get('pago'), Number(q.get('pedido')), q.get('t')];
     const pagoMP = q.get('payment_id') || q.get('collection_id');
