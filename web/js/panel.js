@@ -1464,16 +1464,40 @@ function pintarAlertas(cont, lista) {
       <div class="acciones">
         <button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
         <button class="btn btn-borde btn-chico" data-alerta="${i}">Ver · cancelar</button>
-        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar por WhatsApp</a>`
+        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar desde mi WhatsApp</a>
+          ${st.cfg.asistente_activo !== undefined ? `<button class="btn btn-borde btn-chico" data-recordar="${i}">Que lo mande el asistente</button>` : ''}`
           : '<span class="suave chico">Sin WhatsApp cargado</span>'}
       </div>
     </div>`;
   }).join('');
   $$('[data-cobrar]', cont).forEach((b) => (b.onclick = () => cobrarAlerta(lista[b.dataset.cobrar])));
+  $$('[data-recordar]', cont).forEach((b) => (b.onclick = () => recordarConAsistente(lista[b.dataset.recordar])));
   $$('[data-alerta]', cont).forEach((b) => (b.onclick = () => {
     const x = lista[b.dataset.alerta];
     if (x.reserva_id) detalleReserva(x.reserva_id); else detalleFijo(x.fijo_id, null, false);
   }));
+}
+
+// El equipo autoriza que el asistente mande el recordatorio (y atienda la respuesta)
+function recordarConAsistente(x) {
+  const esFijo = x.tipo.startsWith('fijo');
+  const detalle = esFijo ? `tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)})` : `tu reserva del ${fechaLarga(x.fecha_turno)} (${rangos(x.horas)})`;
+  abrirModal(`<h2 id="modal-titulo">Recordatorio de pago</h2>
+    <p class="suave chico">Lo manda el asistente por WhatsApp a <strong>${esc(x.nombre)}</strong>. Si responde, el asistente la atiende (comprobante, dudas).</p>
+    <div class="campo"><label for="rec-texto">Mensaje</label><textarea id="rec-texto" rows="5" maxlength="1500">${esc(textoAlertaWa(x))}</textarea></div>
+    <p class="aviso aviso-info chico">Si no escribió en las últimas 24 hs, WhatsApp no deja mandar texto libre: se manda el texto aprobado por Meta
+      (“Hola ${esc(x.nombre.split(' ')[0])}, te escribimos de Psico Studios por ${esc(detalle)}. Tenés pendiente ${pesos(x.falta)}…”).</p>
+    <div id="rec-error" class="aviso aviso-error oculto" role="alert"></div>
+    <div class="acciones"><button class="btn btn-primario" id="rec-enviar">Enviar</button><button class="btn btn-borde" id="rec-cancelar">Cancelar</button></div>`);
+  $('#rec-cancelar').onclick = cerrarModal;
+  $('#rec-enviar').onclick = async () => {
+    $('#rec-enviar').disabled = true;
+    const { data, error } = await sb.functions.invoke('asistente-whatsapp', { body: { accion: 'recordar_pago', whatsapp: x.whatsapp, nombre: x.nombre,
+      texto: $('#rec-texto').value, detalle, monto: x.falta } });
+    if (error) { $('#rec-enviar').disabled = false; return errorEn($('#rec-error'), await errorDeFuncion(error)); }
+    cerrarModal();
+    toast(data.ok ? (data.como === 'plantilla' ? 'Enviado (con el texto aprobado por Meta)' : 'Enviado por WhatsApp') : `No se pudo enviar: ${data.envio}`);
+  };
 }
 
 // Registrar el pago de una alerta (ej: el comprobante llegó por WhatsApp)

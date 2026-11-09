@@ -150,6 +150,21 @@ async function enviarImagen(para: string, link: string, epigrafe: string) {
   if (!r.ok) throw new Error(`WhatsApp respondió ${r.status}: ${(await r.text()).slice(0, 300)}`);
 }
 
+// Plantilla aprobada por Meta (para escribirle a alguien que no escribió en las últimas 24 hs)
+export const PLANTILLA_RECORDATORIO = 'psico_recordatorio_pago';
+async function enviarPlantilla(para: string, plantilla: string, parametros: string[]) {
+  const prueba = (globalThis as any).__enviarWhatsAppPrueba;
+  if (prueba) return prueba(para, parametros.join(' | '), { plantilla });
+  const r = await fetch(`${GRAPH}/${variable('WA_PHONE_ID')}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${variable('WA_TOKEN')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: para, type: 'template',
+      template: { name: plantilla, language: { code: 'es_AR' },
+        components: [{ type: 'body', parameters: parametros.map((t) => ({ type: 'text', text: String(t).replace(/\s+/g, ' ').trim().slice(0, 900) || '-' })) }] } }),
+  });
+  if (!r.ok) throw new Error(`WhatsApp respondió ${r.status}: ${(await r.text()).slice(0, 300)}`);
+}
+
 // Fotos de la web (web/img/consultorios) que el asistente puede mandar
 export const FOTOS: Record<string, { archivos: string[]; texto: string }> = {
   espacio: { archivos: ['espacio-a', 'espacio-b', 'espacio-c'], texto: 'El espacio: recepción, sala de espera y la vista desde el edificio' },
@@ -1066,6 +1081,30 @@ async function accionPanel(req: Request, cuerpo: any) {
       await rpc('asistente_soltar_turno', { p_chat_id: e.chat_id }).catch(() => {});
       throw err;
     }
+  }
+
+  // Recordatorio de pago que autoriza el equipo (Pendientes → Alertas de pago)
+  if (cuerpo.accion === 'recordar_pago') {
+    const texto = String(cuerpo.texto || '').trim().slice(0, 1500);
+    if (!texto) return responder({ message: 'VACIO', hint: 'Escribí el mensaje' }, 400);
+    const c = await rpc('asistente_panel_preparar_recordatorio', { p_whatsapp: String(cuerpo.whatsapp || ''), p_nombre: cuerpo.nombre || null }, yo.jwt);
+    const cfg = await leerConfig();
+    let envio = 'enviado', enviado = texto, como = 'texto';
+    try {
+      if (c.ventana_abierta) await enviarTexto(c.whatsapp, texto);
+      else {
+        // fuera de las 24 hs, WhatsApp solo deja mandar el texto aprobado por Meta
+        como = 'plantilla';
+        const p = [primerNombre(cuerpo.nombre) || 'hola', String(cuerpo.detalle || 'tu reserva'), pesos(Number(cuerpo.monto) || 0),
+                   cfg.alias_transferencia && cfg.alias_transferencia !== 'COMPLETAR' ? cfg.alias_transferencia : 'el alias de siempre'];
+        await enviarPlantilla(c.whatsapp, PLANTILLA_RECORDATORIO, p);
+        enviado = `Hola ${p[0]}, te escribimos de Psico Studios por ${p[1]}. Tenés pendiente ${p[2]}. Podés transferir al alias ${p[3]} y mandarnos el comprobante por este chat. ¡Gracias!`;
+      }
+    } catch (e) { envio = String((e as Error)?.message ?? e); }
+    const id = await rpc('asistente_mensaje_sistema', { p_chat_id: c.chat_id, p_texto: enviado,
+      p_nota: `El equipo autorizó este recordatorio de pago (${cuerpo.detalle || ''}, ${pesos(Number(cuerpo.monto) || 0)}): "${enviado}". Si responde, ayudalo con el pago o el comprobante, sin insistir.` });
+    await rpc('asistente_resultado_envio', { p_mensaje_id: id, p_resultado: envio });
+    return responder({ ok: envio === 'enviado', envio, como });
   }
 
   if (cuerpo.accion === 'resolver_solicitud') {

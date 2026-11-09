@@ -1079,6 +1079,10 @@ export function crearClienteDemo() {
             await new Promise((r) => setTimeout(r, 700));
             return { data: body.reiniciar ? { ok: true } : { ...respuestaDemo(String(body.texto || '')), uso: {} }, error: null };
           }
+          if (body.accion === 'recordar_pago') {
+            await new Promise((r) => setTimeout(r, 300));
+            return { data: { ok: true, envio: 'enviado', como: 'texto' }, error: null };
+          }
           if (body.accion === 'resolver_solicitud') {
             const x = db.asistente_solicitudes.find((y) => y.id === Number(body.id) && y.estado === 'pendiente');
             if (x?.tipo === 'visita' && body.aprobar) {

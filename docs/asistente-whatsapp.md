@@ -76,6 +76,25 @@ Cuando el pedido no entra en las reglas, el asistente **deja el cambio armado** 
 - También existe **“¿Ya alquila? Vincular con su ficha”** en cada chat, para vincular sin que haya un pedido.
 - Supuesto a confirmar: si el horario nuevo es **más barato**, no se devuelve la diferencia.
 
+## Recordatorios de pago (solo si los autoriza el equipo)
+
+El asistente **nunca** pide plata por su cuenta. En *Pendientes → Alertas de pago*, cada deuda tiene el botón
+**“Que lo mande el asistente”**: se abre el mensaje (editable), lo revisan y tocan **Enviar**. Sale por WhatsApp desde el número
+del asistente, queda en el chat y, si la persona responde (comprobante, dudas), el asistente la atiende sin insistir.
+También sigue el botón **“Recordar desde mi WhatsApp”**, para mandarlo a mano desde el celular.
+
+- Si la persona escribió en las **últimas 24 hs**, va el texto que editaron.
+- Si no, WhatsApp solo deja mandar un texto **aprobado por Meta**: se usa la plantilla `psico_recordatorio_pago`
+  (hay que crearla una vez, ver abajo). El panel avisa cuál de los dos se mandó.
+- Hace falta el WhatsApp completo en la ficha.
+
+**Plantilla para cargar en Meta** (Administrador de WhatsApp → Plantillas → Crear; categoría **Utilidad**, idioma **Español (ARG)**):
+
+`psico_recordatorio_pago`
+```
+Hola {{1}}, te escribimos de Psico Studios por {{2}}. Tenés pendiente {{3}}. Podés transferir al alias {{4}} y mandarnos el comprobante por este chat. ¡Gracias!
+```
+
 ## CRM: cada contacto con su etapa
 
 En *Asistente → Conversaciones* cada contacto tiene una **etapa**: Nuevo → Consultó → Interesado → Reservó → Pagó (o Perdido).

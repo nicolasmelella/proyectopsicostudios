@@ -437,5 +437,16 @@ set role service_role;
 select pg_temp.ok((select jsonb_array_length(public.asistente_contexto(:chat_g)::jsonb->'visitas') = 1), 'el asistente sabe que tiene la visita');
 reset role;
 
+-- Recordatorio de pago autorizado por el equipo: prepara el chat
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_nadie', false);
+select pg_temp.espera_error($$select public.asistente_panel_preparar_recordatorio('1155556666')$$, 'NO_AUTORIZADO');
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select pg_temp.espera_error($$select public.asistente_panel_preparar_recordatorio('4555')$$, 'SIN_WHATSAPP');
+create temp table as_recordatorio as select public.asistente_panel_preparar_recordatorio('11 2020 3030', 'Nuevo Cliente')::jsonb as r;
+select pg_temp.ok((select r->>'whatsapp' = '5491120203030' and not (r->>'ventana_abierta')::boolean from as_recordatorio),
+                  'recordatorio: crea el chat; sin mensajes recientes no hay ventana de 24 hs (va con plantilla)');
+reset role;
+
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

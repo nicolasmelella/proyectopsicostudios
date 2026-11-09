@@ -1409,6 +1409,27 @@ begin
   update public.asistente_visitas set estado = 'cancelada' where id = p_id;
 end $$;
 
+-- Recordatorio de pago que AUTORIZA el equipo desde Pendientes → Alertas de pago:
+-- prepara el chat (lo crea si no existe) y dice si WhatsApp deja mandar texto libre (24 hs)
+create or replace function public.asistente_panel_preparar_recordatorio(p_whatsapp text, p_nombre text default null) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_tel text;
+  c public.asistente_chats;
+begin
+  perform public.exigir_equipo();
+  if length(public.solo_numeros(p_whatsapp)) < 10 then
+    raise exception 'SIN_WHATSAPP' using hint = 'Falta el WhatsApp completo (con código de área) en su ficha';
+  end if;
+  v_tel := public.whatsapp_internacional(p_whatsapp);
+  insert into public.asistente_chats (whatsapp, nombre_perfil, profesional_id)
+  values (v_tel, nullif(trim(p_nombre), ''), public.asistente_profesional(v_tel))
+  on conflict (whatsapp) do update set profesional_id = coalesce(public.asistente_chats.profesional_id, excluded.profesional_id)
+  returning * into c;
+  return json_build_object('chat_id', c.id, 'whatsapp', c.whatsapp,
+                           'ventana_abierta', coalesce(c.ultimo_cliente_en > now() - interval '24 hours', false));
+end $$;
+
 -- El simulador del panel empieza una charla nueva
 create or replace function public.asistente_panel_reiniciar_simulador() returns void
 language plpgsql security definer set search_path = public as $$

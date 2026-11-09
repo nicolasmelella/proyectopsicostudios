@@ -491,6 +491,25 @@ assert.match(enviados.at(-1).texto, /^Hola Sol! Te esperamos el \*.+ a las 17:30
 ok('el equipo elige día y hora: se le confirma por WhatsApp con la dirección');
 assert.match(mod.INSTRUCCIONES, /no vender/); assert.match(mod.INSTRUCCIONES, /sin presión/i); ok('instrucciones: informar sin presionar');
 
+// =====================================================================
+// 17. Recordatorio de pago que autoriza el equipo
+// =====================================================================
+r = await panel({ accion: 'recordar_pago', whatsapp: '1166667777', nombre: 'Juan Pérez', texto: 'Hola Juan! Te recordamos el saldo de $9.000.',
+  detalle: 'tu reserva del jueves', monto: 9000 });
+let rec = await r.json();
+assert.equal(rec.ok, true); assert.equal(rec.como, 'texto');
+assert.equal(enviados.at(-1).para, CEL); assert.equal(enviados.at(-1).texto, 'Hola Juan! Te recordamos el saldo de $9.000.');
+ok('recordatorio autorizado: si escribió hace poco, va el texto que editó el equipo');
+assert.match(pg(`select texto from public.asistente_mensajes m join public.asistente_chats c on c.id = m.chat_id where c.whatsapp = '${CEL}' and m.rol = 'nota' order by m.id desc limit 1`), /autorizó este recordatorio/);
+ok('el asistente se entera, para atender la respuesta');
+r = await panel({ accion: 'recordar_pago', whatsapp: '1140405050', nombre: 'Marta Díaz', texto: 'cualquier cosa', detalle: 'tu horario fijo de los martes (15 a 17 hs)', monto: 68000 });
+rec = await r.json();
+assert.equal(rec.como, 'plantilla'); assert.equal(enviados.at(-1).plantilla, 'psico_recordatorio_pago');
+assert.equal(enviados.at(-1).texto, 'Marta | tu horario fijo de los martes (15 a 17 hs) | $68.000 | alias.real');
+ok('si no escribió en 24 hs, va la plantilla aprobada por Meta con nombre, detalle, monto y alias');
+r = await panel({ accion: 'recordar_pago', whatsapp: '123', nombre: 'X', texto: 'x' });
+assert.equal(r.status, 400); ok('sin WhatsApp completo, avisa');
+
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');
 assert.deepEqual(mod.partirMensaje('a'.repeat(5000)).map((x) => x.length), [3800, 1200]); ok('mensajes largos se parten (WhatsApp tiene límite)');
