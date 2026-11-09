@@ -162,6 +162,7 @@ create table if not exists public.horas_a_favor (
   horas smallint not null check (horas > 0),
   usadas smallint not null default 0,
   valor_hora integer not null,                 -- lo que valía cada hora (para cobrar la diferencia si recupera en una franja más cara)
+  modalidad text not null default 'fijo',      -- fijo o suelta: con qué precio se compara al recuperarlas
   motivo text,
   fijo_id bigint references public.fijos (id),
   fecha_origen date,
@@ -170,6 +171,7 @@ create table if not exists public.horas_a_favor (
   check (usadas >= 0 and usadas <= horas)
 );
 create index if not exists horas_a_favor_prof on public.horas_a_favor (profesional_id);
+alter table public.horas_a_favor add column if not exists modalidad text not null default 'fijo';
 
 -- Solicitudes que el asistente deja armadas y el equipo aprueba con un toque:
 -- cambios de alguien que no reconoce por su WhatsApp, cambios con poco aviso, más tiempo para la seña
@@ -193,7 +195,7 @@ create table if not exists public.asistente_solicitudes (
 create index if not exists asistente_solicitudes_pend on public.asistente_solicitudes (estado, id);
 alter table public.asistente_solicitudes drop constraint if exists asistente_solicitudes_tipo_check;
 alter table public.asistente_solicitudes add constraint asistente_solicitudes_tipo_check
-  check (tipo in ('mover_reserva', 'mover_fijo', 'no_vengo', 'recuperar_horas', 'extender_sena', 'visita'));
+  check (tipo in ('mover_reserva', 'mover_fijo', 'no_vengo', 'recuperar_horas', 'extender_sena', 'visita', 'liberar_turno'));
 
 -- Visitas para conocer el espacio (las coordina y aprueba el equipo)
 create table if not exists public.asistente_visitas (
@@ -216,7 +218,7 @@ create table if not exists public.asistente_cambios (
   id bigint generated always as identity primary key,
   chat_id bigint references public.asistente_chats (id) on delete set null,
   profesional_id bigint references public.profesionales (id),
-  tipo text not null check (tipo in ('mover_reserva', 'mover_fijo', 'liberar_fijo', 'usar_horas')),
+  tipo text not null check (tipo in ('mover_reserva', 'mover_fijo', 'liberar_fijo', 'usar_horas', 'liberar_turno')),
   detalle text not null,
   diferencia integer not null default 0,
   reserva_id bigint references public.reservas (id),
@@ -1003,6 +1005,40 @@ begin
                         else 'Ese mes todavía no estaba pago: esa semana no se le cobra' end);
 end $$;
 
+-- Cancelar un turno por horas avisando con tiempo: lo pagado queda como saldo a favor (en horas, para otra reserva)
+create or replace function public.asistente_liberar_reserva(p_chat_id bigint, p_reserva_id bigint, p_forzar boolean default false) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prof bigint := public.asistente_quien(p_chat_id);
+  r public.reservas;
+  v_pagado integer;
+  v_vence date;
+begin
+  select * into r from public.reservas where id = p_reserva_id and profesional_id = v_prof for update;
+  if not found or r.estado not in ('pendiente', 'confirmada') or r.fecha < public.hoy_ar() then
+    raise exception 'NO_ENCONTRADO' using hint = 'No hay un turno vigente con ese número a nombre de esta persona';
+  end if;
+  if not p_forzar then perform public.asistente_controlar_anticipacion(r.fecha, r.horas); end if;
+  v_pagado := public.monto_pagado_reserva(r.id);
+  update public.reservas set estado = 'cancelada', cancelada_en = now(),
+         motivo_cancelacion = 'Avisó por WhatsApp con tiempo (asistente)' || case when v_pagado > 0 then ': lo pagado queda a favor' else '' end
+  where id = r.id;
+  delete from public.ocupaciones where reserva_id = r.id;
+  if v_pagado > 0 then
+    v_vence := r.fecha + coalesce(public.cfg('asistente_dias_horas_a_favor'), 30);
+    insert into public.horas_a_favor (profesional_id, horas, valor_hora, modalidad, motivo, fecha_origen, vence)
+    values (v_prof, cardinality(r.horas), v_pagado / cardinality(r.horas), 'suelta',
+            'Canceló con tiempo el turno del ' || to_char(r.fecha, 'DD/MM') || ' (pagó ' || v_pagado || ')', r.fecha, v_vence);
+  end if;
+  insert into public.asistente_cambios (chat_id, profesional_id, tipo, detalle, reserva_id)
+  values (p_chat_id, v_prof, 'liberar_turno', format('Canceló su turno del %s%s', to_char(r.fecha, 'DD/MM'),
+          case when v_pagado > 0 then format(': %s horas a favor hasta el %s', cardinality(r.horas), to_char(v_vence, 'DD/MM')) else ' (no había pagado)' end), r.id);
+  return json_build_object('cancelado', true, 'fecha', r.fecha, 'pagado', v_pagado,
+    'horas_a_favor', case when v_pagado > 0 then cardinality(r.horas) else 0 end, 'vencen', v_vence,
+    'explicacion', case when v_pagado > 0 then 'Lo que pagó queda como horas a favor para otra reserva (si la franja nueva cuesta más, paga la diferencia)'
+                        else 'No había pagado: se canceló y el horario quedó libre' end);
+end $$;
+
 -- Recuperar horas a favor en otro día (si la franja nueva es más cara, paga la diferencia)
 create or replace function public.asistente_usar_horas(p_chat_id bigint, p_fecha date, p_horas smallint[], p_consultorio smallint default null)
 returns json
@@ -1034,7 +1070,7 @@ begin
     update public.horas_a_favor set usadas = usadas + least(v_falta, k.horas - k.usadas) where id = k.id;
     for i in 1 .. least(v_falta, k.horas - k.usadas) loop
       h := v_horas[cardinality(v_horas) - v_falta + 1];
-      v_precio := v_precio + greatest(0, public.precio_hora('fijo', h, p_fecha) - k.valor_hora);
+      v_precio := v_precio + greatest(0, public.precio_hora(coalesce(k.modalidad, 'fijo'), h, p_fecha) - k.valor_hora);
       v_falta := v_falta - 1;
     end loop;
   end loop;
@@ -1370,6 +1406,10 @@ begin
       else
         v_res := public.asistente_liberar_fijo(c.id, v_ref, (d->>'fecha_original')::date, true);
       end if;
+    elsif s.tipo = 'liberar_turno' then
+      v_ref := coalesce(nullif(d->>'reserva_id', '')::bigint,
+        (select id from public.reservas where profesional_id = v_prof and fecha = (d->>'fecha_original')::date and estado in ('pendiente', 'confirmada') order by id limit 1));
+      v_res := public.asistente_liberar_reserva(c.id, v_ref, true);
     elsif s.tipo = 'recuperar_horas' then
       v_res := public.asistente_usar_horas(c.id, (d->>'nueva_fecha')::date, v_horas, nullif(d->>'consultorio_id', '')::smallint);
     elsif s.tipo = 'extender_sena' then
@@ -1613,19 +1653,32 @@ end $$;
 -- ---------------------------------------------------------------------
 insert into public.asistente_conocimiento (tema, pregunta, respuesta, origen)
 select * from (values
-  ('El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.', 'inicial'),
-  ('El espacio', '¿Cómo son los consultorios?', 'Son amplios y luminosos, todos con aire acondicionado. Hay 5 consultorios y un Salón para grupos, talleres y supervisiones. El 3 tiene sofá, sillones y ventanales; el 4, sillones enfrentados; el 1, escritorio y sillas. Hay recepción y sala de espera. En la web están las fotos de cada uno.', 'inicial'),
-  ('El espacio', '¿Qué incluye?', 'Wifi de alta velocidad, aire acondicionado, recepción y sala de espera, y café y snacks para vos. Sin contratos ni costos ocultos.', 'inicial'),
-  ('El espacio', '¿Están habilitados?', 'Sí: están habilitados por el Ministerio de Salud y para obras sociales.', 'inicial'),
-  ('El espacio', '¿Quiénes atienden el espacio?', 'Está atendido por sus dueños. Hace más de 15 años que alquilamos consultorios a profesionales de la salud en el Microcentro.', 'inicial'),
-  ('El espacio', '¿Hacen derivación de pacientes?', 'Sí, hay derivación de pacientes: lo coordina el equipo directamente (derivar a una persona del equipo).', 'inicial'),
-  ('Reservas', '¿Cómo reservo?', 'Por acá mismo: decime qué día, horario y si preferís algún consultorio, y te lo reservo. También se puede desde la web, en 2 minutos. Se pide nombre, profesión, celular y mail (los recordamos para la próxima).', 'inicial'),
-  ('Reservas', '¿Cómo se confirma una reserva por horas?', 'Los horarios quedan guardados mientras se paga la seña (50% del total). Se paga por transferencia (y se manda la captura del comprobante por este chat) o por Mercado Pago si está disponible. El saldo se paga hasta el día anterior a cada turno.', 'inicial'),
-  ('Reservas', '¿Qué pasa si no pago la seña a tiempo?', 'Si la seña no llega en el plazo, los horarios se liberan solos y otra persona los puede tomar. Si avisás que transferís más tarde, el equipo puede darte un rato más.', 'inicial'),
-  ('Horario fijo', '¿Qué es el horario fijo?', 'Es el mismo día y horario todas las semanas, con precio preferencial. Por la mañana desde 1 hora; por la tarde (desde las 13 hs) mínimo 2 horas seguidas. Se confirma pagando el primer mes y después se paga mes a mes por adelantado.', 'inicial'),
-  ('Cancelaciones', '¿Puedo cancelar o cambiar una reserva?', 'Si todavía no pagaste nada, se puede cancelar y volver a reservar. Si ya pagaste algo (seña o comprobante enviado), lo ve el equipo: te paso con ellos.', 'inicial')
+  ('El espacio', '¿Dónde están?', 'En Perú 89, piso 7, Microcentro (CABA). La puerta del edificio está al lado de la pizzería. Ubicación: https://maps.google.com/?q=-34.609,-58.375', 'inicial'),
+  ('El espacio', '¿Cómo se ingresa?', 'La puerta del edificio está abierta hasta las 19 hs aprox.: profesionales y pacientes suben directo por el ascensor al piso 7. Después de esa hora y los sábados la puerta de abajo está cerrada: el equipo le explica a cada profesional cómo ingresar (nunca compartas códigos ni llaves).', 'inicial'),
+  ('El espacio', '¿Qué incluye?', 'Aire frío/calor, WiFi, sala de espera, cocina, café y snacks, depósito e ingreso independiente. Sin contratos ni costos ocultos.', 'inicial'),
+  ('El espacio', '¿Están habilitados?', 'Sí, estamos habilitados por el Ministerio de Salud como gabinete psicológico.', 'inicial'),
+  ('El espacio', '¿Quiénes atienden el espacio?', 'Lo atienden sus dueños, con más de 15 años alquilando consultorios a profesionales de la salud en el Microcentro.', 'inicial'),
+  ('El espacio', '¿Cuál es el horario?', 'De lunes a sábado, de 8 a 21 hs. Se alquila por hora suelta (sin mínimo) o con horario fijo semanal.', 'inicial'),
+  ('Precios', '¿Todos los consultorios cuestan lo mismo?', 'Sí, todos los consultorios tienen el mismo valor por hora (cambia según sea mañana o tarde, y hora suelta u horario fijo).', 'inicial'),
+  ('Reservas', '¿Cómo reservo?', 'Desde la web se elige día, horario y consultorio, se dejan los datos y se paga. Si te sirve, te paso el link que abre directo en el día que buscás.', 'inicial'),
+  ('Reservas', '¿Cómo se paga una reserva por horas?', 'Podés pagar el total o una seña del 50% y el saldo hasta el día anterior a cada turno. La reserva queda confirmada al recibir el pago.', 'inicial'),
+  ('Cancelaciones', '¿Puedo cancelar o cambiar una reserva?', 'Sí, avisando con 24 hs de anticipación o más: se cambia la fecha sin cargo o, si todavía no sabés cuándo, te queda el saldo a favor para otra reserva. Lo pagado no se devuelve en dinero; con menos de 24 hs de aviso lo evalúa el equipo.', 'inicial'),
+  ('Horario fijo', '¿Qué es el horario fijo?', 'Es el mismo día y horario todas las semanas, con precio preferencial. Por la mañana desde 1 hora; por la tarde (desde las 13 hs) mínimo 2 horas seguidas. Se paga por mes, por adelantado.', 'inicial')
 ) v(tema, pregunta, respuesta, origen)
 where not exists (select 1 from public.asistente_conocimiento);
+
+-- Lo que salió de las charlas de WhatsApp del equipo y conviene que confirmen: queda en Asistente → Aprendizaje → Para aprobar
+insert into public.asistente_propuestas (tema, pregunta, respuesta, motivo, origen)
+select * from (values
+  ('Consultorios', '¿Qué consultorios tienen escritorio y cuáles sillones?', 'Con escritorio: el 1 y el 5. Con sillones o diván: el 2, el 3 y el 4 (el 5 también tiene sillones). El 1 está al fondo, al lado del baño; el 5 adelante, al lado de la sala de espera.', 'Sale de varias charlas: la gente elige por escritorio o sillón. Revisen que esté bien', 'revision'),
+  ('Consultorios', '¿Hay consultorio con camilla?', 'Sí, el Consultorio 1 tiene camilla.', 'En una charla se reservó el 1 “con camilla”. Confirmen si es así', 'revision'),
+  ('Consultorios', '¿Se pueden hacer grupos o talleres?', 'Sí, en el Salón (consultorio 6), con mesa grande: sirve para grupos de unas 5 personas, talleres, supervisiones y psicodiagnóstico (técnicas gráficas). Mismo valor que los demás.', 'Lo preguntaron para terapia grupal y para psicodiagnóstico', 'revision'),
+  ('Reservas', '¿Se pueden hacer pericias?', 'Sí, muchas profesionales vienen a tomar pericias, en general en bloques de 2 a 4 horas en un consultorio con escritorio. Los sábados también se puede (la puerta de abajo está cerrada: el equipo te explica cómo ingresar).', 'Varias charlas de pericias', 'revision'),
+  ('El espacio', '¿Puede esperar un acompañante?', 'Sí, puede esperar en la sala de espera.', 'Lo preguntaron por una pareja mayor en una pericia', 'revision'),
+  ('Visitas', '¿Puedo ir a conocer los consultorios?', 'Sí, coordinamos un día y horario. Conviene antes de las 14 hs, cuando hay más consultorios libres para mostrar.', 'Así lo coordinan en los chats', 'revision'),
+  ('El espacio', '¿Tienen red de derivación de pacientes?', 'Sí, estamos armando una red de derivación: derivamos pacientes según el perfil de cada profesional, sin costo extra ni cambios en el alquiler. Es opcional; para sumarte completás un formulario de 5 minutos (te lo pasamos).', 'Lo comparten en varias charlas', 'revision')
+) v(tema, pregunta, respuesta, motivo, origen)
+where not exists (select 1 from public.asistente_propuestas where origen = 'revision' and motivo like 'Sale de varias charlas%');
 
 -- ---------------------------------------------------------------------
 -- 7. TAREAS AUTOMÁTICAS (pg_cron + pg_net, solo en Supabase)

@@ -154,7 +154,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 24); ok('24 herramientas (con reservas prendidas)');
+assert.equal(p.tools.length, 25); ok('25 herramientas (con reservas prendidas)');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -534,7 +534,7 @@ await deWhatsApp(CEL6, { type: 'text', text: { body: 'Quiero reservar el jueves 
 assert.match(enviados.at(-1).texto, new RegExp(`reservas\\.prueba/\\?dia=${dia}`));
 assert.equal(pg(`select count(*) from public.asistente_pedidos ap join public.asistente_chats c on c.id = ap.chat_id where c.whatsapp = '${CEL6}'`), '0');
 ok('por defecto no reserva: comparte la disponibilidad y el link que abre la web en ese día');
-assert.equal(mod.herramientasSegun({ asistente_toma_reservas: 'no' }).length, 22); ok('sin las herramientas de reservar');
+assert.equal(mod.herramientasSegun({ asistente_toma_reservas: 'no' }).length, 23); ok('sin las herramientas de reservar');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

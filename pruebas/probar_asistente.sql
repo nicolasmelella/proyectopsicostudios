@@ -5,6 +5,9 @@
 \set QUIET 1
 \o /dev/null
 
+select pg_temp.ok((select count(*) = 7 from public.asistente_propuestas where origen = 'revision' and estado = 'pendiente'), 'lo aprendido de las charlas queda para aprobar');
+delete from public.asistente_propuestas where origen = 'revision';   -- (las pruebas de abajo cuentan propuestas desde cero)
+
 -- Personas de prueba: una admin y una del equipo
 insert into auth.users (email) values ('asis-admin@x.com'), ('asis-equipo@x.com'), ('asis-nadie@x.com');
 select (select id from auth.users where email = 'asis-admin@x.com') as a_admin,
@@ -448,6 +451,20 @@ create temp table as_recordatorio as select public.asistente_panel_preparar_reco
 select pg_temp.ok((select r->>'whatsapp' = '5491120203030' and not (r->>'ventana_abierta')::boolean from as_recordatorio),
                   'recordatorio: crea el chat; sin mensajes recientes no hay ventana de 24 hs (va con plantilla)');
 reset role;
+
+-- Cancelar un turno por horas con tiempo: lo pagado queda a favor (y al recuperarlo se compara con el precio de hora suelta)
+insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen)
+values (:laura, 2, (select dia + 1 from as_ta), array[9, 10]::smallint[], 17000, 'confirmada', 'panel') returning id as res_lt \gset
+insert into public.ocupaciones (consultorio_id, fecha, hora, reserva_id) select 2, (select dia + 1 from as_ta), h, :res_lt from unnest(array[9, 10]) h;
+insert into public.pagos (reserva_id, monto, medio) values (:res_lt, 17000, 'transferencia');
+set role service_role;
+create temp table as_lt2 as select public.asistente_liberar_reserva(:chat, :res_lt)::jsonb as r;
+select pg_temp.ok((select (r->>'horas_a_favor')::int = 2 from as_lt2), 'cancela su turno pagado con tiempo: 2 horas a favor');
+reset role;
+select pg_temp.ok((select estado = 'cancelada' from public.reservas where id = :res_lt), 'el turno queda cancelado y el horario libre');
+select pg_temp.ok((select modalidad = 'suelta' and valor_hora = 8500 from public.horas_a_favor where fecha_origen = (select dia + 1 from as_ta)),
+                  'el saldo se guarda con el valor de la hora suelta');
+select pg_temp.ok((select respuesta like '%Perú 89%' from public.asistente_conocimiento where pregunta = '¿Dónde están?'), 'sabe la dirección');
 
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

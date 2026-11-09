@@ -15,7 +15,7 @@ const NOMBRES_HERRAMIENTA = {
   cancelar_pedido_sin_pagar: 'canceló un pedido sin pagar', guardar_comprobante: 'guardó un comprobante', recordar: 'anotó un dato',
   pasar_al_equipo: 'pasó al equipo', pedir_visita: 'pidió una visita', solicitar_cambio: 'dejó un cambio para aprobar', pedir_mas_tiempo: 'pidió más tiempo para la seña', proponer_saber: 'propuso aprender algo', consulta_equipo: 'consultó el panel',
   calificar_contacto: 'actualizó la ficha', mandar_fotos: 'mandó fotos',
-  mover_turno: 'movió un horario', no_vengo: 'liberó una semana del fijo', recuperar_horas: 'usó horas a favor',
+  mover_turno: 'movió un horario', no_vengo: 'liberó una semana del fijo', liberar_turno: 'canceló un turno (saldo a favor)', recuperar_horas: 'usó horas a favor',
 };
 const ETAPAS = [['nuevo', 'Nuevo'], ['consulta', 'Consultó'], ['interesado', 'Interesado'], ['reservo', 'Reservó'], ['pago', 'Pagó'], ['perdido', 'Perdido']];
 const nombreEtapa = (e) => ETAPAS.find(([v]) => v === e)?.[1] || e;
@@ -189,7 +189,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
 
   // ================================================================ PARA APROBAR
   const TIPO_SOL = { mover_reserva: 'Mover un turno', mover_fijo: 'Mover una semana del fijo', no_vengo: 'No viene una semana (fijo)',
-    recuperar_horas: 'Recuperar horas a favor', extender_sena: 'Más tiempo para la seña', visita: 'Visita para conocer el espacio' };
+    recuperar_horas: 'Recuperar horas a favor', liberar_turno: 'Cancelar un turno (con saldo a favor)', extender_sena: 'Más tiempo para la seña', visita: 'Visita para conocer el espacio' };
   const MOTIVO_SOL = { sin_identificar: '<span class="pill pill-alerta">No reconocido por su WhatsApp</span>',
     poca_anticipacion: '<span class="pill pill-alerta">Menos de 24 hs de aviso</span>', pedido: '<span class="pill pill-info">Lo pide la persona</span>' };
   async function pintarSolicitudes() {
