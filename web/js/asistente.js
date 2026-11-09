@@ -162,7 +162,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     if (m.rol === 'nota') return `<div class="asis-nota">${esc(m.texto)}</div>`;
     if (m.rol === 'asistente' && !m.texto && !m.url) return '';   // seguimiento en el que decidió no escribir
     const quien = m.rol === 'cliente' ? '' : m.rol === 'asistente' ? '🤖 Asistente' : `👤 ${esc(m.autor || 'Equipo')}`;
-    const adjunto = { imagen: '📷 Imagen', documento: '📄 Archivo', audio: '🎤 Audio', video: '🎬 Video' }[m.tipo];
+    const adjunto = m.tipo === 'audio' && m.texto ? '🎤 Audio · transcripto' : { imagen: '📷 Imagen', documento: '📄 Archivo', audio: '🎤 Audio (no se pudo transcribir)', video: '🎬 Video' }[m.tipo];
     const fallo = m.envio && m.envio !== 'enviado' ? `<span class="asis-fallo">No se envió: ${esc(m.envio)}</span>` : '';
     return `<div class="asis-b asis-${m.rol}">${quien ? `<span class="asis-quien">${quien}</span>` : ''}
       ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener"><img class="asis-foto" src="${esc(m.url)}" alt="${esc(m.texto || 'Foto')}" loading="lazy"></a>`
@@ -330,6 +330,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     ['asistente_minutos_recordatorio', 'Minutos después de reservar para recordarla', 'number'],
     ['asistente_seguimiento', 'Volver a escribirle UNA vez a quien consultó y no reservó', 'sino'],
     ['asistente_horas_seguimiento', 'Horas de silencio antes de ese seguimiento', 'number'],
+    ['asistente_transcribir_audios', 'Entender audios (los pasa a texto con Whisper)', 'sino'],
     ['asistente_esfuerzo', 'Cuánto piensa antes de responder', 'esfuerzo'],
   ];
   async function pintarAjustes() {

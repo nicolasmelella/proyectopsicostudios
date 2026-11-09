@@ -21,6 +21,7 @@ Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la 
 | **Precalifica** a cada contacto (qué busca, cuánto vale por mes) y marca como 🔥 prioridad los fijos, muchas horas o el Salón | |
 | Reconoce a quien ya es cliente (“¿lo mismo de siempre, martes a la tarde?”) | |
 | Responde en el idioma en que le escriben | |
+| **Entiende audios**: los pasa a texto (Whisper) y responde al contenido; el equipo ve la transcripción en el panel | |
 
 Lo que reserva aparece en el panel como cualquier reserva, con las mismas reglas (seña, plazos, límites).
 Los pedidos que toma quedan marcados con origen **WhatsApp**.
@@ -60,7 +61,7 @@ Así nadie le puede “enseñar” un precio falso o una regla inventada por cha
   chat** por 60 minutos (configurable). En *Conversaciones* se puede pausar o devolverle el chat cuando quieran.
 - Lo que el asistente no puede resolver queda **“Para atender”**, con el motivo en una línea, y suma al número rojo de la pestaña.
 - Si la persona manda varios mensajes seguidos, espera unos segundos y contesta todo junto.
-- No escucha audios: pide con amabilidad que lo escriban.
+- Los audios los entiende (si está cargada la clave de OpenAI, ver paso 4). Si no se pueden transcribir, pide que lo escriban.
 
 ---
 
@@ -93,6 +94,7 @@ Supabase → **Edge Functions → Secrets**, agregá:
 | `ASISTENTE_SECRETO` | otra clave larga inventada (40 letras y números al azar) |
 
 `WA_TOKEN`, `WA_PHONE_ID` y `SITIO_URL` ya están cargados de los avisos.
+Para **entender audios**, agregá también `OPENAI_API_KEY` (ver abajo, *Audios*).
 Opcional: `ASISTENTE_MODELO` para usar otro modelo (por defecto `claude-opus-5-5`, el más capaz; ver *Costos*).
 
 ### 5. Conectar WhatsApp con la función (webhook)
@@ -139,6 +141,7 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
 | Recordar la seña | Sí | Un recordatorio a quien reservó por WhatsApp y no pagó |
 | Seguimiento | Sí | Una vez, a quien consultó y no reservó (solo dentro de las 24 hs que deja WhatsApp) |
 | Horas antes del seguimiento | 3 | Cuánto silencio espera antes de volver a escribir |
+| Entender audios | Sí | Pasa los audios a texto con Whisper (si está la clave de OpenAI) |
 | Minutos para recordarla | 60 | Cuándo manda ese recordatorio (antes de que se libere) |
 | Cuánto piensa | Normal | *Poco*: más rápido y barato. *Mucho*: más cuidadoso y lento |
 
@@ -155,11 +158,22 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
 - WhatsApp **no deja escribir primero** a alguien que no escribió en las últimas 24 hs (salvo con plantillas aprobadas).
   Por eso el recordatorio de seña solo sale si la persona escribió hace menos de 23 hs, y el panel avisa si pasó ese plazo.
 
-## Audios (pendiente)
+## Audios (Whisper)
 
-Hoy **no escucha audios**: pide con amabilidad que lo escriban. Claude no recibe audio directamente; para entenderlos hace falta
-sumar un servicio de **transcripción** (por ejemplo OpenAI Whisper, Deepgram o Google Speech), con su propia cuenta y costo
-(del orden de centavos de dólar por minuto). Con eso, el audio se pasa a texto antes de llegar al asistente y se ve transcripto en el panel.
+Los audios de WhatsApp se pasan a texto con **Whisper** (de OpenAI) apenas llegan. El asistente responde al contenido como si
+lo hubieran escrito, y en el panel el audio aparece como *🎤 Audio · transcripto* con el texto, para que el equipo no tenga que escucharlo.
+La transcripción puede tener errores: el asistente confirma los datos clave (fecha, hora, mail) antes de reservar.
+
+**Para prenderlo:**
+1. Entrá a <https://platform.openai.com> → creá la cuenta → **Billing**: cargá saldo (alcanza con poco) y poné un tope de gasto.
+2. **API keys → Create new secret key** (nombre: `Psico Studios audios`). Copiala: es secreta.
+3. Supabase → **Edge Functions → Secrets** → agregá `OPENAI_API_KEY` con esa clave. Listo: no hay que volver a subir la función.
+
+- **Costo:** se paga por minuto de audio, del orden de **un centavo de dólar por minuto** (una nota de voz típica dura menos de un minuto).
+  Precio actual: <https://openai.com/api/pricing>.
+- Sin la clave (o con *Entender audios: No* en Ajustes), el asistente pide con amabilidad que lo escriban.
+- El audio se manda a OpenAI solo para transcribirlo; el archivo no se guarda en Supabase.
+- Opcional: `ASISTENTE_MODELO_AUDIO` para usar otro modelo de transcripción de OpenAI (por defecto `whisper-1`).
 
 ## Seguridad y privacidad
 

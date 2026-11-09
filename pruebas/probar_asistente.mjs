@@ -42,6 +42,8 @@ const archivos = {};        // archivos "de WhatsApp"
 const subidos = [];         // comprobantes guardados
 const pedidosAClaude = [];  // lo que se le mandó a Claude
 let guion = [];             // lo que contesta Claude, en orden
+const whisper = [];         // audios que se mandaron a transcribir
+let whisperRespuesta = () => new Response(JSON.stringify({ text: '' }), { status: 200 });
 
 globalThis.fetch = async (url, opciones = {}) => {
   const u = String(url);
@@ -62,6 +64,11 @@ globalThis.fetch = async (url, opciones = {}) => {
   }
   if (u.startsWith(env.SUPABASE_URL + '/rest/v1/config')) {
     return json(JSON.parse(pg("select json_agg(json_build_object('clave', clave, 'valor', valor)) from public.config")));
+  }
+  if (u === 'https://api.openai.com/v1/audio/transcriptions') {
+    whisper.push({ auth: opciones.headers.Authorization, model: opciones.body.get('model'), language: opciones.body.get('language'),
+                   prompt: opciones.body.get('prompt'), archivo: opciones.body.get('file') });
+    return whisperRespuesta();
   }
   if (u === env.SUPABASE_URL + '/auth/v1/user') {
     const id = sesiones[opciones.headers.Authorization.replace('Bearer ', '')];
@@ -215,7 +222,7 @@ assert.equal(enviados.length, n); ok('mientras piensa, no arranca otra respuesta
 pg(`update public.asistente_chats set procesando_desde = null where id = ${chatId}`);
 guion = [(q) => {
   const t = q.messages.at(-1).content.map((b) => b.text || '').join('|');
-  assert.match(t, /otra cosa/); assert.match(t, /audio: no lo podés escuchar/);
+  assert.match(t, /otra cosa/); assert.match(t, /audio que no se pudo transcribir/);
   return texto('Te leo! No puedo escuchar audios, ¿me lo escribís?');
 }];
 await deWhatsApp(CEL, { type: 'text', text: { body: 'hola??' } });
@@ -355,6 +362,44 @@ assert.equal(enviados.length, enviadosN); ok('si decide que no corresponde ("NAD
 guion = [herramienta('mandar_fotos', { cual: 'espacio' }), texto('Ahí van fotos del espacio.')];
 r = await panel({ accion: 'simular', texto: '¿cómo es el lugar?' });
 assert.equal((await r.json()).fotos.length, 3); ok('simulador: muestra las fotos que mandaría');
+
+// =====================================================================
+// 13. Audios: se transcriben con Whisper y el asistente responde al contenido
+// =====================================================================
+env.OPENAI_API_KEY = 'sk-prueba';
+archivos['audio-1'] = { datos: new Uint8Array([0x4f, 0x67, 0x67, 0x53, 1, 2, 3]), mime: 'audio/ogg' };
+whisperRespuesta = () => new Response(JSON.stringify({ text: 'Hola, quería saber si el viernes a las diez hay lugar.' }), { status: 200 });
+const CEL3 = '5491144440000';
+guion = [(q) => {
+  const t = q.messages.at(-1).content.map((b) => b.text || '').join('|');
+  assert.match(t, /\[Audio del cliente, transcripto automáticamente \(puede tener errores\)\]: Hola, quería saber si el viernes a las diez hay lugar\./);
+  return texto('¡Hola! Sí, el viernes a las 10 hay lugar en el Consultorio 2. ¿Te lo reservo?');
+}];
+await deWhatsApp(CEL3, { type: 'audio', audio: { id: 'audio-1', mime_type: 'audio/ogg; codecs=opus' } }, 'Pablo');
+const w = whisper.at(-1);
+assert.equal(w.auth, 'Bearer sk-prueba'); assert.equal(w.model, 'whisper-1'); assert.equal(w.language, 'es');
+assert.match(w.prompt, /seña/); assert.equal(w.archivo.name, 'audio.ogg'); assert.equal(w.archivo.size, 7);
+ok('audio: lo baja de WhatsApp y lo manda a Whisper (español, con el vocabulario del negocio)');
+assert.match(enviados.at(-1).texto, /el viernes a las 10 hay lugar/); ok('el asistente responde al contenido del audio');
+assert.equal(pg(`select texto from public.asistente_mensajes m join public.asistente_chats c on c.id = m.chat_id where c.whatsapp = '${CEL3}' and m.tipo = 'audio'`),
+  'Hola, quería saber si el viernes a las diez hay lugar.');
+ok('la transcripción queda en el chat del panel');
+
+whisperRespuesta = () => new Response('caído', { status: 500 });
+guion = [(q) => {
+  assert.match(q.messages.at(-1).content.at(-1).text, /no se pudo transcribir/);
+  return texto('Perdón, no pude escuchar tu audio. ¿Me lo escribís?');
+}];
+await deWhatsApp(CEL3, { type: 'audio', audio: { id: 'audio-1', mime_type: 'audio/ogg' } }, 'Pablo');
+assert.match(enviados.at(-1).texto, /¿Me lo escribís\?/); ok('si Whisper falla, pide con amabilidad que lo escriba');
+
+pg("update public.config set valor = 'no' where clave = 'asistente_transcribir_audios'");
+const nWhisper = whisper.length;
+guion = [texto('¿Me lo escribís?')];
+await deWhatsApp(CEL3, { type: 'audio', audio: { id: 'audio-1', mime_type: 'audio/ogg' } }, 'Pablo');
+assert.equal(whisper.length, nWhisper); ok('con "Entender audios: No" no se transcribe (no gasta)');
+pg("update public.config set valor = 'si' where clave = 'asistente_transcribir_audios'");
+delete env.OPENAI_API_KEY;
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

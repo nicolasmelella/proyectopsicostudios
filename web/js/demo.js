@@ -23,7 +23,7 @@ export function crearClienteDemo() {
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
       ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
       ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'si'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
-      ['asistente_seguimiento', 'si'], ['asistente_horas_seguimiento', '3'],
+      ['asistente_seguimiento', 'si'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -171,7 +171,7 @@ export function crearClienteDemo() {
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
   // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
-  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa)) {
+  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio')) {
     const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
     const saber = [
       ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
@@ -215,8 +215,8 @@ export function crearClienteDemo() {
         [9002, 'cliente', 'Me interesa fijo martes y jueves de 17 a 19. ¿Cómo son los consultorios?', 94],
         [9002, 'asistente', '', 93, 'img/consultorios/c3-a.jpg', 'Consultorio 3: con sofá, sillones y ventanales'],
         [9002, 'asistente', 'Te mandé fotos del 3, que está libre esos días ☝️ Con horario fijo la tarde sale *$8.500* la hora: unos *$136.000* por mes. ¿Te lo pido?', 93],
-        [9003, 'cliente', 'Hola! ¿Se puede alquilar el Salón un sábado para un taller?', 420], [9003, 'asistente', '¡Hola Lucía! Sí, el Salón es para grupos y talleres. ¿Qué sábado y en qué horario lo necesitás?', 419],
-      ].map(([chat_id, rol, texto, min, url, pie]) => ({ id: nuevoId(), chat_id, rol, texto: url ? pie : texto, tipo: url ? 'imagen' : 'texto', url,
+        [9003, 'cliente', 'Hola! ¿Se puede alquilar el Salón un sábado para un taller? Somos unas doce personas, sería a la mañana.', 420, null, null, 'audio'], [9003, 'asistente', '¡Hola Lucía! Sí, el Salón es para grupos y talleres. ¿Qué sábado y en qué horario lo necesitás?', 419],
+      ].map(([chat_id, rol, texto, min, url, pie, tipo]) => ({ id: nuevoId(), chat_id, rol, texto: url ? pie : texto, tipo: tipo || (url ? 'imagen' : 'texto'), url,
         envio: rol === 'asistente' ? 'enviado' : null, creado_en: hace(min) })),
     });
   }

@@ -27,7 +27,8 @@ insert into public.config (clave, valor, descripcion) values
   ('asistente_minutos_recordatorio', '60', 'Minutos después de reservar en que el asistente recuerda la seña'),
   ('asistente_esfuerzo',        'medium', 'Cuánto piensa antes de responder: low (más rápido y barato), medium o high'),
   ('asistente_seguimiento',     'si',  'si = si alguien consultó y no reservó, el asistente le vuelve a escribir UNA vez (con disponibilidad real)'),
-  ('asistente_horas_seguimiento', '3', 'Horas de silencio después de las que el asistente hace ese seguimiento')
+  ('asistente_horas_seguimiento', '3', 'Horas de silencio después de las que el asistente hace ese seguimiento'),
+  ('asistente_transcribir_audios', 'si', 'si = los audios se pasan a texto con Whisper (requiere el secreto OPENAI_API_KEY)')
 on conflict (clave) do nothing;
 
 -- ---------------------------------------------------------------------
@@ -356,6 +357,14 @@ begin
       pausa_hasta = now() + make_interval(mins => public.cfg('asistente_minutos_pausa'))
   where id = v_chat;
 end $$;
+
+-- Audio pasado a texto (Whisper): queda en el mensaje para el asistente y para el panel
+create or replace function public.asistente_transcripcion(p_mensaje_id bigint, p_texto text) returns void
+language sql security definer set search_path = public as $$
+  update public.asistente_mensajes
+  set texto = left(p_texto, 8000), media = coalesce(media, '{}'::jsonb) || '{"transcripto": true}'::jsonb
+  where id = p_mensaje_id and tipo = 'audio'
+$$;
 
 -- Mensaje que manda el sistema (recordatorio, aviso): queda en el chat y como nota para el asistente
 create or replace function public.asistente_mensaje_sistema(p_chat_id bigint, p_texto text, p_nota text) returns bigint
