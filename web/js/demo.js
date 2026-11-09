@@ -171,7 +171,7 @@ export function crearClienteDemo() {
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
   // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
-  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio') || !db.asistente_solicitudes || !db.asistente_visitas) {
+  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio') || !db.asistente_solicitudes || !db.asistente_visitas || !db.asistente_ejemplos) {
     const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
     const saber = [
       ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
@@ -197,6 +197,10 @@ export function crearClienteDemo() {
         propuestas: [] }, creado_en: hace(60) }],
       asistente_pedidos: [],
       asistente_visitas: [],
+      asistente_ejemplos: [
+        { id: nuevoId(), situacion: 'Confirma disponibilidad', cliente: '¿Tenés disponible el jueves de 18 a 19?', respuesta: '¡Sí, tengo disponible! El jueves de 18 a 19 está libre el consultorio 4 (con sillones). Avisame si querés y te paso el link para reservar.', activo: true, origen: 'chat' },
+        { id: nuevoId(), situacion: 'Pide visitar el espacio', cliente: '¿Puedo pasar a ver los consultorios?', respuesta: '¡Sí, obvio! Decime qué día y horario te queda cómodo y lo coordinamos. Si podés antes de las 14 hs mejor.', activo: false, origen: 'chat' },
+      ],
       asistente_solicitudes: [{ id: nuevoId(), chat_id: 9002, tipo: 'visita', motivo: 'pedido', estado: 'pendiente',
         resumen: 'Visita para conocer el espacio: jueves o viernes a la tarde, después de las 17', nombre_dicho: 'Martín',
         datos: { preferencia: 'jueves o viernes a la tarde, después de las 17' }, profesional_id: null, lugar_guardado: false, creado_en: hace(90) },
@@ -921,6 +925,24 @@ export function crearClienteDemo() {
   Object.assign(rpcs, {
     asistente_panel_badge: () => (rpcs.es_equipo() ? db.asistente_chats.filter((c) => c.atender && !c.simulado).length
       + db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length + db.asistente_solicitudes.filter((x) => x.estado === 'pendiente').length : 0),
+    asistente_panel_corregir({ p_mensaje_id, p_correccion, p_pregunta, p_como_ejemplo }) {
+      soloEquipo();
+      const m = db.asistente_mensajes.find((x) => x.id === p_mensaje_id);
+      if (!m) return err('NO_ENCONTRADO');
+      if (String(p_correccion || '').trim().length < 2) return err('VACIO', 'Escribí cómo tendría que haber respondido');
+      m.correccion = p_correccion.trim();
+      db.asistente_propuestas.push({ id: nuevoId(), tema: 'General', pregunta: p_pregunta || 'Respuesta corregida', respuesta: m.correccion,
+        motivo: 'Corrección del equipo a una respuesta del asistente', origen: 'correccion', estado: 'pendiente', creado_en: ahoraISO() });
+      if (p_como_ejemplo) db.asistente_ejemplos.push({ id: nuevoId(), situacion: p_pregunta || 'Respuesta corregida', respuesta: m.correccion, activo: true, origen: 'correccion' });
+      return { ok: true };
+    },
+    asistente_panel_guardar_ejemplo({ p_id, p_situacion, p_cliente, p_respuesta, p_activo }) {
+      soloEquipo();
+      if (String(p_situacion || '').trim().length < 3 || String(p_respuesta || '').trim().length < 2) return err('INCOMPLETO', 'Completá cuándo se usa y cómo se responde');
+      const v = { situacion: p_situacion.trim(), cliente: (p_cliente || '').trim() || null, respuesta: p_respuesta.trim(), activo: p_activo !== false };
+      if (p_id) Object.assign(db.asistente_ejemplos.find((x) => x.id === p_id), v); else db.asistente_ejemplos.push({ id: nuevoId(), ...v, origen: 'equipo' });
+    },
+    asistente_panel_borrar_ejemplo({ p_id }) { soloEquipo(); db.asistente_ejemplos = db.asistente_ejemplos.filter((x) => x.id !== p_id); },
     asistente_panel_visitas() { soloEquipo(); return db.asistente_visitas.filter((v) => v.estado === 'confirmada').sort((a, b) => (a.fecha + a.hora < b.fecha + b.hora ? -1 : 1)); },
     asistente_panel_cancelar_visita({ p_id }) { soloEquipo(); const v = db.asistente_visitas.find((x) => x.id === p_id); if (v) v.estado = 'cancelada'; },
     asistente_panel_solicitudes() {

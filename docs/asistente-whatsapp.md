@@ -133,6 +133,13 @@ La IA no se “reentrena” sola: lo que crece es lo que **sabe** y lo que **rec
    de qué preguntan, qué no supo responder, reservas que se perdieron y por qué, días y franjas que pidieron y estaban
    llenos, errores e ideas para el negocio. También deja propuestas para aprobar.
 
+4. **También de lo que contestan desde el celular.** Con el mismo número en la app (coexistencia), lo que responden desde el
+   teléfono le llega al sistema: si hay algo general para aprender, lo propone igual que con el panel (una vez por tanda de mensajes).
+5. **Correcciones.** Debajo de cada respuesta del asistente, en *Conversaciones*, está **“Corregir”**: escriben cómo tendría que haber
+   respondido. Queda para aprobar y, si marcan la casilla, también como ejemplo.
+6. **Ejemplos de cómo responder** (*Aprendizaje → Ejemplos*): respuestas modelo del equipo. El asistente imita el tono, el largo y
+   el formato (no copia los datos). Hay cuatro sacados de sus charlas, apagados hasta que los revisen y activen.
+
 **Nada de lo aprendido se usa hasta que alguien del equipo lo aprueba** (se puede corregir antes de aprobar).
 Así nadie le puede “enseñar” un precio falso o una regla inventada por chat.
 

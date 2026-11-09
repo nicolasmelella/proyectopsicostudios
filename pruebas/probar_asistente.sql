@@ -466,5 +466,34 @@ select pg_temp.ok((select modalidad = 'suelta' and valor_hora = 8500 from public
                   'el saldo se guarda con el valor de la hora suelta');
 select pg_temp.ok((select respuesta like '%Perú 89%' from public.asistente_conocimiento where pregunta = '¿Dónde están?'), 'sabe la dirección');
 
+-- ---------------------------------------------------------------------
+-- Aprender: de lo que se contesta desde el celular, correcciones y ejemplos
+-- ---------------------------------------------------------------------
+set role service_role;
+create temp table as_eco1 as select public.asistente_eco('5491155556666', 'Primera parte de la respuesta', 'wamid.ap1')::jsonb as r;
+create temp table as_eco2 as select public.asistente_eco('5491155556666', 'Segunda parte', 'wamid.ap2')::jsonb as r;
+select (select (r->>'mensaje_id')::bigint from as_eco1) as eco1, (select (r->>'mensaje_id')::bigint from as_eco2) as eco2 \gset
+select pg_temp.ok((select not public.asistente_tomar_aprendizaje(:chat, :eco1)), 'varios mensajes seguidos del equipo: no analiza con el primero');
+select pg_temp.ok((select public.asistente_tomar_aprendizaje(:chat, :eco2)), 'analiza una sola vez, con el último');
+select pg_temp.ok((select not public.asistente_tomar_aprendizaje(:chat, :eco2)), 'y no lo repite');
+select pg_temp.ok((select json_array_length(public.asistente_mensajes_para_aprender(:chat)) between 2 and 14), 'trae el final de la charla para analizar');
+reset role;
+-- Corregir una respuesta del asistente
+select (select max(id) from public.asistente_mensajes where chat_id = :chat and rol = 'asistente' and texto <> '') as resp_a \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select pg_temp.espera_error(format($$select public.asistente_panel_corregir(%s, '')$$, :resp_a), 'VACIO');
+create temp table as_cor as select public.asistente_panel_corregir(:resp_a, 'Sí, el estacionamiento más cercano está a media cuadra.', '¿Tienen cochera?', 'El espacio', true)::jsonb as r;
+select pg_temp.ok((select (r->>'propuesta') is not null and (r->>'ejemplo') is not null from as_cor), 'corregir: queda para aprobar y como ejemplo');
+select pg_temp.ok((select json_array_length(public.asistente_panel_propuestas()) >= 1), 'aparece en Para aprobar');
+reset role;
+select pg_temp.ok((select correccion like 'Sí, el estacionamiento%' from public.asistente_mensajes where id = :resp_a), 'la respuesta queda marcada como corregida');
+-- Ejemplos: los activos los ve el asistente; los sugeridos de las charlas arrancan apagados
+select pg_temp.ok((select count(*) = 4 from public.asistente_ejemplos where origen = 'chat' and not activo), 'ejemplos sugeridos de las charlas: apagados hasta que los activen');
+set role service_role;
+select pg_temp.ok((select public.asistente_contexto(:chat)::jsonb->'ejemplos'->0->>'respuesta' like 'Sí, el estacionamiento%'), 'el asistente ve el ejemplo activo');
+select pg_temp.ok((select jsonb_array_length(public.asistente_contexto(:chat)::jsonb->'ejemplos') = 1), '…y no los apagados');
+reset role;
+
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

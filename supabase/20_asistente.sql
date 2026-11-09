@@ -125,7 +125,7 @@ create table if not exists public.asistente_propuestas (
   pregunta text not null,
   respuesta text not null,
   motivo text,
-  origen text not null default 'conversacion' check (origen in ('conversacion', 'equipo', 'revision')),
+  origen text not null default 'conversacion',
   chat_id bigint references public.asistente_chats (id) on delete set null,
   conocimiento_id bigint references public.asistente_conocimiento (id) on delete set null,  -- si corrige una existente
   estado text not null default 'pendiente' check (estado in ('pendiente', 'aprobada', 'descartada')),
@@ -133,6 +133,9 @@ create table if not exists public.asistente_propuestas (
   revisado_en timestamptz,
   creado_en timestamptz not null default now()
 );
+alter table public.asistente_propuestas drop constraint if exists asistente_propuestas_origen_check;
+alter table public.asistente_propuestas add constraint asistente_propuestas_origen_check
+  check (origen in ('conversacion', 'equipo', 'revision', 'correccion'));
 create unique index if not exists asistente_propuestas_unica
   on public.asistente_propuestas (md5(lower(trim(pregunta)))) where estado = 'pendiente';
 
@@ -154,6 +157,22 @@ create table if not exists public.asistente_informes (
 );
 
 alter table public.equipo add column if not exists whatsapp text;
+
+-- Aprendizaje: hasta qué mensaje del equipo ya se analizó cada chat, y las correcciones a respuestas del asistente
+alter table public.asistente_chats add column if not exists aprendido_hasta bigint not null default 0;
+alter table public.asistente_mensajes add column if not exists correccion text;
+
+-- Ejemplos de CÓMO responder (tono y formato): el asistente los imita, sin copiar datos
+create table if not exists public.asistente_ejemplos (
+  id bigint generated always as identity primary key,
+  situacion text not null,                   -- cuándo aplica: "Pregunta precios", "Confirma disponibilidad"
+  cliente text,                              -- lo que escribe el cliente (opcional)
+  respuesta text not null,                   -- cómo responde el equipo
+  activo boolean not null default true,
+  origen text not null default 'equipo' check (origen in ('equipo', 'correccion', 'chat')),
+  creado_por uuid,
+  creado_en timestamptz not null default now()
+);
 
 -- Horas a favor: un fijo avisó a tiempo que no viene una semana ya pagada → las recupera otro día
 create table if not exists public.horas_a_favor (
@@ -232,7 +251,7 @@ declare t text;
 begin
   foreach t in array array['asistente_numeros', 'asistente_chats', 'asistente_mensajes', 'asistente_memoria',
                            'asistente_conocimiento', 'asistente_propuestas', 'asistente_pedidos', 'asistente_informes',
-                           'horas_a_favor', 'asistente_cambios', 'asistente_solicitudes', 'asistente_visitas'] loop
+                           'horas_a_favor', 'asistente_cambios', 'asistente_solicitudes', 'asistente_visitas', 'asistente_ejemplos'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "equipo lee" on public.%I', t);
     execute format('create policy "equipo lee" on public.%I for select to authenticated using (public.es_equipo())', t);
@@ -385,6 +404,8 @@ begin
         'cliente_desde', to_char(pr.creado_en, 'YYYY-MM'),
         'reservas_hechas', (select count(*) from public.reservas r where r.profesional_id = pr.id and r.estado = 'confirmada'),
         'tiene_fijo', exists (select 1 from public.fijos f where f.profesional_id = pr.id and f.estado = 'activo')) end,
+    'ejemplos', coalesce((select json_agg(json_build_object('situacion', e.situacion, 'cliente', e.cliente, 'respuesta', left(e.respuesta, 600)) order by e.id)
+                          from (select * from public.asistente_ejemplos where activo order by id desc limit 8) e), '[]'::json),
     'visitas', coalesce((select json_agg(json_build_object('fecha', v.fecha, 'hora', to_char(v.hora, 'HH24:MI')) order by v.fecha)
                          from public.asistente_visitas v where v.chat_id = c.id and v.estado = 'confirmada' and v.fecha >= public.hoy_ar()), '[]'::json),
     'solicitudes', coalesce((select json_agg(json_build_object('id', x.id, 'resumen', x.resumen) order by x.id)
@@ -422,20 +443,45 @@ $$;
 
 -- Alguien del equipo contestó DESDE EL CELULAR (app WhatsApp Business con el mismo número):
 -- queda en el chat y el asistente se calla un rato, igual que si contestara desde el panel
-create or replace function public.asistente_eco(p_whatsapp text, p_texto text, p_wa_id text) returns void
+drop function if exists public.asistente_eco(text, text, text);
+create or replace function public.asistente_eco(p_whatsapp text, p_texto text, p_wa_id text) returns json
 language plpgsql security definer set search_path = public as $$
-declare v_chat bigint;
+declare
+  v_chat bigint;
+  v_id bigint;
 begin
   insert into public.asistente_chats (whatsapp, profesional_id) values (p_whatsapp, public.asistente_profesional(p_whatsapp))
   on conflict (whatsapp) do nothing;
   select id into v_chat from public.asistente_chats where whatsapp = p_whatsapp;
   insert into public.asistente_mensajes (chat_id, rol, texto, wa_id, envio) values (v_chat, 'equipo', coalesce(p_texto, ''), p_wa_id, 'enviado')
-  on conflict (wa_id) do nothing;
+  on conflict (wa_id) do nothing
+  returning id into v_id;
   update public.asistente_chats
   set atender = false, urgente = false, ultimo_mensaje_en = now(),
       pausa_hasta = now() + make_interval(mins => public.cfg('asistente_minutos_pausa'))
   where id = v_chat;
+  return json_build_object('chat_id', v_chat, 'mensaje_id', v_id);
 end $$;
+
+-- ¿Toca analizar este chat para aprender? Solo si este es el último mensaje del equipo y no se analizó todavía
+-- (si el equipo manda varios mensajes seguidos, se analiza una sola vez, con todos)
+create or replace function public.asistente_tomar_aprendizaje(p_chat_id bigint, p_mensaje_id bigint) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare v_ok boolean;
+begin
+  update public.asistente_chats c set aprendido_hasta = p_mensaje_id
+  where c.id = p_chat_id and not c.simulado and c.aprendido_hasta < p_mensaje_id
+    and not exists (select 1 from public.asistente_mensajes m where m.chat_id = c.id and m.rol = 'equipo' and m.id > p_mensaje_id)
+  returning true into v_ok;
+  return coalesce(v_ok, false);
+end $$;
+
+-- El final de una charla, para analizar qué aprender (solo el servidor)
+create or replace function public.asistente_mensajes_para_aprender(p_chat_id bigint) returns json
+language sql stable security definer set search_path = public as $$
+  select coalesce(json_agg(json_build_object('rol', m.rol, 'texto', m.texto) order by m.id), '[]'::json)
+  from (select * from public.asistente_mensajes where chat_id = p_chat_id and rol <> 'nota' and texto <> '' order by id desc limit 14) m
+$$;
 
 -- Audio pasado a texto (Whisper): queda en el mensaje para el asistente y para el panel
 create or replace function public.asistente_transcripcion(p_mensaje_id bigint, p_texto text) returns void
@@ -1241,7 +1287,7 @@ begin
   select * into c from public.asistente_chats where id = p_chat_id;
   return json_build_object(
     'mensajes', coalesce((select json_agg(json_build_object('id', m.id, 'rol', m.rol, 'texto', m.texto, 'tipo', m.tipo, 'envio', m.envio,
-                                                            'url', m.media->>'url',
+                                                            'url', m.media->>'url', 'correccion', m.correccion,
                                                             'creado_en', m.creado_en,
                                                             'autor', (select nombre from public.equipo where user_id = m.autor)) order by m.id)
                           from (select * from public.asistente_mensajes where chat_id = p_chat_id order by id desc limit 300) m), '[]'::json),
@@ -1471,6 +1517,62 @@ begin
                            'ventana_abierta', coalesce(c.ultimo_cliente_en > now() - interval '24 hours', false));
 end $$;
 
+-- "Corregir": el equipo escribe lo que el asistente debería haber dicho.
+-- Queda como propuesta para aprobar (y, si quieren, como ejemplo de cómo responder).
+create or replace function public.asistente_panel_corregir(p_mensaje_id bigint, p_correccion text, p_pregunta text default null,
+                                                         p_tema text default null, p_como_ejemplo boolean default false) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  m public.asistente_mensajes;
+  v_cliente text;
+  v_prop bigint;
+  v_ej bigint;
+begin
+  perform public.exigir_equipo();
+  if length(trim(coalesce(p_correccion, ''))) < 2 then raise exception 'VACIO' using hint = 'Escribí cómo tendría que haber respondido'; end if;
+  select * into m from public.asistente_mensajes where id = p_mensaje_id and rol = 'asistente';
+  if not found then raise exception 'NO_ENCONTRADO'; end if;
+  select string_agg(x.texto, ' ' order by x.id) into v_cliente from (
+    select id, texto from public.asistente_mensajes where chat_id = m.chat_id and rol = 'cliente' and id < m.id and texto <> ''
+    order by id desc limit 3) x;
+  update public.asistente_mensajes set correccion = left(trim(p_correccion), 2000) where id = m.id;
+  v_prop := public.asistente_proponer(coalesce(nullif(trim(p_pregunta), ''), left(v_cliente, 300), 'Respuesta corregida'), trim(p_correccion),
+                                      coalesce(nullif(trim(p_tema), ''), 'General'), 'Corrección del equipo a una respuesta del asistente',
+                                      'correccion', m.chat_id);
+  if p_como_ejemplo then
+    insert into public.asistente_ejemplos (situacion, cliente, respuesta, origen, creado_por)
+    values (coalesce(nullif(trim(p_pregunta), ''), left(v_cliente, 200), 'Respuesta corregida'), left(v_cliente, 400), trim(p_correccion), 'correccion', auth.uid())
+    returning id into v_ej;
+  end if;
+  return json_build_object('propuesta', v_prop, 'ejemplo', v_ej);
+end $$;
+
+create or replace function public.asistente_panel_guardar_ejemplo(p_id bigint, p_situacion text, p_cliente text, p_respuesta text, p_activo boolean default true)
+returns bigint
+language plpgsql security definer set search_path = public as $$
+declare v_id bigint;
+begin
+  perform public.exigir_equipo();
+  if length(trim(coalesce(p_situacion, ''))) < 3 or length(trim(coalesce(p_respuesta, ''))) < 2 then
+    raise exception 'INCOMPLETO' using hint = 'Completá cuándo se usa y cómo se responde';
+  end if;
+  if p_id is null then
+    insert into public.asistente_ejemplos (situacion, cliente, respuesta, activo, creado_por)
+    values (trim(p_situacion), nullif(trim(p_cliente), ''), trim(p_respuesta), coalesce(p_activo, true), auth.uid()) returning id into v_id;
+  else
+    update public.asistente_ejemplos set situacion = trim(p_situacion), cliente = nullif(trim(p_cliente), ''), respuesta = trim(p_respuesta),
+           activo = coalesce(p_activo, true) where id = p_id returning id into v_id;
+  end if;
+  return v_id;
+end $$;
+
+create or replace function public.asistente_panel_borrar_ejemplo(p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.exigir_equipo();
+  delete from public.asistente_ejemplos where id = p_id;
+end $$;
+
 -- El simulador del panel empieza una charla nueva
 create or replace function public.asistente_panel_reiniciar_simulador() returns void
 language plpgsql security definer set search_path = public as $$
@@ -1631,6 +1733,7 @@ begin
         and c.ultimo_mensaje_en > now() - interval '14 days'), '[]'::json),
     'para_atender', (select count(*) from public.asistente_chats where atender and not simulado),
     'cambios', (select count(*) from public.asistente_cambios where creado_en >= v_ini and creado_en < v_fin),
+    'correcciones', (select count(*) from public.asistente_mensajes where correccion is not null and creado_en >= v_ini and creado_en < v_fin),
     'propuestas', (select count(*) from public.asistente_propuestas where estado = 'pendiente'),
     'tokens', (select json_build_object('entrada', coalesce(sum((m.uso->>'input_tokens')::bigint + coalesce((m.uso->>'cache_read_input_tokens')::bigint, 0)
                                                                 + coalesce((m.uso->>'cache_creation_input_tokens')::bigint, 0)), 0),
@@ -1670,6 +1773,20 @@ where not exists (select 1 from public.asistente_conocimiento);
 insert into public.asistente_conocimiento (tema, pregunta, respuesta, origen)
 select 'Requisitos', '¿Qué requisitos hay para alquilar?', 'Siempre pedimos copia del título profesional y del documento (DNI).', 'inicial'
 where not exists (select 1 from public.asistente_conocimiento where tema = 'Requisitos');
+
+-- Ejemplos de cómo responde el equipo, sacados de sus charlas (sin datos personales). Arrancan apagados: los activan en Aprendizaje
+insert into public.asistente_ejemplos (situacion, cliente, respuesta, activo, origen)
+select * from (values
+  ('Primera consulta: cómo funciona', 'Hola, soy psicóloga. Quería info para alquilar por hora',
+   'Hola, ¿cómo estás? Te cuento cómo funciona: reservás solo los días y horarios que necesitás, sin contratos. Tenemos consultorios con escritorio o con sillón/diván, en Perú 89, piso 7 (Microcentro). Todos incluyen aire frío/calor, WiFi, sala de espera, cocina, café y snacks. ¿Qué día y horario estás buscando?', false, 'chat'),
+  ('Confirma disponibilidad', '¿Tenés disponible el jueves de 18 a 19?',
+   '¡Sí, tengo disponible! El jueves de 18 a 19 está libre el consultorio 4 (con sillones). Avisame si querés y te paso el link para reservar.', false, 'chat'),
+  ('Pregunta precios', '¿Qué valor tiene la hora?',
+   'Te paso los valores por hora (son iguales para todos los consultorios): por la mañana (8 a 13 hs) $8.500 la hora suelta y $8.200 con horario fijo; por la tarde (13 a 21 hs) $9.000 suelta y $8.500 fija. Podés cancelar o reprogramar hasta 24 hs antes, sin cargo.', false, 'chat'),
+  ('Pide visitar el espacio', '¿Puedo pasar a ver los consultorios?',
+   '¡Sí, obvio! Decime qué día y horario te queda cómodo y lo coordinamos. Si podés antes de las 14 hs mejor, porque hay más consultorios libres para mostrarte.', false, 'chat')
+) v(situacion, cliente, respuesta, activo, origen)
+where not exists (select 1 from public.asistente_ejemplos);
 
 -- Lo que salió de las charlas de WhatsApp del equipo y conviene que confirmen: queda en Asistente → Aprendizaje → Para aprobar
 insert into public.asistente_propuestas (tema, pregunta, respuesta, motivo, origen)

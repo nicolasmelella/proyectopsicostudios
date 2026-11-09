@@ -10,7 +10,7 @@ const BASE = 'psicostudios_prueba';
 const env = {
   SUPABASE_URL: 'http://supabase.prueba', SUPABASE_ANON_KEY: 'anon-prueba', SUPABASE_SERVICE_ROLE_KEY: 'clave-servicio-prueba',
   SITIO_URL: 'https://reservas.prueba/', WA_APP_SECRET: 'secreto-meta', WA_VERIFY_TOKEN: 'palabra-meta',
-  ASISTENTE_SECRETO: 'secreto-tareas', ASISTENTE_ESPERA_MS: '0', WA_TOKEN: 'wa', WA_PHONE_ID: '123',
+  ASISTENTE_SECRETO: 'secreto-tareas', ASISTENTE_ESPERA_MS: '0', ASISTENTE_ESPERA_APRENDER_MS: '0', WA_TOKEN: 'wa', WA_PHONE_ID: '123',
 };
 const ok = (m) => console.log('ok  · ' + m);
 
@@ -535,6 +535,27 @@ assert.match(enviados.at(-1).texto, new RegExp(`reservas\\.prueba/\\?dia=${dia}`
 assert.equal(pg(`select count(*) from public.asistente_pedidos ap join public.asistente_chats c on c.id = ap.chat_id where c.whatsapp = '${CEL6}'`), '0');
 ok('por defecto no reserva: comparte la disponibilidad y el link que abre la web en ese día');
 assert.equal(mod.herramientasSegun({ asistente_toma_reservas: 'no' }).length, 23); ok('sin las herramientas de reservar');
+
+// =====================================================================
+// 19. Aprende de lo que el equipo contesta desde el celular, y usa los ejemplos
+// =====================================================================
+const CEL7 = '5491155550303';
+guion = [texto('Hola! Sí, tenemos lugar. ¿Querés que te pase el link?')];
+await deWhatsApp(CEL7, { type: 'text', text: { body: '¿Se puede ir con bicicleta? ¿Hay donde dejarla?' } }, 'Rocío');
+guion = [(q) => {
+  assert.match(q.messages[0].content, /bicicletero en la entrada/i);
+  return jsonComoTexto({ proponer: true, pregunta: '¿Hay lugar para dejar la bicicleta?', respuesta: 'Sí, hay un bicicletero en la entrada del edificio.', tema: 'El espacio', motivo: 'Lo respondió el equipo desde el celular' });
+}];
+const ecoB = JSON.stringify({ entry: [{ changes: [{ field: 'smb_message_echoes', value: { message_echoes: [
+  { from: '5491178224918', to: CEL7, id: 'wamid.eco.bici', type: 'text', text: { body: 'Hola Rocío! Sí, hay un bicicletero en la entrada del edificio 🚲' } }] } }] }] });
+await manejador(new Request('https://x', { method: 'POST', headers: { 'x-hub-signature-256': firmar(ecoB) }, body: ecoB }));
+assert.equal(pg("select count(*) from public.asistente_propuestas where pregunta = '¿Hay lugar para dejar la bicicleta?' and estado = 'pendiente'"), '1');
+ok('aprende de lo que el equipo contesta desde el celular: queda una propuesta para aprobar');
+pg("insert into public.asistente_ejemplos (situacion, cliente, respuesta, activo) values ('Saludo', 'hola', '¡Hola! ¿Cómo estás? Contame qué estás buscando 😊', true)");
+guion = [(q) => { assert.match(q.messages.at(-1).content[0].text, /Ejemplos de cómo responde el equipo[\s\S]*Contame qué estás buscando/); return texto('¡Hola! ¿Cómo estás?'); }];
+pg(`update public.asistente_chats set pausa_hasta = null where whatsapp = '${CEL7}'`);
+await deWhatsApp(CEL7, { type: 'text', text: { body: 'hola de nuevo' } }, 'Rocío');
+ok('usa los ejemplos activos para imitar cómo responde el equipo');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

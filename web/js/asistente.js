@@ -157,6 +157,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     $('#asis-asignado').onchange = async (e) => {
       try { await llamar('asistente_panel_asignar', { p_chat_id: id, p_user_id: e.target.value || null }, 'Asignado'); pintarChats(true); } catch (err) { errorEn(null, err); }
     };
+    $$('[data-corregir]', panel).forEach((b) => (b.onclick = () => modalCorregir(d.mensajes.find((x) => x.id === Number(b.dataset.corregir)), id)));
     $$('[data-borrar-memoria]', panel).forEach((b) => (b.onclick = async () => {
       await llamar('asistente_panel_borrar_memoria', { p_id: Number(b.dataset.borrarMemoria) }, 'Borrado'); abrirChat(id);
     }));
@@ -184,8 +185,34 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     return `<div class="asis-b asis-${m.rol}">${quien ? `<span class="asis-quien">${quien}</span>` : ''}
       ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener"><img class="asis-foto" src="${esc(m.url)}" alt="${esc(m.texto || 'Foto')}" loading="lazy"></a>`
         : adjunto ? `<span class="asis-adj">${adjunto}</span>` : ''}${m.texto ? `<div>${formato(m.texto)}</div>` : ''}
-      <span class="asis-h">${cuando(m.creado_en)}</span>${fallo}</div>`;
+      <span class="asis-h">${cuando(m.creado_en)}</span>${fallo}
+      ${m.rol === 'asistente' && m.texto ? (m.correccion ? `<span class="asis-corregida">✎ Corregida: ${esc(m.correccion)}</span>`
+        : `<button class="link-btn chico asis-corregir" data-corregir="${m.id}" type="button">Corregir</button>`) : ''}</div>`;
   }
+
+  function modalCorregir(m, chatId) {
+    abrirCorreccion.innerHTML = `
+      <h2 id="modal-titulo">Corregir respuesta</h2>
+      <p class="suave chico">Lo que dijo el asistente:</p>
+      <blockquote class="asis-cita">${formato(m.texto)}</blockquote>
+      <div class="campo"><label for="cor-texto">Cómo tendría que haber respondido</label><textarea id="cor-texto" rows="4" maxlength="2000"></textarea></div>
+      <div class="campo"><label for="cor-preg">¿Qué estaba preguntando? (opcional, para que lo aprenda como pregunta frecuente)</label><input id="cor-preg" maxlength="300"></div>
+      <label class="chico"><input type="checkbox" id="cor-ej"> Usarla también como ejemplo de cómo responder</label>
+      <p class="suave chico">Queda en Aprendizaje → Para aprobar. A esta persona no se le manda nada: si hace falta, respondele desde el chat.</p>
+      <div class="acciones"><button class="btn btn-primario" id="cor-ok">Guardar corrección</button></div>`;
+    document.getElementById('modal').classList.remove('oculto');
+    document.getElementById('modal-cuerpo').replaceChildren(abrirCorreccion);
+    $('#cor-texto').focus();
+    $('#cor-ok').onclick = async () => {
+      try {
+        await llamar('asistente_panel_corregir', { p_mensaje_id: m.id, p_correccion: $('#cor-texto').value, p_pregunta: $('#cor-preg').value,
+          p_tema: null, p_como_ejemplo: $('#cor-ej').checked }, 'Guardado: queda para aprobar en Aprendizaje');
+        document.getElementById('modal').classList.add('oculto');
+        abrirChat(chatId); badge();
+      } catch (err) { errorEn(null, err); }
+    };
+  }
+  const abrirCorreccion = document.createElement('div');
 
   // ================================================================ PARA APROBAR
   const TIPO_SOL = { mover_reserva: 'Mover un turno', mover_fijo: 'Mover una semana del fijo', no_vengo: 'No viene una semana (fijo)',
@@ -323,6 +350,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       } catch (err) { errorEn(null, err); }
     }));
 
+    pintarEjemplos();
     const filas = saber.data || [];
     $('#asis-saber').innerHTML = filas.length ? filas.map((k) => `
       <details class="item asis-k ${k.activo ? '' : 'inactivo'}">
@@ -352,6 +380,44 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       } catch (err) { errorEn(null, err); }
     }));
   }
+  async function pintarEjemplos() {
+    const { data } = await sb.from('asistente_ejemplos').select('*').order('id');
+    const lista = data || [];
+    const ORIGEN_EJ = { chat: 'Sacado de sus charlas', correccion: 'De una corrección', equipo: 'Cargado por el equipo' };
+    $('#asis-ejemplos').innerHTML = lista.length ? lista.map((x) => `
+      <details class="item asis-k ${x.activo ? '' : 'inactivo'}">
+        <summary><span class="pill pill-info">${esc(x.situacion)}</span>${x.activo ? ' <span class="pill pill-ok">Lo usa</span>' : ' <span class="pill pill-alerta">Apagado</span>'}
+          <span class="suave chico"> · ${ORIGEN_EJ[x.origen] || ''}</span></summary>
+        <form data-ejemplo="${x.id}" style="margin-top:.6em">
+          <div class="campo"><label>Cuándo se usa</label><input name="situacion" value="${esc(x.situacion)}" maxlength="120"></div>
+          <div class="campo"><label>Lo que escribe el cliente (opcional)</label><input name="cliente" value="${esc(x.cliente || '')}" maxlength="400"></div>
+          <div class="campo"><label>Cómo responde el equipo</label><textarea name="respuesta" rows="3" maxlength="2000">${esc(x.respuesta)}</textarea></div>
+          <label class="chico"><input type="checkbox" name="activo" ${x.activo ? 'checked' : ''}> Que el asistente lo use</label>
+          <div class="acciones"><button class="btn btn-primario btn-chico" value="guardar">Guardar</button>
+            <button class="btn btn-peligro btn-chico" value="borrar">Borrar</button></div>
+        </form>
+      </details>`).join('') : '<p class="suave">Todavía no hay ejemplos.</p>';
+    $$('[data-ejemplo]').forEach((f) => (f.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = Number(f.dataset.ejemplo);
+      try {
+        if (e.submitter?.value === 'borrar') await llamar('asistente_panel_borrar_ejemplo', { p_id: id }, 'Borrado');
+        else await llamar('asistente_panel_guardar_ejemplo', { p_id: id, p_situacion: f.situacion.value, p_cliente: f.cliente.value,
+          p_respuesta: f.respuesta.value, p_activo: f.activo.checked }, 'Guardado');
+        pintarEjemplos();
+      } catch (err) { errorEn(null, err); }
+    }));
+  }
+  $('#asis-nuevo-ejemplo').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await llamar('asistente_panel_guardar_ejemplo', { p_id: null, p_situacion: f.situacion.value, p_cliente: f.cliente.value,
+        p_respuesta: f.respuesta.value, p_activo: true }, 'Listo: lo va a imitar');
+      f.reset(); pintarEjemplos();
+    } catch (err) { errorEn(null, err); }
+  };
+
   $('#asis-nuevo-saber').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
@@ -379,6 +445,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       kpi(r.charlas ? Math.round(((r.embudo?.pago || 0) / r.charlas) * 100) + '%' : '—', 'tasa de cierre', 'charlas que terminaron en pago'),
       kpi(segundos(r.respuesta_segundos?.asistente), 'tarda en responder el asistente', `el equipo: ${segundos(r.respuesta_segundos?.equipo)}`),
       kpi(r.cambios ?? 0, 'horarios que movió o liberó', 'sin intervención del equipo'),
+      kpi(r.correcciones ?? 0, 'respuestas corregidas', 'por el equipo'),
       kpi(r.para_atender, 'chats para atender'),
       kpi(r.propuestas, 'cosas para aprobar'),
       kpi(Math.round((r.tokens.entrada + r.tokens.salida) / 1000).toLocaleString('es-AR') + ' mil', 'tokens usados', 'el costo se ve en console.anthropic.com'),

@@ -798,6 +798,10 @@ export function textoContexto(ctx: any, cfg: Record<string, string>, ahora = new
     const c = ctx.crm;
     l.push(`Ficha (CRM): etapa ${c.etapa}${c.interes ? `, busca ${c.interes}` : ''}${c.valor_estimado ? `, valor estimado ${pesos(c.valor_estimado)}/mes` : ''}${c.prioridad ? ', PRIORIDAD' : ''}${c.nota ? `. ${c.nota}` : ''}.`);
   }
+  if (ctx.ejemplos?.length) {
+    l.push(`Ejemplos de cómo responde el equipo (imitá el tono, el largo y el formato; no copies datos que no correspondan a esta charla):\n${ctx.ejemplos
+      .map((e: any) => `• ${e.situacion}${e.cliente ? ` — cliente: "${e.cliente}"` : ''}\n  equipo: "${e.respuesta}"`).join('\n')}`);
+  }
   if (ctx.visitas?.length) l.push(`Tiene una visita confirmada: ${ctx.visitas.map((v: any) => `${fechaCorta(String(v.fecha))} a las ${v.hora}`).join(', ')}.`);
   if (ctx.solicitudes?.length) l.push(`Solicitudes esperando al equipo: ${ctx.solicitudes.map((x: any) => `#${x.id} ${x.resumen}`).join(' · ')}.`);
   if (ctx.memoria?.length) l.push(`Lo que recordás de esta persona:\n${ctx.memoria.map((d: string) => `• ${d}`).join('\n')}`);
@@ -961,10 +965,20 @@ async function pedirJSON(instrucciones: string, contenido: string, esquema: any,
   try { return JSON.parse(txt); } catch { return null; }
 }
 
+// Respuesta del equipo desde el celular: espera un rato (suelen mandar varios mensajes seguidos) y analiza una sola vez
+async function aprenderDespuesDeEco(chatId: number, mensajeId: number) {
+  const espera = Number(env('ASISTENTE_ESPERA_APRENDER_MS') || 45000);
+  if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+  try {
+    if (await rpc('asistente_tomar_aprendizaje', { p_chat_id: chatId, p_mensaje_id: mensajeId })) await aprenderDeRespuesta(chatId);
+  } catch (e) { console.error('Aprender del celular:', e); }
+}
+
 // Cuando el equipo contesta a mano, el asistente mira si hay algo general para aprender
-export async function aprenderDeRespuesta(chatId: number, jwt: string) {
-  const d = await rpc('asistente_panel_mensajes', { p_chat_id: chatId }, jwt);
-  const ultimos = (d.mensajes || []).filter((m: any) => m.rol !== 'nota').slice(-14);
+export async function aprenderDeRespuesta(chatId: number, jwt?: string) {
+  const ultimos = jwt
+    ? ((await rpc('asistente_panel_mensajes', { p_chat_id: chatId }, jwt)).mensajes || []).filter((m: any) => m.rol !== 'nota' && m.texto).slice(-14)
+    : await rpc('asistente_mensajes_para_aprender', { p_chat_id: chatId });
   if (!ultimos.some((m: any) => m.rol === 'equipo')) return null;
   const saber = await rpc('asistente_buscar', { p_consulta: ultimos.map((m: any) => m.texto).join(' ') });
   const charla = ultimos.map((m: any) => `${m.rol === 'cliente' ? 'Cliente' : m.rol === 'equipo' ? 'EQUIPO' : 'Asistente'}: ${m.texto}`).join('\n');
@@ -1193,7 +1207,9 @@ export async function recibirDeWhatsApp(datos: any) {
       // Lo que el equipo contesta desde la app del celular (mismo número, "coexistencia"): el asistente se calla en ese chat
       for (const eco of v.message_echoes || []) {
         const { texto } = leerMensajeWhatsApp(eco);
-        await rpc('asistente_eco', { p_whatsapp: String(eco.to), p_texto: texto || `[${eco.type}]`, p_wa_id: eco.id });
+        const r = await rpc('asistente_eco', { p_whatsapp: String(eco.to), p_texto: texto || `[${eco.type}]`, p_wa_id: eco.id });
+        // aprender también de lo que el equipo contesta desde el celular (una vez por tanda de mensajes)
+        if (r?.mensaje_id && texto) tareas.push(aprenderDespuesDeEco(r.chat_id, r.mensaje_id));
       }
       const nombres = Object.fromEntries((v.contacts || []).map((c: any) => [c.wa_id, c.profile?.name]));
       for (const m of v.messages || []) {

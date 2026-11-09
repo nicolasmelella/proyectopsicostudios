@@ -109,6 +109,10 @@
     .asis-vincular input { width: auto; flex: 1 1 200px; min-height: 36px; padding: .2em .6em; }
     .asis-sol .quien { display: grid; gap: 4px; margin: .6em 0; font-size: .9rem; }
     .asis-sol .quien input { min-height: 40px; }
+    #modal input[type=checkbox], .asis-saber input[type=checkbox] { width: auto; min-height: 0; margin: 0 6px 0 0; vertical-align: -2px; }
+    .asis-corregir { display: inline; margin: 2px 0 0; padding: 0; font-size: .75rem; }
+    .asis-corregida { display: block; font-size: .78rem; color: var(--ok); margin-top: 3px; }
+    .asis-cita { margin: 0 0 10px; padding: .5em .8em; border-left: 3px solid var(--borde); background: #eef1f6; border-radius: 6px; font-size: .92rem; }
     .asis-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
     .asis-check input { width: auto; min-height: 0; }
     .asis-foto { display: block; max-width: 220px; width: 100%; border-radius: 8px; margin: 4px 0; }
@@ -592,6 +596,16 @@
           <div id="asis-props" class="lista"></div>
           <div class="seccion-titulo"><h2>Lo que sabe</h2><span class="suave chico">Responde dudas solo con esto (más precios y agenda, que lee de la base).</span></div>
           <div id="asis-saber" class="asis-saber"></div>
+          <div class="seccion-titulo"><h2>Ejemplos de cómo responder</h2><span class="suave chico">El asistente imita el tono y el formato de estos ejemplos (no copia los datos).</span></div>
+          <div id="asis-ejemplos" class="asis-saber"></div>
+          <form class="tarjeta" id="asis-nuevo-ejemplo" style="max-width:760px;margin-top:14px">
+            <h3>Agregar un ejemplo</h3>
+            <div class="campo"><label for="ne-sit">Cuándo se usa</label><input id="ne-sit" name="situacion" required maxlength="120" placeholder="Pregunta precios, confirma disponibilidad, pide visita…"></div>
+            <div class="campo"><label for="ne-cli">Lo que escribe el cliente (opcional)</label><input id="ne-cli" name="cliente" maxlength="400"></div>
+            <div class="campo"><label for="ne-resp">Cómo responden ustedes</label><textarea id="ne-resp" name="respuesta" rows="3" required maxlength="2000"></textarea></div>
+            <button class="btn btn-primario">Guardar ejemplo</button>
+          </form>
+          <div class="seccion-titulo"><h2>Enseñarle algo</h2></div>
           <form class="tarjeta" id="asis-nuevo-saber" style="max-width:760px;margin-top:14px">
             <h3>Enseñarle algo</h3>
             <div class="fila2">
