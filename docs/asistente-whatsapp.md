@@ -30,6 +30,23 @@ Los pedidos que toma quedan marcados con origen **WhatsApp**.
 “¿quién viene mañana?”, “¿qué falta cobrar?”, “¿cómo vamos este mes?”, “¿qué hay pendiente?”.
 Responde con los permisos del usuario del panel de esa persona.
 
+## Clientes que ya alquilan: mover y liberar horarios
+
+El asistente reconoce a la persona por su WhatsApp y ve sus turnos, su horario fijo y sus horas a favor. Reglas (decididas por el equipo):
+
+| Pide | Qué hace el asistente |
+|---|---|
+| Mover un turno por horas, o **una semana** de su fijo, a otro día/hora/consultorio libre | Lo mueve si faltan **24 horas o más** (configurable). Misma duración. Si el horario nuevo cuesta más, **la diferencia queda como saldo a pagar** |
+| “Esta semana no voy” (fijo) | Libera ese día para otros. Si **ya pagó el mes**, le quedan **horas a favor** por 30 días (configurable) y le ofrece recuperarlas; si **no pagó el mes**, esa semana **no se le cobra** (igual que cuando la libera el equipo) |
+| Recuperar horas a favor | Reserva otro horario libre; si la franja es más cara, paga la diferencia |
+| Con **menos de 24 hs**, cambiar la duración, cambiar el fijo para siempre | Lo pasa al equipo |
+
+- Cada cambio queda en la agenda (con un comentario “movida por el asistente”) y en *Asistente → Conversaciones*, debajo del chat.
+- **Seguridad:** si escribe un número que no está en ninguna ficha, el asistente **no toca nada**: pide nombre y mail y lo pasa al equipo.
+  En el chat aparece **“¿Ya alquila? Vincular con su ficha”**: se elige a la persona y desde ese momento el asistente la reconoce
+  (se guarda su WhatsApp en la ficha). Conviene cargar los WhatsApp completos (con código de área) en *Profesionales*: hoy la mayoría de las fichas no lo tiene.
+- Supuesto a confirmar: si el horario nuevo es **más barato**, no se devuelve la diferencia.
+
 ## CRM: cada contacto con su etapa
 
 En *Asistente → Conversaciones* cada contacto tiene una **etapa**: Nuevo → Consultó → Interesado → Reservó → Pagó (o Perdido).
@@ -142,6 +159,8 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
 | Seguimiento | Sí | Una vez, a quien consultó y no reservó (solo dentro de las 24 hs que deja WhatsApp) |
 | Horas antes del seguimiento | 3 | Cuánto silencio espera antes de volver a escribir |
 | Entender audios | Sí | Pasa los audios a texto con Whisper (si está la clave de OpenAI) |
+| Horas de anticipación | 24 | Mínimo para que el asistente mueva o libere un horario (se cambia desde *Precios y ajustes* del panel) |
+| Días de las horas a favor | 30 | Cuánto duran las horas a favor (ídem) |
 | Minutos para recordarla | 60 | Cuándo manda ese recordatorio (antes de que se libere) |
 | Cuánto piensa | Normal | *Poco*: más rápido y barato. *Mucho*: más cuidadoso y lento |
 

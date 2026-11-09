@@ -314,6 +314,14 @@ REGLAS (no se negocian)
 12. Audios: llegan transcriptos automáticamente ("[Audio del cliente, transcripto …]"). Respondé al contenido con normalidad, sin comentar que era un audio. La transcripción puede tener errores: si un dato clave (fecha, hora, nombre, mail) suena raro o ambiguo, confirmalo antes de reservar. Si dice que no se pudo transcribir, pedí con amabilidad que lo escriban.
 13. Fotos: si preguntan cómo son los consultorios o el espacio, o están dudando entre consultorios, mandá fotos con mandar_fotos (no más de 2 envíos por charla).
 
+CLIENTES QUE YA ALQUILAN (mover horarios, avisar que no vienen)
+- Usá mis_reservas para ver sus turnos (reserva_id), sus horarios fijos (fijo_id y proximas_fechas) y sus horas a favor.
+- Mover un turno o UNA semana del fijo a otro día, hora o consultorio: buscá lugar libre, mostrá el cambio (de → a) y lo que cuesta, esperá un "sí" y usá mover_turno. Misma duración; para cambiar la duración o el fijo para siempre, pasá al equipo.
+- Si avisa que una semana NO viene a su fijo: confirmá qué día y usá no_vengo. Si el mes estaba pago, le quedan horas a favor (ofrecele recuperarlas con recuperar_horas); si no, esa semana no se le cobra. Contale lo que corresponda según la respuesta de la herramienta.
+- Si el horario nuevo cuesta más, decí la diferencia antes de confirmar: queda como saldo a pagar (se paga igual que siempre).
+- Si la herramienta dice POCA_ANTICIPACION (faltan menos de 24 hs), explicá con amabilidad que con tan poco aviso lo tiene que ver el equipo, y usá pasar_al_equipo con el detalle.
+- Si dice SIN_IDENTIFICAR (no reconocemos su WhatsApp), NO muevas nada: pedile nombre y apellido y el mail con el que alquila, y pasá al equipo con el motivo "Vincular: dice ser <nombre> (<mail>), quiere <qué>". Explicale que es por seguridad y que es una sola vez.
+
 SEGUIMIENTO Y OPORTUNIDADES
 - Usá calificar_contacto cuando sepas qué busca la persona: "consulta" si solo pregunta, "interesado" si quiere reservar o pidió algo concreto, "perdido" si dijo que no o eligió otro lugar. Estimá el valor por mes (horas por semana × precio × 4) y marcá prioridad si busca horario fijo, varias horas por semana o el Salón: son las oportunidades más valiosas.
 - Si recibís una [Nota del sistema] de SEGUIMIENTO AUTOMÁTICO, decidí si vale la pena escribirle. Si sí: un solo mensaje breve, cálido y concreto (por ejemplo, que lo que buscaba sigue libre, con el horario), sin presionar. Si no: respondé exactamente NADA.
@@ -425,6 +433,30 @@ const HERRAMIENTAS = [
       required: ['pregunta', 'respuesta', 'motivo'] },
   },
   {
+    name: 'mover_turno',
+    description: 'Mueve un turno por horas (tipo "reserva", con reserva_id) o UNA semana de un horario fijo (tipo "fijo", con fijo_id y fecha_original) a otro día, hora o consultorio libre, misma duración. SOLO después de que la persona confirmó el cambio. Devuelve lo que queda a pagar si cuesta más.',
+    input_schema: { type: 'object', properties: {
+      tipo: { type: 'string', enum: ['reserva', 'fijo'] },
+      reserva_id: { type: 'integer' }, fijo_id: { type: 'integer' },
+      fecha_original: { type: 'string', description: 'Solo para fijo: la fecha (AAAA-MM-DD) de la semana que mueve' },
+      nueva_fecha: { type: 'string', description: 'AAAA-MM-DD' },
+      nuevas_horas: { type: 'array', items: { type: 'integer' }, description: 'De 15 a 17 hs = [15, 16]' },
+      consultorio_id: { type: 'integer', description: 'Opcional: si no, el mismo de antes o el primero libre' } },
+      required: ['tipo', 'nueva_fecha', 'nuevas_horas'] },
+  },
+  {
+    name: 'no_vengo',
+    description: 'La persona avisa que una semana NO viene a su horario fijo: libera ese día. Si el mes estaba pago le quedan horas a favor; si no, esa semana no se cobra. Confirmá el día antes.',
+    input_schema: { type: 'object', properties: { fijo_id: { type: 'integer' }, fecha: { type: 'string', description: 'AAAA-MM-DD' } }, required: ['fijo_id', 'fecha'] },
+  },
+  {
+    name: 'recuperar_horas',
+    description: 'Usa horas a favor para reservar otro horario libre (si la franja es más cara, paga la diferencia). Confirmá antes.',
+    input_schema: { type: 'object', properties: {
+      fecha: { type: 'string', description: 'AAAA-MM-DD' }, horas: { type: 'array', items: { type: 'integer' } }, consultorio_id: { type: 'integer' } },
+      required: ['fecha', 'horas'] },
+  },
+  {
     name: 'calificar_contacto',
     description: 'Actualiza la ficha del contacto en el CRM del panel: etapa (consulta, interesado, perdido), qué busca, valor estimado por mes y si es prioridad. Reservó y pagó se marcan solos.',
     input_schema: { type: 'object', properties: {
@@ -472,6 +504,7 @@ function pagoParaCliente(r: any, cfg: Record<string, string>) {
   };
 }
 
+const ctx_registrado = (chat: any) => !!chat.cliente;
 type Turno = { chat: any; cfg: Record<string, string>; usadas: { nombre: string; ok: boolean }[]; fotos: { url: string; texto: string }[] };
 
 async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
@@ -504,7 +537,13 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
       const r = await rpc('asistente_mis_reservas', { p_whatsapp: wa });
       r.proximos_turnos = r.proximos_turnos.map((x: any) => ({ ...x, dia: fechaCorta(x.fecha), horario: rangos(x.horas),
         paga_sena_hasta: cuandoAR(x.paga_sena_hasta) }));
-      r.horarios_fijos = r.horarios_fijos.map((x: any) => ({ ...x, horario: rangos(x.horas) }));
+      r.horarios_fijos = r.horarios_fijos.map((x: any) => ({ ...x, horario: rangos(x.horas),
+        proximas_fechas: (x.proximas_fechas || []).map((f: string) => ({ fecha: f, dia: fechaCorta(f) })),
+        semanas_liberadas: (x.semanas_liberadas || []).map((f: string) => fechaCorta(f)) }));
+      r.horas_a_favor = (r.horas_a_favor || []).map((h: any) => ({ ...h, vence: fechaCorta(String(h.vence)) }));
+      if (!r.proximos_turnos.length && !r.horarios_fijos.length && !ctx_registrado(chat)) {
+        r.nota = 'No reconocemos este WhatsApp como cliente. Si dice que ya alquila, pedí nombre y mail y pasá al equipo para vincularlo.';
+      }
       return r;
     }
     case 'reservar_horas': {
@@ -569,6 +608,28 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
         p_motivo: e.motivo, p_origen: 'conversacion', p_chat_id: chat.simulado ? null : chat.chat_id,
         p_conocimiento_id: e.corrige_id ? Number(e.corrige_id) : null });
       return { propuesto: !!id, nota: 'El equipo lo revisa. Hasta que lo apruebe, no lo des por cierto.' };
+    }
+    case 'mover_turno': {
+      if (chat.simulado) throw { message: 'SIMULADOR', hint: 'En el simulador no hay reservas reales para mover' };
+      const base = { p_chat_id: chat.chat_id, p_fecha: fecha(e.nueva_fecha), p_horas: enteros(e.nuevas_horas), p_consultorio: e.consultorio_id ? Number(e.consultorio_id) : null };
+      const r = e.tipo === 'fijo'
+        ? await rpc('asistente_mover_fijo', { ...base, p_fijo_id: Number(e.fijo_id), p_fecha_original: fecha(e.fecha_original) })
+        : await rpc('asistente_mover_reserva', { ...base, p_reserva_id: Number(e.reserva_id) });
+      const aPagar = e.tipo === 'fijo' ? r.a_pagar : r.diferencia;
+      return { ...r, dia: fechaCorta(String(r.fecha)), horario: rangos(r.horas), a_pagar: pesos(aPagar || 0),
+               saldo_total: r.saldo !== undefined ? pesos(r.saldo) : undefined,
+               transferencia: aPagar > 0 ? { alias: cfg.alias_transferencia, titular: cfg.titular_transferencia } : undefined };
+    }
+    case 'no_vengo': {
+      if (chat.simulado) throw { message: 'SIMULADOR', hint: 'En el simulador no hay horarios fijos reales' };
+      const r = await rpc('asistente_liberar_fijo', { p_chat_id: chat.chat_id, p_fijo_id: Number(e.fijo_id), p_fecha: fecha(e.fecha) });
+      return { ...r, dia: fechaCorta(String(r.fecha)), vencen: r.vencen ? fechaCorta(String(r.vencen)) : null };
+    }
+    case 'recuperar_horas': {
+      if (chat.simulado) throw { message: 'SIMULADOR', hint: 'En el simulador no hay horas a favor' };
+      const r = await rpc('asistente_usar_horas', { p_chat_id: chat.chat_id, p_fecha: fecha(e.fecha), p_horas: enteros(e.horas),
+        p_consultorio: e.consultorio_id ? Number(e.consultorio_id) : null });
+      return { ...r, dia: fechaCorta(String(r.fecha)), horario: rangos(r.horas), a_pagar: pesos(r.a_pagar) };
     }
     case 'calificar_contacto':
       return rpc('asistente_calificar', { p_chat_id: chat.chat_id, p_etapa: e.etapa, p_interes: e.interes || null,

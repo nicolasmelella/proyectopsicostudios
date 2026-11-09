@@ -922,6 +922,10 @@ export function crearClienteDemo() {
       return { mensajes: db.asistente_mensajes.filter((m) => m.chat_id === p_chat_id),
         memoria: db.asistente_memoria.filter((m) => m.whatsapp === c?.whatsapp), pedidos: c?.reservo ? [db.pedidos[0]?.id || 1] : [] };
     },
+    asistente_panel_vincular({ p_chat_id, p_profesional_id }) {
+      soloEquipo(); const p = db.profesionales.find((x) => x.id === p_profesional_id); if (!p) return err('NO_ENCONTRADO', 'Esa persona no existe');
+      const c = chatDe(p_chat_id); c.profesional_id = p.id; c.nombre = p.nombre; return { nombre: p.nombre };
+    },
     asistente_panel_asignar({ p_chat_id, p_user_id }) { soloEquipo(); chatDe(p_chat_id).asignado_a = p_user_id || null; },
     asistente_panel_etapa({ p_chat_id, p_etapa, p_prioridad }) {
       soloEquipo();

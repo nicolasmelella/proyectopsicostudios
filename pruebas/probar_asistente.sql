@@ -287,5 +287,70 @@ select pg_temp.ok((select json_array_length(public.asistente_para_seguir()) = 0)
 reset role;
 update public.config set valor = 'si' where clave = 'asistente_solo_prueba';
 
+-- ---------------------------------------------------------------------
+-- Quien ya alquila: mover, avisar que no viene, horas a favor, vincular
+-- ---------------------------------------------------------------------
+create temp table as_f as select (public.hoy_ar() + 42 + ((1 - extract(isodow from public.hoy_ar() + 42)::int + 7) % 7))::date as lunes;
+grant select on as_f to service_role;
+select (select id from public.profesionales where right(whatsapp, 10) = '1155556666') as laura \gset
+insert into public.fijos (profesional_id, consultorio_id, dia_semana, horas, precio_semanal, estado, desde)
+values (:laura, 5, 1, array[8, 9]::smallint[], 16400, 'activo', (select lunes from as_f)) returning id as fijo \gset
+select public.ocupar_fijo(:fijo, false);
+set role service_role;
+create temp table as_mr as select public.asistente_mis_reservas('5491155556666')::jsonb as r;
+select pg_temp.ok((select (r->'horarios_fijos'->0->>'fijo_id')::bigint = :fijo and jsonb_array_length(r->'horarios_fijos'->0->'proximas_fechas') >= 1 from as_mr),
+                  'mis reservas: ve su fijo con las próximas fechas');
+-- mover UNA semana del fijo (mes sin pagar): esa semana sale del fijo y se cobra el horario nuevo
+create temp table as_mf as select public.asistente_mover_fijo(:chat, :fijo, (select lunes from as_f), (select lunes + 1 from as_f), array[9, 10]::smallint[])::jsonb as r;
+select pg_temp.ok((select r->>'movido' = 'true' and not (r->>'mes_pago')::boolean and (r->>'a_pagar')::int = 16400 from as_mf),
+                  'mueve una semana del fijo; mes sin pagar: se cobra el horario nuevo y esa semana no');
+reset role;
+select pg_temp.ok((select count(*) = 0 from public.ocupaciones where fijo_id = :fijo and fecha = (select lunes from as_f)), 'el lunes queda libre para otros');
+select pg_temp.ok((select count(*) = 2 from public.ocupaciones o join public.reservas r on r.id = o.reserva_id
+                   where r.profesional_id = :laura and o.fecha = (select lunes + 1 from as_f) and r.comentario like '%fijo%'), 'el martes queda a su nombre');
+-- con el mes pago: liberar deja horas a favor
+insert into public.pagos (fijo_id, periodo, monto, medio) values (:fijo, to_char((select lunes + 7 from as_f), 'YYYY-MM'), 60000, 'transferencia');
+set role service_role;
+create temp table as_lf as select public.asistente_liberar_fijo(:chat, :fijo, (select lunes + 7 from as_f))::jsonb as r;
+select pg_temp.ok((select (r->>'horas_a_favor')::int = 2 from as_lf), 'avisa que no viene (mes pago): 2 horas a favor');
+select pg_temp.ok((select jsonb_array_length(public.asistente_mis_reservas('5491155556666')::jsonb->'horas_a_favor') = 1), 'las ve en sus reservas');
+select pg_temp.espera_error(format($$select public.asistente_liberar_fijo(%s, %s, %L)$$, :chat, :fijo, (select lunes + 7 from as_f)), 'NO_ENCONTRADO');
+-- recuperar: 2 horas a favor a la tarde (más cara) → paga la diferencia
+create temp table as_uh as select public.asistente_usar_horas(:chat, (select lunes + 9 from as_f), array[15, 16]::smallint[])::jsonb as r;
+select pg_temp.ok((select (r->>'a_pagar')::int = 2 * (8500 - 8200) from as_uh),
+                  'recupera a la tarde: paga solo la diferencia de franja');
+select pg_temp.espera_error(format($$select public.asistente_usar_horas(%s, %L, array[10]::smallint[])$$, :chat, (select lunes + 10 from as_f)), 'POCAS_HORAS_A_FAVOR');
+-- mover una reserva por horas: más cara → la diferencia queda como saldo
+create temp table as_r1 as select public.asistente_crear_pedido(:chat, 'Laura Vieja', 'Psicóloga', 'laura@x.com',
+  jsonb_build_array(jsonb_build_object('fecha', (select lunes + 2 from as_f), 'horas', jsonb_build_array(10), 'consultorio', 1)))::jsonb as r;
+select ((select r->'reservas'->0->>'id' from as_r1))::bigint as res \gset
+create temp table as_mv as select public.asistente_mover_reserva(:chat, :res, (select lunes + 2 from as_f), array[18]::smallint[])::jsonb as r;
+select pg_temp.ok((select (r->>'diferencia')::int = 500 and (r->>'total')::int = 9000 from as_mv), 'mueve una reserva a la tarde: queda la diferencia ($500) como saldo');
+select pg_temp.espera_error(format($$select public.asistente_mover_reserva(%s, %s, %L, array[10, 11]::smallint[])$$, :chat, :res, (select lunes + 3 from as_f)), 'OTRA_DURACION');
+-- poca anticipación: lo tiene que ver el equipo
+reset role;
+update public.reservas set fecha = public.hoy_ar() + 1, horas = array[(extract(hour from public.ahora_ar())::int % 12) + 8]::smallint[] where id = :res;
+delete from public.ocupaciones where reserva_id = :res;
+set role service_role;
+select pg_temp.espera_error(format($$select public.asistente_mover_reserva(%s, %s, %L, array[19]::smallint[])$$, :chat, :res, (select lunes + 4 from as_f)), 'POCA_ANTICIPACION');
+-- otra persona no puede mover lo de Laura; un número desconocido no puede nada
+create temp table as_ot as select public.asistente_entrada('5491177770000', 'Otro', 'hola', 'texto', null, 'wamid.ot')::jsonb as r;
+select (select (r->>'chat_id')::bigint from as_ot) as otro \gset
+select pg_temp.espera_error(format($$select public.asistente_liberar_fijo(%s, %s, %L)$$, (select (r->>'chat_id')::bigint from as_ot), :fijo, (select lunes + 14 from as_f)), 'SIN_IDENTIFICAR');
+reset role;
+select pg_temp.ok((select count(*) = 4 from public.asistente_cambios where profesional_id = :laura), 'cada cambio queda registrado para el equipo');
+
+-- Vincular desde el panel: desde ahí lo reconoce
+insert into public.profesionales (nombre, whatsapp, profesion) values ('Marta Sin Celular', '4555', 'Psicóloga') returning id as marta \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select public.asistente_panel_vincular(:otro, :marta);
+select pg_temp.espera_error(format($$select public.asistente_panel_vincular(%s, %s)$$, :otro, :laura), 'YA_USADO');
+reset role;
+select pg_temp.ok((select whatsapp = '1177770000' from public.profesionales where id = :marta), 'vincular: carga el WhatsApp en la ficha');
+set role service_role;
+select pg_temp.ok((select public.asistente_contexto(:otro)::jsonb->'cliente'->>'nombre' = 'Marta Sin Celular'), 'y el asistente ya la reconoce');
+reset role;
+
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

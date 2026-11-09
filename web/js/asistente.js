@@ -15,6 +15,7 @@ const NOMBRES_HERRAMIENTA = {
   cancelar_pedido_sin_pagar: 'canceló un pedido sin pagar', guardar_comprobante: 'guardó un comprobante', recordar: 'anotó un dato',
   pasar_al_equipo: 'pasó al equipo', proponer_saber: 'propuso aprender algo', consulta_equipo: 'consultó el panel',
   calificar_contacto: 'actualizó la ficha', mandar_fotos: 'mandó fotos',
+  mover_turno: 'movió un horario', no_vengo: 'liberó una semana del fijo', recuperar_horas: 'usó horas a favor',
 };
 const ETAPAS = [['nuevo', 'Nuevo'], ['consulta', 'Consultó'], ['interesado', 'Interesado'], ['reservo', 'Reservó'], ['pago', 'Pagó'], ['perdido', 'Perdido']];
 const nombreEtapa = (e) => ETAPAS.find(([v]) => v === e)?.[1] || e;
@@ -109,6 +110,13 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
         <label class="asis-check"><input type="checkbox" id="asis-prioridad" ${c.prioridad ? 'checked' : ''}> 🔥 Prioridad</label>
         ${c.interes || c.nota_crm || c.valor_estimado ? `<p class="chico" style="margin:0;flex-basis:100%">${c.interes ? `Busca <strong>${INTERES[c.interes] || esc(c.interes)}</strong>` : ''}${c.valor_estimado ? ` · ~${pesos(c.valor_estimado)}/mes` : ''}${c.nota_crm ? ` · ${esc(c.nota_crm)}` : ''}</p>` : ''}
       </div>
+      ${c.profesional_id ? '' : `<form class="asis-vincular" id="asis-vincular">
+        <label for="asis-prof">¿Ya alquila? Vincular con su ficha</label>
+        <input id="asis-prof" list="asis-profs" placeholder="Nombre del profesional" autocomplete="off">
+        <datalist id="asis-profs">${(st.profesionales || []).map((p) => `<option value="${esc(p.nombre)}">${esc(p.profesion || '')}</option>`).join('')}</datalist>
+        <button class="btn btn-borde btn-chico">Vincular</button>
+        <span class="suave chico">Desde ahí el asistente la reconoce y puede mover sus horarios.</span></form>`}
+      ${d.horas_a_favor?.length ? `<p class="aviso aviso-info chico" style="margin:.5em 0">Horas a favor: ${d.horas_a_favor.map((h) => `<strong>${h.horas} h</strong> hasta el ${fechaCorta(h.vence)} (${esc(h.motivo || '')})`).join(' · ')}</p>` : ''}
       ${c.atender ? `<p class="aviso aviso-alerta chico" style="margin:.5em 0">${c.urgente ? '<strong>URGENTE.</strong> ' : ''}Para atender: ${esc(c.motivo_atender || 'sin detalle')}</p>` : ''}
       ${pausado ? `<p class="aviso aviso-info chico" style="margin:.5em 0">El asistente no contesta en este chat hasta las ${hora(c.pausa_hasta)}.</p>` : ''}
       <div class="asis-msjs" id="asis-msjs">${d.mensajes.map(burbuja).join('') || '<p class="suave">Sin mensajes.</p>'}</div>
@@ -121,6 +129,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
         ${d.memoria.length ? `<ul>${d.memoria.map((m) => `<li>${esc(m.dato)} <button class="link-btn chico" data-borrar-memoria="${m.id}" style="display:inline;margin:0">borrar</button></li>`).join('')}</ul>`
           : '<p class="suave chico">Nada todavía.</p>'}
         ${d.pedidos.length ? `<p class="chico">Pedidos que tomó: ${d.pedidos.map((p) => `#${p}`).join(', ')}</p>` : ''}
+        ${d.cambios?.length ? `<p class="chico" style="margin-bottom:0"><strong>Cambios que hizo:</strong></p><ul>${d.cambios.map((x) => `<li>${esc(x.detalle)}${x.diferencia > 0 ? ` · diferencia ${pesos(x.diferencia)}` : ''} <span class="suave">(${cuando(x.creado_en)})</span></li>`).join('')}</ul>` : ''}
       </details>`;
     if (borrador && $('#asis-resp') && !$('#asis-resp').disabled) $('#asis-resp').value = borrador;
     const caja = $('#asis-msjs');
@@ -130,6 +139,14 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     $('#asis-atendido') && ($('#asis-atendido').onclick = async () => { await llamar('asistente_panel_atendido', { p_chat_id: id }, 'Marcado como atendido'); pintarChats(); badge(); });
     $('#asis-pausar') && ($('#asis-pausar').onclick = async () => { await llamar('asistente_panel_pausa', { p_chat_id: id, p_minutos: 120 }, 'Asistente pausado en este chat'); pintarChats(); });
     $('#asis-devolver') && ($('#asis-devolver').onclick = async () => { await llamar('asistente_panel_pausa', { p_chat_id: id, p_minutos: 0 }, 'El asistente vuelve a contestar'); pintarChats(); });
+    $('#asis-vincular') && ($('#asis-vincular').onsubmit = async (e) => {
+      e.preventDefault();
+      const nombre = $('#asis-prof').value.trim().toLowerCase();
+      const p = (st.profesionales || []).find((x) => x.nombre.toLowerCase() === nombre);
+      if (!p) return errorEn(null, 'Elegí el nombre de la lista (tiene que ser un profesional que ya existe).');
+      try { await llamar('asistente_panel_vincular', { p_chat_id: id, p_profesional_id: p.id }, `Vinculado con ${p.nombre}`); est.chat = id; pintarChats(); }
+      catch (err) { errorEn(null, err); }
+    });
     $('#asis-etapa').onchange = async (e) => {
       try { await llamar('asistente_panel_etapa', { p_chat_id: id, p_etapa: e.target.value }, 'Etapa actualizada'); pintarChats(true); } catch (err) { errorEn(null, err); }
     };
@@ -290,6 +307,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       kpi(r.pedidos_confirmados, 'reservas pagadas', pesos(r.monto_reservado)),
       kpi(r.charlas ? Math.round(((r.embudo?.pago || 0) / r.charlas) * 100) + '%' : '—', 'tasa de cierre', 'charlas que terminaron en pago'),
       kpi(segundos(r.respuesta_segundos?.asistente), 'tarda en responder el asistente', `el equipo: ${segundos(r.respuesta_segundos?.equipo)}`),
+      kpi(r.cambios ?? 0, 'horarios que movió o liberó', 'sin intervención del equipo'),
       kpi(r.para_atender, 'chats para atender'),
       kpi(r.propuestas, 'cosas para aprobar'),
       kpi(Math.round((r.tokens.entrada + r.tokens.salida) / 1000).toLocaleString('es-AR') + ' mil', 'tokens usados', 'el costo se ve en console.anthropic.com'),

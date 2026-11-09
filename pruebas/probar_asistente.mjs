@@ -152,7 +152,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 17); ok('17 herramientas');
+assert.equal(p.tools.length, 20); ok('20 herramientas');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -400,6 +400,41 @@ await deWhatsApp(CEL3, { type: 'audio', audio: { id: 'audio-1', mime_type: 'audi
 assert.equal(whisper.length, nWhisper); ok('con "Entender audios: No" no se transcribe (no gasta)');
 pg("update public.config set valor = 'si' where clave = 'asistente_transcribir_audios'");
 delete env.OPENAI_API_KEY;
+
+// =====================================================================
+// 14. Quien ya alquila mueve su turno (y alguien no reconocido no puede)
+// =====================================================================
+const resId = Number(pg(`select id from public.reservas where pedido_id = ${pedidoId}`));
+pg(`update public.asistente_chats set pausa_hasta = null, atender = false where whatsapp = '${CEL}'`);
+guion = [
+  herramienta('mis_reservas', {}),
+  (q) => {
+    const mr = JSON.parse(q.messages.at(-1).content[0].content);
+    assert.equal(mr.proximos_turnos[0].reserva_id, resId);
+    return herramienta('mover_turno', { tipo: 'reserva', reserva_id: resId, nueva_fecha: dia, nuevas_horas: [17, 18] });
+  },
+  (q) => {
+    const r = JSON.parse(q.messages.at(-1).content[0].content);
+    assert.equal(r.movida, true); assert.equal(r.a_pagar, '$1.000'); assert.equal(r.horario, '17 a 19 hs');
+    return texto('¡Listo! Te pasé al mismo día de 17 a 19 hs. Como la tarde sale un poco más, quedan $1.000 de diferencia.');
+  },
+];
+await deWhatsApp(CEL, { type: 'text', text: { body: 'Sí, pasame de 17 a 19 porfa' } });
+assert.equal(pg(`select array_to_string(horas, ',') || '|' || precio_total from public.reservas where id = ${resId}`), '17,18|18000');
+assert.match(enviados.at(-1).texto, /\$1\.000 de diferencia/);
+ok('quien ya alquila mueve su turno por WhatsApp: se mueve en la agenda y queda la diferencia como saldo');
+assert.equal(pg(`select count(*) from public.asistente_cambios where reserva_id = ${resId}`), '1'); ok('el cambio queda registrado para el equipo');
+
+guion = [
+  herramienta('no_vengo', { fijo_id: 1, fecha: dia }),
+  (q) => {
+    const r = q.messages.at(-1).content[0];
+    assert.equal(r.is_error, true); assert.match(r.content, /SIN_IDENTIFICAR/);
+    return texto('Por seguridad, ¿me pasás tu nombre y el mail con el que alquilás? Se lo paso al equipo.');
+  },
+];
+await deWhatsApp('5491199990000', { type: 'text', text: { body: 'Hola, soy fija de los lunes y este no voy' } }, 'Desconocida');
+assert.match(enviados.at(-1).texto, /Por seguridad/); ok('un número que no reconoce no puede mover ni liberar nada');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

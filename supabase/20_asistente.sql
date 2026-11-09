@@ -28,7 +28,9 @@ insert into public.config (clave, valor, descripcion) values
   ('asistente_esfuerzo',        'medium', 'Cuánto piensa antes de responder: low (más rápido y barato), medium o high'),
   ('asistente_seguimiento',     'si',  'si = si alguien consultó y no reservó, el asistente le vuelve a escribir UNA vez (con disponibilidad real)'),
   ('asistente_horas_seguimiento', '3', 'Horas de silencio después de las que el asistente hace ese seguimiento'),
-  ('asistente_transcribir_audios', 'si', 'si = los audios se pasan a texto con Whisper (requiere el secreto OPENAI_API_KEY)')
+  ('asistente_transcribir_audios', 'si', 'si = los audios se pasan a texto con Whisper (requiere el secreto OPENAI_API_KEY)'),
+  ('asistente_horas_anticipacion', '24', 'Horas de anticipación mínimas para que el asistente mueva o libere un horario (con menos, lo pasa al equipo)'),
+  ('asistente_dias_horas_a_favor', '30', 'Días que duran las horas a favor de un fijo que avisó que no viene')
 on conflict (clave) do nothing;
 
 -- ---------------------------------------------------------------------
@@ -152,12 +154,42 @@ create table if not exists public.asistente_informes (
 
 alter table public.equipo add column if not exists whatsapp text;
 
+-- Horas a favor: un fijo avisó a tiempo que no viene una semana ya pagada → las recupera otro día
+create table if not exists public.horas_a_favor (
+  id bigint generated always as identity primary key,
+  profesional_id bigint not null references public.profesionales (id),
+  horas smallint not null check (horas > 0),
+  usadas smallint not null default 0,
+  valor_hora integer not null,                 -- lo que valía cada hora (para cobrar la diferencia si recupera en una franja más cara)
+  motivo text,
+  fijo_id bigint references public.fijos (id),
+  fecha_origen date,
+  vence date not null,
+  creado_en timestamptz not null default now(),
+  check (usadas >= 0 and usadas <= horas)
+);
+create index if not exists horas_a_favor_prof on public.horas_a_favor (profesional_id);
+
+-- Cambios que hizo el asistente (mover, liberar, recuperar): quedan registrados para el equipo
+create table if not exists public.asistente_cambios (
+  id bigint generated always as identity primary key,
+  chat_id bigint references public.asistente_chats (id) on delete set null,
+  profesional_id bigint references public.profesionales (id),
+  tipo text not null check (tipo in ('mover_reserva', 'mover_fijo', 'liberar_fijo', 'usar_horas')),
+  detalle text not null,
+  diferencia integer not null default 0,
+  reserva_id bigint references public.reservas (id),
+  fijo_id bigint references public.fijos (id),
+  creado_en timestamptz not null default now()
+);
+
 -- Seguridad: el panel solo LEE (todo cambio pasa por funciones que revisan permisos); la web no ve nada
 do $$
 declare t text;
 begin
   foreach t in array array['asistente_numeros', 'asistente_chats', 'asistente_mensajes', 'asistente_memoria',
-                           'asistente_conocimiento', 'asistente_propuestas', 'asistente_pedidos', 'asistente_informes'] loop
+                           'asistente_conocimiento', 'asistente_propuestas', 'asistente_pedidos', 'asistente_informes',
+                           'horas_a_favor', 'asistente_cambios'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "equipo lee" on public.%I', t);
     execute format('create policy "equipo lee" on public.%I for select to authenticated using (public.es_equipo())', t);
@@ -435,16 +467,21 @@ language sql stable security definer set search_path = public as $$
     where public.asistente_clave_tel(pr.whatsapp) = public.asistente_clave_tel(p_whatsapp))
   select json_build_object(
     'proximos_turnos', coalesce((select json_agg(json_build_object(
-        'pedido', r.pedido_id, 'fecha', r.fecha, 'horas', r.horas, 'consultorio', c.nombre, 'estado', r.estado,
+        'reserva_id', r.id, 'pedido', r.pedido_id, 'fecha', r.fecha, 'horas', r.horas, 'consultorio', c.nombre, 'estado', r.estado,
         'total', r.precio_total, 'pagado', public.monto_pagado_reserva(r.id),
         'paga_sena_hasta', case when r.estado = 'pendiente' then r.expira_en end) order by r.fecha, r.horas[1])
       from public.reservas r join public.consultorios c on c.id = r.consultorio_id
       where r.profesional_id in (select id from yo) and r.fecha >= public.hoy_ar() and r.estado in ('pendiente', 'confirmada')), '[]'::json),
     'horarios_fijos', coalesce((select json_agg(json_build_object(
-        'pedido', f.pedido_id, 'dia_semana', f.dia_semana, 'horas', f.horas, 'consultorio', c.nombre, 'estado', f.estado,
-        'desde', f.desde, 'precio_semanal', f.precio_semanal))
+        'fijo_id', f.id, 'pedido', f.pedido_id, 'dia_semana', f.dia_semana, 'horas', f.horas, 'consultorio', c.nombre, 'estado', f.estado,
+        'desde', f.desde, 'precio_semanal', f.precio_semanal,
+        'proximas_fechas', (select json_agg(x.fecha order by x.fecha) from (select distinct o.fecha from public.ocupaciones o
+                            where o.fijo_id = f.id and o.fecha >= public.hoy_ar() order by o.fecha limit 6) x),
+        'semanas_liberadas', (select json_agg(e.fecha order by e.fecha) from public.fijo_excepciones e where e.fijo_id = f.id and e.fecha >= public.hoy_ar())))
       from public.fijos f join public.consultorios c on c.id = f.consultorio_id
       where f.profesional_id in (select id from yo) and f.estado in ('solicitud', 'activo')), '[]'::json),
+    'horas_a_favor', coalesce((select json_agg(json_build_object('horas', h.horas - h.usadas, 'vence', h.vence, 'motivo', h.motivo) order by h.vence)
+      from public.horas_a_favor h where h.profesional_id in (select id from yo) and h.usadas < h.horas and h.vence >= public.hoy_ar()), '[]'::json),
     'pedidos_con_comprobante_en_revision', coalesce((select json_agg(distinct co.pedido_id)
       from public.comprobantes co join public.pedidos pe on pe.id = co.pedido_id
       where pe.profesional_id in (select id from yo) and co.estado = 'pendiente'), '[]'::json))
@@ -738,6 +775,230 @@ begin
   return v;
 end $$;
 
+-- ---------------------------------------------------------------------
+-- CAMBIOS DE QUIEN YA ALQUILA (reglas decididas por el equipo):
+--   · el asistente mueve o libera solo si faltan al menos N horas (24 por defecto) y el lugar nuevo está libre
+--   · si el horario nuevo cuesta más, la diferencia queda como saldo a pagar
+--   · un fijo que avisa a tiempo que no viene: si ya pagó ese mes, le quedan horas a favor (30 días);
+--     si no lo pagó, esa semana no se le cobra (igual que cuando la libera el equipo)
+--   · con menos anticipación, o fuera de estas reglas: lo pasa al equipo
+-- ---------------------------------------------------------------------
+create or replace function public.asistente_quien(p_chat_id bigint) returns bigint
+language plpgsql stable security definer set search_path = public as $$
+declare v bigint;
+begin
+  select coalesce(c.profesional_id, public.asistente_profesional(c.whatsapp)) into v
+  from public.asistente_chats c where c.id = p_chat_id and not c.simulado;
+  if v is null then
+    raise exception 'SIN_IDENTIFICAR' using hint = 'No reconocemos este WhatsApp como cliente: pedí nombre y mail y pasalo al equipo para vincularlo';
+  end if;
+  return v;
+end $$;
+
+create or replace function public.asistente_controlar_anticipacion(p_fecha date, p_horas smallint[]) returns void
+language plpgsql stable security definer set search_path = public as $$
+declare v_h integer := coalesce(public.cfg('asistente_horas_anticipacion'), 24);
+begin
+  if p_fecha + make_interval(hours => (select min(h) from unnest(p_horas) h)) < public.ahora_ar() + make_interval(hours => v_h) then
+    raise exception 'POCA_ANTICIPACION'
+      using hint = format('Faltan menos de %s horas: no lo puede cambiar el asistente. Pasalo al equipo.', v_h);
+  end if;
+end $$;
+
+-- Elige el consultorio: el pedido, o si no el mismo de antes, o el primero libre
+create or replace function public.asistente_elegir_consultorio(p_pedido smallint, p_antes smallint, p_fecha date, p_horas smallint[]) returns smallint
+language sql stable security definer set search_path = public as $$
+  select case
+    when p_pedido is not null then (select id from public.consultorios where id = p_pedido and activo and online and public.libre(id, p_fecha, p_horas))
+    when p_antes is not null and public.libre(p_antes, p_fecha, p_horas) then p_antes
+    else (select c.id from public.consultorios c where c.activo and c.online and c.nombre <> 'Salón' and public.libre(c.id, p_fecha, p_horas)
+          order by c.orden limit 1) end
+$$;
+
+-- Mover una reserva por horas a otro día, hora o consultorio (mismas horas de duración)
+create or replace function public.asistente_mover_reserva(
+  p_chat_id bigint, p_reserva_id bigint, p_fecha date, p_horas smallint[], p_consultorio smallint default null
+) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prof bigint := public.asistente_quien(p_chat_id);
+  r public.reservas;
+  v_horas smallint[] := array(select h from unnest(p_horas) h order by 1);
+  v_cons smallint;
+  v_nuevo integer;
+  v_dif integer;
+  v_antes text;
+begin
+  select * into r from public.reservas where id = p_reserva_id and profesional_id = v_prof for update;
+  if not found or r.estado not in ('pendiente', 'confirmada') or r.fecha < public.hoy_ar() then
+    raise exception 'NO_ENCONTRADO' using hint = 'No hay un turno vigente con ese número a nombre de esta persona';
+  end if;
+  perform public.asistente_controlar_anticipacion(r.fecha, r.horas);
+  if cardinality(v_horas) <> cardinality(r.horas) then
+    raise exception 'OTRA_DURACION' using hint = format('El turno es de %s horas: para cambiar la duración hace falta otra reserva o al equipo', cardinality(r.horas));
+  end if;
+  perform public.validar_horas(p_fecha, v_horas);
+  if p_fecha > public.fecha_maxima_reserva() then raise exception 'FECHA_LEJANA'; end if;
+  v_antes := format('%s %s-%s hs, %s', to_char(r.fecha, 'DD/MM'), r.horas[1], r.horas[cardinality(r.horas)] + 1,
+                    (select nombre from public.consultorios where id = r.consultorio_id));
+  delete from public.ocupaciones where reserva_id = r.id;
+  v_cons := public.asistente_elegir_consultorio(p_consultorio, r.consultorio_id, p_fecha, v_horas);
+  if v_cons is null then
+    raise exception 'SIN_LUGAR' using hint = 'Ese horario no está libre: ofrecé otro';
+  end if;
+  insert into public.ocupaciones (consultorio_id, fecha, hora, reserva_id) select v_cons, p_fecha, h, r.id from unnest(v_horas) h;
+  select sum(public.precio_hora('suelta', h, p_fecha)) into v_nuevo from unnest(v_horas) h;
+  v_dif := greatest(0, v_nuevo - r.precio_total);
+  update public.reservas
+  set fecha = p_fecha, horas = v_horas, consultorio_id = v_cons, precio_total = greatest(r.precio_total, v_nuevo),
+      comentario = concat_ws(' · ', nullif(comentario, ''), 'Movida por el asistente (antes: ' || v_antes || ')')
+  where id = r.id returning * into r;
+  insert into public.asistente_cambios (chat_id, profesional_id, tipo, detalle, diferencia, reserva_id)
+  values (p_chat_id, v_prof, 'mover_reserva', format('De %s a %s %s-%s hs, %s', v_antes, to_char(p_fecha, 'DD/MM'), v_horas[1],
+          v_horas[cardinality(v_horas)] + 1, (select nombre from public.consultorios where id = v_cons)),
+          v_dif, r.id);
+  return json_build_object('movida', true, 'reserva_id', r.id, 'fecha', p_fecha, 'horas', v_horas, 'diferencia', v_dif,
+    'consultorio', (select nombre from public.consultorios where id = v_cons),
+    'total', r.precio_total, 'pagado', public.monto_pagado_reserva(r.id), 'saldo', r.precio_total - public.monto_pagado_reserva(r.id));
+end $$;
+
+-- ¿Ya pagó el mes de esa semana del fijo?
+create or replace function public.asistente_mes_fijo_pago(p_fijo_id bigint, p_fecha date) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.monto_pagado_fijo(p_fijo_id, to_char(p_fecha, 'YYYY-MM')) > 0
+$$;
+
+create or replace function public.asistente_fijo_de(p_prof bigint, p_fijo_id bigint, p_fecha date) returns public.fijos
+language plpgsql stable security definer set search_path = public as $$
+declare f public.fijos;
+begin
+  select * into f from public.fijos where id = p_fijo_id and profesional_id = p_prof and estado = 'activo';
+  if not found or not exists (select 1 from public.ocupaciones where fijo_id = f.id and fecha = p_fecha) then
+    raise exception 'NO_ENCONTRADO' using hint = 'Ese día no hay una semana de su horario fijo (o ya está liberada)';
+  end if;
+  return f;
+end $$;
+
+-- Una semana del fijo, a otro día/hora/consultorio (solo esa vez)
+create or replace function public.asistente_mover_fijo(
+  p_chat_id bigint, p_fijo_id bigint, p_fecha_original date, p_fecha date, p_horas smallint[], p_consultorio smallint default null
+) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prof bigint := public.asistente_quien(p_chat_id);
+  f public.fijos := public.asistente_fijo_de(v_prof, p_fijo_id, p_fecha_original);
+  v_horas smallint[] := array(select h from unnest(p_horas) h order by 1);
+  v_cons smallint;
+  v_viejo integer;
+  v_nuevo integer;
+  v_pago boolean;
+  v_precio integer;
+  v_id bigint;
+begin
+  perform public.asistente_controlar_anticipacion(p_fecha_original, f.horas);
+  if cardinality(v_horas) <> cardinality(f.horas) then
+    raise exception 'OTRA_DURACION' using hint = format('Su fijo es de %s horas: para cambiar la duración, al equipo', cardinality(f.horas));
+  end if;
+  perform public.validar_horas(p_fecha, v_horas);
+  if p_fecha > public.fecha_maxima_reserva() then raise exception 'FECHA_LEJANA'; end if;
+  insert into public.fijo_excepciones (fijo_id, fecha, motivo)
+  values (f.id, p_fecha_original, 'Movido por el asistente al ' || to_char(p_fecha, 'DD/MM')) on conflict do nothing;
+  delete from public.ocupaciones where fijo_id = f.id and fecha = p_fecha_original;
+  v_cons := public.asistente_elegir_consultorio(p_consultorio, f.consultorio_id, p_fecha, v_horas);
+  if v_cons is null then raise exception 'SIN_LUGAR' using hint = 'Ese horario no está libre: ofrecé otro'; end if;
+  select sum(public.precio_hora('fijo', h, p_fecha_original)) into v_viejo from unnest(f.horas) h;
+  select sum(public.precio_hora('fijo', h, p_fecha)) into v_nuevo from unnest(v_horas) h;
+  -- mes pago: solo la diferencia; mes sin pagar: esa semana sale del fijo y se cobra el horario nuevo
+  v_pago := public.asistente_mes_fijo_pago(f.id, p_fecha_original);
+  v_precio := case when v_pago then greatest(0, v_nuevo - v_viejo) else v_nuevo end;
+  insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen, comentario)
+  values (v_prof, v_cons, p_fecha, v_horas, v_precio, 'confirmada', 'panel',
+          'Semana de su fijo del ' || to_char(p_fecha_original, 'DD/MM') || ', movida por el asistente')
+  returning id into v_id;
+  insert into public.ocupaciones (consultorio_id, fecha, hora, reserva_id) select v_cons, p_fecha, h, v_id from unnest(v_horas) h;
+  insert into public.asistente_cambios (chat_id, profesional_id, tipo, detalle, diferencia, reserva_id, fijo_id)
+  values (p_chat_id, v_prof, 'mover_fijo', format('Fijo del %s pasa al %s %s-%s hs, %s', to_char(p_fecha_original, 'DD/MM'), to_char(p_fecha, 'DD/MM'),
+          v_horas[1], v_horas[cardinality(v_horas)] + 1, (select nombre from public.consultorios where id = v_cons)), greatest(0, v_nuevo - v_viejo), v_id, f.id);
+  return json_build_object('movido', true, 'fecha', p_fecha, 'horas', v_horas, 'consultorio', (select nombre from public.consultorios where id = v_cons),
+    'mes_pago', v_pago, 'a_pagar', v_precio,
+    'explicacion', case when v_pago and v_precio = 0 then 'Sin costo extra'
+                        when v_pago then 'Diferencia de precio a pagar'
+                        else 'Esa semana no se cobra en el fijo; se cobra este horario' end);
+end $$;
+
+-- Un fijo avisa que una semana no viene
+create or replace function public.asistente_liberar_fijo(p_chat_id bigint, p_fijo_id bigint, p_fecha date) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prof bigint := public.asistente_quien(p_chat_id);
+  f public.fijos := public.asistente_fijo_de(v_prof, p_fijo_id, p_fecha);
+  v_pago boolean;
+  v_vence date;
+begin
+  perform public.asistente_controlar_anticipacion(p_fecha, f.horas);
+  insert into public.fijo_excepciones (fijo_id, fecha, motivo) values (f.id, p_fecha, 'Avisó por WhatsApp que no viene (asistente)') on conflict do nothing;
+  delete from public.ocupaciones where fijo_id = f.id and fecha = p_fecha;
+  v_pago := public.asistente_mes_fijo_pago(f.id, p_fecha);
+  if v_pago then
+    v_vence := p_fecha + coalesce(public.cfg('asistente_dias_horas_a_favor'), 30);
+    insert into public.horas_a_favor (profesional_id, horas, valor_hora, motivo, fijo_id, fecha_origen, vence)
+    values (v_prof, cardinality(f.horas), f.precio_semanal / cardinality(f.horas), 'No vino el ' || to_char(p_fecha, 'DD/MM') || ' (avisó a tiempo)', f.id, p_fecha, v_vence);
+  end if;
+  insert into public.asistente_cambios (chat_id, profesional_id, tipo, detalle, fijo_id)
+  values (p_chat_id, v_prof, 'liberar_fijo', format('Liberó su fijo del %s%s', to_char(p_fecha, 'DD/MM'),
+          case when v_pago then format(': %s horas a favor hasta el %s', cardinality(f.horas), to_char(v_vence, 'DD/MM')) else ' (esa semana no se cobra)' end), f.id);
+  return json_build_object('liberado', true, 'fecha', p_fecha,
+    'horas_a_favor', case when v_pago then cardinality(f.horas) else 0 end, 'vencen', v_vence,
+    'explicacion', case when v_pago then 'Ese mes ya estaba pago: le quedan horas a favor para recuperar'
+                        else 'Ese mes todavía no estaba pago: esa semana no se le cobra' end);
+end $$;
+
+-- Recuperar horas a favor en otro día (si la franja nueva es más cara, paga la diferencia)
+create or replace function public.asistente_usar_horas(p_chat_id bigint, p_fecha date, p_horas smallint[], p_consultorio smallint default null)
+returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prof bigint := public.asistente_quien(p_chat_id);
+  v_horas smallint[] := array(select h from unnest(p_horas) h order by 1);
+  v_disp integer;
+  v_cons smallint;
+  v_id bigint;
+  v_precio integer := 0;
+  h smallint;
+  k public.horas_a_favor;
+  v_falta integer;
+begin
+  select coalesce(sum(horas - usadas), 0) into v_disp from public.horas_a_favor
+  where profesional_id = v_prof and usadas < horas and vence >= greatest(p_fecha, public.hoy_ar());
+  if v_disp < cardinality(v_horas) then
+    raise exception 'POCAS_HORAS_A_FAVOR' using hint = format('Tiene %s horas a favor vigentes para esa fecha', v_disp);
+  end if;
+  perform public.validar_horas(p_fecha, v_horas);
+  v_cons := public.asistente_elegir_consultorio(p_consultorio, null, p_fecha, v_horas);
+  if v_cons is null then raise exception 'SIN_LUGAR' using hint = 'Ese horario no está libre: ofrecé otro'; end if;
+  -- usa primero las que vencen antes; cada hora paga la diferencia si la franja nueva es más cara
+  v_falta := cardinality(v_horas);
+  for k in select * from public.horas_a_favor where profesional_id = v_prof and usadas < horas and vence >= greatest(p_fecha, public.hoy_ar())
+           order by vence, id for update loop
+    exit when v_falta = 0;
+    update public.horas_a_favor set usadas = usadas + least(v_falta, k.horas - k.usadas) where id = k.id;
+    for i in 1 .. least(v_falta, k.horas - k.usadas) loop
+      h := v_horas[cardinality(v_horas) - v_falta + 1];
+      v_precio := v_precio + greatest(0, public.precio_hora('fijo', h, p_fecha) - k.valor_hora);
+      v_falta := v_falta - 1;
+    end loop;
+  end loop;
+  insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen, comentario)
+  values (v_prof, v_cons, p_fecha, v_horas, v_precio, 'confirmada', 'panel', 'Recupera horas a favor (asistente)') returning id into v_id;
+  insert into public.ocupaciones (consultorio_id, fecha, hora, reserva_id) select v_cons, p_fecha, x, v_id from unnest(v_horas) x;
+  insert into public.asistente_cambios (chat_id, profesional_id, tipo, detalle, diferencia, reserva_id)
+  values (p_chat_id, v_prof, 'usar_horas', format('Recupera %s horas: %s %s-%s hs, %s', cardinality(v_horas), to_char(p_fecha, 'DD/MM'), v_horas[1],
+          v_horas[cardinality(v_horas)] + 1, (select nombre from public.consultorios where id = v_cons)), v_precio, v_id);
+  return json_build_object('reservado', true, 'reserva_id', v_id, 'fecha', p_fecha, 'horas', v_horas,
+    'consultorio', (select nombre from public.consultorios where id = v_cons), 'a_pagar', v_precio,
+    'horas_a_favor_que_quedan', v_disp - cardinality(v_horas));
+end $$;
+
 -- Recordatorio de seña: pedidos tomados por el asistente que siguen sin pagar
 create or replace function public.asistente_para_recordar() returns json
 language plpgsql security definer set search_path = public as $$
@@ -824,7 +1085,11 @@ begin
                           from (select * from public.asistente_mensajes where chat_id = p_chat_id order by id desc limit 300) m), '[]'::json),
     'memoria', coalesce((select json_agg(json_build_object('id', id, 'dato', dato, 'creado_en', creado_en) order by id)
                          from public.asistente_memoria where whatsapp = public.asistente_clave_memoria(c.whatsapp)), '[]'::json),
-    'pedidos', coalesce((select json_agg(ap.pedido_id order by ap.pedido_id) from public.asistente_pedidos ap where ap.chat_id = p_chat_id), '[]'::json));
+    'pedidos', coalesce((select json_agg(ap.pedido_id order by ap.pedido_id) from public.asistente_pedidos ap where ap.chat_id = p_chat_id), '[]'::json),
+    'cambios', coalesce((select json_agg(json_build_object('detalle', x.detalle, 'diferencia', x.diferencia, 'creado_en', x.creado_en) order by x.id desc)
+                         from public.asistente_cambios x where x.chat_id = p_chat_id), '[]'::json),
+    'horas_a_favor', coalesce((select json_agg(json_build_object('horas', h.horas - h.usadas, 'vence', h.vence, 'motivo', h.motivo) order by h.vence)
+                               from public.horas_a_favor h where h.profesional_id = c.profesional_id and h.usadas < h.horas and h.vence >= public.hoy_ar()), '[]'::json));
 end $$;
 
 -- Alguien del equipo contesta en un chat: el asistente se calla un rato
@@ -883,6 +1148,30 @@ begin
     raise exception 'ETAPA' using hint = 'Reservó y pagó se marcan solos cuando hay un pedido';
   end if;
   update public.asistente_chats set etapa = p_etapa, prioridad = coalesce(p_prioridad, prioridad) where id = p_chat_id;
+end $$;
+
+-- Vincular un chat con la ficha de un profesional (para clientes cuyo WhatsApp no estaba cargado)
+create or replace function public.asistente_panel_vincular(p_chat_id bigint, p_profesional_id bigint) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  c public.asistente_chats;
+  v_tel text;
+  v_otro text;
+begin
+  perform public.exigir_equipo();
+  select * into c from public.asistente_chats where id = p_chat_id and not simulado;
+  if not found then raise exception 'NO_ENCONTRADO'; end if;
+  if not exists (select 1 from public.profesionales where id = p_profesional_id) then raise exception 'NO_ENCONTRADO' using hint = 'Esa persona no existe'; end if;
+  v_tel := case when public.solo_numeros(c.whatsapp) like '549%' then substr(public.solo_numeros(c.whatsapp), 4)
+                when public.solo_numeros(c.whatsapp) like '54%' then substr(public.solo_numeros(c.whatsapp), 3)
+                else public.solo_numeros(c.whatsapp) end;
+  select nombre into v_otro from public.profesionales where whatsapp = v_tel and id <> p_profesional_id;
+  if v_otro is not null then
+    raise exception 'YA_USADO' using hint = format('Ese WhatsApp ya está en la ficha de %s. Corregilo en Profesionales.', v_otro);
+  end if;
+  update public.profesionales set whatsapp = v_tel where id = p_profesional_id;
+  update public.asistente_chats set profesional_id = p_profesional_id where id = p_chat_id;
+  return json_build_object('nombre', (select nombre from public.profesionales where id = p_profesional_id));
 end $$;
 
 -- El simulador del panel empieza una charla nueva
@@ -1044,6 +1333,7 @@ begin
       where not c.simulado and c.etapa = 'interesado' and public.asistente_etapa(c.id) = 'interesado'
         and c.ultimo_mensaje_en > now() - interval '14 days'), '[]'::json),
     'para_atender', (select count(*) from public.asistente_chats where atender and not simulado),
+    'cambios', (select count(*) from public.asistente_cambios where creado_en >= v_ini and creado_en < v_fin),
     'propuestas', (select count(*) from public.asistente_propuestas where estado = 'pendiente'),
     'tokens', (select json_build_object('entrada', coalesce(sum((m.uso->>'input_tokens')::bigint + coalesce((m.uso->>'cache_read_input_tokens')::bigint, 0)
                                                                 + coalesce((m.uso->>'cache_creation_input_tokens')::bigint, 0)), 0),
