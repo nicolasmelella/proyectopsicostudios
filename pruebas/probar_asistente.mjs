@@ -119,7 +119,8 @@ const tarea = (accion, secreto = env.ASISTENTE_SECRETO) => manejador(new Request
 pg("update public.config set valor = 'si' where clave = 'asistente_activo'");
 pg("update public.config set valor = 'no' where clave = 'asistente_solo_prueba'");
 pg("update public.config set valor = 'Sofía' where clave = 'asistente_nombre'");
-pg("update public.config set valor = 'si' where clave = 'asistente_toma_reservas'");   // las primeras pruebas reservan; al final se prueba el modo link
+pg("update public.config set valor = 'si' where clave = 'asistente_toma_reservas'");
+pg("update public.config set valor = 'si' where clave in ('asistente_recordar_sena', 'asistente_seguimiento')");   // etapa 2: se prueban igual   // las primeras pruebas reservan; al final se prueba el modo link
 let dia = pg('select public.hoy_ar() + 12');
 if (pg(`select extract(isodow from date '${dia}')`) === '7') dia = pg(`select date '${dia}' + 1`);
 const CEL = '5491166667777';

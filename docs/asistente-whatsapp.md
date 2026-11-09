@@ -3,6 +3,20 @@
 Un asistente (por defecto se llama **Sofía**) que contesta el WhatsApp de Psico Studios solo, las 24 horas.
 Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la misma base que la web y el panel.
 
+## Por etapas
+
+Se lanza de a poco: primero lo esencial; lo demás se prende recién cuando la etapa anterior funcione bien
+(mirando *Resumen*, la revisión semanal y las charlas). Todo lo de etapas siguientes ya está programado y probado, **apagado**.
+
+| Etapa | Qué hace | Cómo se prende |
+|---|---|---|
+| **1 · Lanzamiento** | 1) Informa a los leads de la pauta, sin presionar. 2) Comparte disponibilidad y el link para reservar en la web. 3) Reprograma a quien ya alquila si cumple la regla (si no, *Para aprobar*). 4) Pide visitas que confirma el equipo. 5) Recordatorios de pago **solo** cuando el equipo los manda desde el panel | Viene así |
+| **2 · Cuando la etapa 1 ande bien** | Que reserve él mismo · recordar la seña de lo que reservó · un seguimiento cordial a quien quedó con algo pendiente | *Asistente → Ajustes* (dicen “Etapa 2”) |
+| **Más adelante (ideas, sin programar)** | Lista de espera para horarios llenos, recordatorio de turno, Instagram | A decidir |
+
+**Para pasar de etapa**, una guía: 2 a 4 semanas en la etapa actual, la revisión semanal sin errores importantes del asistente,
+y que el equipo esté conforme con cómo responde en las charlas.
+
 ## Para qué está (y para qué no)
 
 - **Informa, no vende.** Responde con calma y completo: cómo es el espacio, precios, disponibilidad, cómo se reserva.
@@ -13,8 +27,8 @@ Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la 
   (`?dia=AAAA-MM-DD`, o `?fijo=1…6` para horario fijo), para que la persona arme su reserva. Por defecto **no reserva él**;
   se puede prender en *Ajustes → “Reserva él mismo”*.
 - **Los que ya alquilan:** los ayuda a reagendar o a encontrar más disponibilidad cuando escriben.
-- **Nunca escribe primero**, salvo dos avisos que se pueden apagar en *Ajustes*: un recordatorio de seña a quien reservó
-  por el asistente y no pagó, y un seguimiento cordial (sin presión) a quien consultó y quedó con algo pendiente.
+- **Nunca escribe primero.** (En etapa 2 se pueden prender dos avisos: recordar la seña de lo que reservó él y un
+  seguimiento cordial a quien quedó con algo pendiente.)
 - **No hace:** escribir a gente que no le escribió, ofrecer horarios por su cuenta, ni pedir pagos a los fijos.
   Eso lo maneja el equipo.
 

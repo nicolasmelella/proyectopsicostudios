@@ -22,6 +22,7 @@ grant execute on function pg_temp.espera_error(text, text) to service_role;
 -- Una profesional que ya existe, guardada SIN el 54 9
 select public.obtener_profesional('Laura Vieja', '1155556666', 'Psicóloga', 'laura@x.com', 'Web');
 update public.config set valor = 'no' where clave = 'asistente_activo';
+update public.config set valor = 'si' where clave in ('asistente_recordar_sena', 'asistente_seguimiento');   -- etapa 2: se prueban igual
 
 -- ---------------------------------------------------------------------
 -- Permisos: la web y el panel no tocan las funciones del servidor
