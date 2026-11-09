@@ -3,6 +3,7 @@ import {
   crearCliente, esc, pesos, hoyAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
   faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, DIAS_CORTOS, preguntar,
 } from './comun.js';
+import { crearAsistente } from './asistente.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -17,6 +18,9 @@ const MEDIOS = [['transferencia', 'Transferencia'], ['efectivo', 'Efectivo'], ['
 
 // Lunes de la semana de una fecha (el domingo muestra la semana que empieza)
 const lunesDe = (f) => (diaSemana(f) === 7 ? sumarDias(f, 1) : sumarDias(f, 1 - diaSemana(f)));
+
+// Pestaña "Asistente" (asistente.js). Se crea al final, cuando ya están todas las funciones.
+let asistente = { pintar() {}, badge() {} };
 
 const st = {
   fecha: hoyAR(),
@@ -287,7 +291,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
+  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -297,6 +301,7 @@ async function refrescar() {
 }
 
 async function actualizarBadge() {
+  asistente.badge();
   const [a, m, c] = await Promise.all([
     sb.rpc('alertas_pago'),
     sb.from('pagos_a_revisar').select('id').eq('resuelto', false),
@@ -1015,7 +1020,8 @@ async function detalleReserva(id) {
   const falta = r.precio_total - pagado;
   const faltaSena = Math.max(0, sena(r.precio_total) - pagado);
   const vigente = ['pendiente', 'confirmada'].includes(r.estado);
-  const pill = { pendiente: 'pill-alerta">Sin seña', confirmada: 'pill-ok">Confirmada', cancelada: 'pill-error">Cancelada', vencida: 'pill-error">Vencida' }[r.estado];
+  const pill = r.estado === 'vencida' && r.motivo_cancelacion === MOTIVO_NO_PAGO ? 'pill-nopago">No pagó'
+    : { pendiente: 'pill-alerta">Sin seña', confirmada: 'pill-ok">Confirmada', cancelada: 'pill-error">Cancelada', vencida: 'pill-error">Vencida' }[r.estado];
   const textoRecordatorio = `Hola ${r.profesionales.nombre.split(' ')[0]}! Te escribimos de Psico Studios por tu reserva #${r.id} del ${fechaLarga(r.fecha)} (${rangos(r.horas)}). ` +
     (r.estado === 'pendiente' ? `Para confirmarla falta la seña de ${pesos(faltaSena)}. Alias: ${st.cfg.alias_transferencia}.` : `¡Te esperamos!`);
 
@@ -1034,6 +1040,7 @@ async function detalleReserva(id) {
       <li><span>Saldo</span><span>${pesos(falta)}</span></li>
 
       ${r.motivo_cancelacion ? `<li><span>Motivo</span><span>${esc(r.motivo_cancelacion)}</span></li>` : ''}
+      ${r.estado === 'vencida' && r.motivo_cancelacion === MOTIVO_NO_PAGO ? '<li><span>Recuperarla</span><span>Desde Pendientes → Alertas de pago (si el horario sigue libre)</span></li>' : ''}
       <li><span>Origen</span><span>${r.origen === 'web' ? 'Web' : 'Cargada en el panel' + (st.equipo.find((e) => e.user_id === r.creado_por) ? ' por ' + esc(st.equipo.find((e) => e.user_id === r.creado_por).nombre) : '')}</span></li>
       ${r.pedido_id ? `<li><span>Pedido</span><span>#${r.pedido_id}${pedidoN > 1 ? ` · ${pedidoN} días en el mismo pedido` : ''}</span></li>` : ''}
     </ul>
@@ -1057,7 +1064,7 @@ async function detalleReserva(id) {
     </form>` : ''}
     <div id="det-error" class="aviso aviso-error oculto" role="alert"></div>
     ${vigente ? `<div class="bloque grupo-btn">
-      ${r.estado === 'pendiente' ? '<button class="btn btn-borde btn-chico" id="btn-extender">+1 hora para pagar</button>' : ''}
+      ${r.estado === 'pendiente' ? `<button class="btn btn-borde btn-chico" id="btn-extender">+1 hora para pagar${r.expira_en ? ` (se libera a las ${horaAr(r.expira_en)})` : ''}</button>` : ''}
       <a class="btn btn-wa btn-chico" href="${waLink(r.profesionales.whatsapp, textoRecordatorio)}" target="_blank" rel="noopener">WhatsApp</a>
       <button class="btn btn-peligro btn-chico" id="btn-cancelar">Cancelar reserva</button>
     </div>` : ''}`);
@@ -1433,12 +1440,15 @@ async function pintarComprobantes() {
 }
 
 // Alertas de pago: lo que falta cobrar y ya está en plazo o vencido. Nunca se cancela nada solo.
-const GRAVEDAD = { vencida: ['pill-error', 'Vencido'], hoy: ['pill-alerta', 'Vence hoy'], pendiente: ['pill-info', 'Pendiente'] };
+const GRAVEDAD = { no_pago: ['pill-nopago', 'No pagó'], vencida: ['pill-error', 'Vencido'], hoy: ['pill-alerta', 'Vence hoy'], pendiente: ['pill-info', 'Pendiente'] };
+const MOTIVO_NO_PAGO = 'No pagó la seña a tiempo';
+const horaAr = (iso) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
 function textoAlertaWa(x) {
   const n = x.nombre.split(' ')[0];
   const alias = st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : '';
   const turno = `${fechaLarga(x.fecha_turno)} (${rangos(x.horas)})`;
   if (x.tipo === 'sena') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Para confirmarla falta la seña de ${pesos(x.falta)}.${alias}`;
+  if (x.tipo === 'no_pago') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Como no nos llegó la seña, el horario se liberó. Si todavía lo querés, avisanos y vemos si sigue disponible.`;
   if (x.tipo === 'saldo') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Te recordamos que el saldo de ${pesos(x.falta)} se paga hasta el ${fechaLarga(x.fecha_limite)}.${alias}`;
   if (x.tipo === 'fijo_inicial') return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Para confirmarlo falta pagar el primer mes: ${pesos(x.falta)}.${alias}`;
   return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Te recordamos que falta pagar el mes ${x.periodo}: ${pesos(x.falta)}.${alias}`;
@@ -1451,24 +1461,71 @@ function pintarAlertas(cont, lista) {
     const esFijo = x.tipo.startsWith('fijo');
     const que = esFijo ? `Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${rangos(x.horas)} · ${x.consultorio}`
       : `${fechaLarga(x.fecha_turno)} · ${rangos(x.horas)} · ${x.consultorio}`;
+    if (x.tipo === 'no_pago') return `<div class="item alerta-pago alerta-no_pago">
+      <div class="alerta-cab"><span class="pill ${clase}">${etiqueta}</span><strong>Se liberó el horario${x.liberada_en ? ` a las ${horaAr(x.liberada_en)}` : ''}</strong></div>
+      <h3>${esc(x.nombre)}</h3>
+      <div class="suave chico">${esc(que)} · seña ${pesos(x.falta)}</div>
+      <div class="chico" style="margin-top:.3em">${x.libre ? 'El horario <strong>sigue libre</strong>: si paga, se recupera.' : 'El horario <strong>ya lo tomó otra persona</strong>.'}</div>
+      <div class="acciones">
+        ${x.libre ? `<button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
+        <button class="btn btn-borde btn-chico" data-apartar="${i}">Volver a apartar 1 hora</button>` : ''}
+        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">WhatsApp</a>` : ''}
+        <button class="btn btn-borde btn-chico" data-descartar="${i}">Descartar</button>
+      </div>
+    </div>`;
     return `<div class="item alerta-pago alerta-${esc(x.gravedad)}">
       <div class="alerta-cab"><span class="pill ${clase}">${etiqueta}</span><strong>${esc(x.texto)}: ${pesos(x.falta)}</strong></div>
       <h3>${esc(x.nombre)}</h3>
       <div class="suave chico">${esc(que)}</div>
-      <div class="chico" style="margin-top:.3em">Plazo: hasta el ${esc(fechaLarga(x.fecha_limite))}${x.tipo === 'sena' && x.total > x.falta ? ` · total ${pesos(x.total)}` : ''}</div>
+      <div class="chico" style="margin-top:.3em">${x.tipo === 'sena' && x.expira_en ? `Apartado hasta las <strong>${horaAr(x.expira_en)}</strong>: si no se registra la seña, se libera solo`
+        : `Plazo: hasta el ${esc(fechaLarga(x.fecha_limite))}`}${x.tipo === 'sena' && x.total > x.falta ? ` · total ${pesos(x.total)}` : ''}</div>
       <div class="acciones">
         <button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
         <button class="btn btn-borde btn-chico" data-alerta="${i}">Ver · cancelar</button>
-        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar por WhatsApp</a>`
+        ${tieneWa(x.whatsapp) ? `<a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${waLink(x.whatsapp, textoAlertaWa(x))}">Recordar desde mi WhatsApp</a>
+          ${st.cfg.asistente_activo !== undefined ? `<button class="btn btn-borde btn-chico" data-recordar="${i}">Que lo mande el asistente</button>` : ''}`
           : '<span class="suave chico">Sin WhatsApp cargado</span>'}
       </div>
     </div>`;
   }).join('');
   $$('[data-cobrar]', cont).forEach((b) => (b.onclick = () => cobrarAlerta(lista[b.dataset.cobrar])));
+  $$('[data-recordar]', cont).forEach((b) => (b.onclick = () => recordarConAsistente(lista[b.dataset.recordar])));
+  $$('[data-apartar]', cont).forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try { await llamar('recuperar_reserva', { p_reserva_id: lista[b.dataset.apartar].reserva_id, p_minutos: 60 }, 'Apartado otra hora'); refrescar(); }
+    catch (err) { b.disabled = false; errorEn(null, err); }
+  }));
+  $$('[data-descartar]', cont).forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    try { await llamar('descartar_no_pago', { p_reserva_id: lista[b.dataset.descartar].reserva_id }, 'Descartado'); refrescar(); }
+    catch (err) { b.disabled = false; errorEn(null, err); }
+  }));
   $$('[data-alerta]', cont).forEach((b) => (b.onclick = () => {
     const x = lista[b.dataset.alerta];
     if (x.reserva_id) detalleReserva(x.reserva_id); else detalleFijo(x.fijo_id, null, false);
   }));
+}
+
+// El equipo autoriza que el asistente mande el recordatorio (y atienda la respuesta)
+function recordarConAsistente(x) {
+  const esFijo = x.tipo.startsWith('fijo');
+  const detalle = esFijo ? `tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)})` : `tu reserva del ${fechaLarga(x.fecha_turno)} (${rangos(x.horas)})`;
+  abrirModal(`<h2 id="modal-titulo">Recordatorio de pago</h2>
+    <p class="suave chico">Lo manda el asistente por WhatsApp a <strong>${esc(x.nombre)}</strong>. Si responde, el asistente la atiende (comprobante, dudas).</p>
+    <div class="campo"><label for="rec-texto">Mensaje</label><textarea id="rec-texto" rows="5" maxlength="1500">${esc(textoAlertaWa(x))}</textarea></div>
+    <p class="aviso aviso-info chico">Si no escribió en las últimas 24 hs, WhatsApp no deja mandar texto libre: se manda el texto aprobado por Meta
+      (“Hola ${esc(x.nombre.split(' ')[0])}, te escribimos de Psico Studios por ${esc(detalle)}. Tenés pendiente ${pesos(x.falta)}…”).</p>
+    <div id="rec-error" class="aviso aviso-error oculto" role="alert"></div>
+    <div class="acciones"><button class="btn btn-primario" id="rec-enviar">Enviar</button><button class="btn btn-borde" id="rec-cancelar">Cancelar</button></div>`);
+  $('#rec-cancelar').onclick = cerrarModal;
+  $('#rec-enviar').onclick = async () => {
+    $('#rec-enviar').disabled = true;
+    const { data, error } = await sb.functions.invoke('asistente-whatsapp', { body: { accion: 'recordar_pago', whatsapp: x.whatsapp, nombre: x.nombre,
+      texto: $('#rec-texto').value, detalle, monto: x.falta } });
+    if (error) { $('#rec-enviar').disabled = false; return errorEn($('#rec-error'), await errorDeFuncion(error)); }
+    cerrarModal();
+    toast(data.ok ? (data.como === 'plantilla' ? 'Enviado (con el texto aprobado por Meta)' : 'Enviado por WhatsApp') : `No se pudo enviar: ${data.envio}`);
+  };
 }
 
 // Registrar el pago de una alerta (ej: el comprobante llegó por WhatsApp)
@@ -1921,6 +1978,8 @@ $('#form-invitar').onsubmit = async (e) => {
 
 // ================================================================ arranque
 setInterval(() => { if (!$('#app').classList.contains('oculto') && $('#modal').classList.contains('oculto')) refrescar(); }, 60000);
+
+asistente = crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion, preguntar });
 
 const { data: { session } } = await sb.auth.getSession();
 if (session && (tipoLink === 'invite' || tipoLink === 'recovery')) mostrarNuevaClave(tipoLink);

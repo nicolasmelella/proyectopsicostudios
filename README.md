@@ -19,6 +19,8 @@ pruebas/    → pruebas automáticas de la base (no hace falta tocarlas)
 > 🔎 Revisión del Excel actual y mejoras pendientes (fijos y panel): [`docs/revision-excel-y-mejoras.md`](docs/revision-excel-y-mejoras.md)
 >
 > 🎬 Video de cómo funciona (1 minuto, para mostrar o mandar por WhatsApp): [`docs/como-funciona-reservas.mp4`](docs/como-funciona-reservas.mp4)
+>
+> 🤖 **Asistente de WhatsApp con IA** (contesta dudas, muestra disponibilidad, reserva, recibe comprobantes y aprende con aprobación del equipo): [`docs/asistente-whatsapp.md`](docs/asistente-whatsapp.md)
 
 ---
 
@@ -128,6 +130,14 @@ Después volvé a desplegar la función `enviar-avisos`.
 
 Y `supabase/19_sin_subida_web.sql` → **Run**. **Un solo camino:** la persona transfiere y **envía la reserva por WhatsApp**
 con el comprobante; desde la web no se puede subir nada. El equipo registra el pago en **Pendientes → Alertas de pago → Registrar pago**.
+
+Y `supabase/21_sin_sena_una_hora.sql` → **Run**. **Completar los datos no alcanza:** la reserva por la web aparta
+el horario **1 hora**; si en ese tiempo el equipo no registra la seña, el horario se libera solo y la reserva queda en
+**Pendientes → Alertas de pago** como **"No pagó"** (con *Registrar pago*, que la recupera si el horario sigue libre,
+*Volver a apartar 1 hora* o *Descartar*). Las del panel, las del Excel, los fijos y las que ya tienen algún pago no se liberan nunca.
+
+Opcional: `supabase/20_asistente.sql` → **Run** → *"Asistente de WhatsApp instalado (apagado y en modo prueba)"*.
+Es el **asistente de WhatsApp con IA**; el resto de la puesta en marcha está en [`docs/asistente-whatsapp.md`](docs/asistente-whatsapp.md).
 
 ### Paso 5 · Conectar la web con Supabase
 En Supabase → **Project Settings → API** copiá:
@@ -240,6 +250,8 @@ Recorridos para probar:
 3. Reservar sin pagar → ⏩ Adelantar el reloj 2 horas → en el panel el horario quedó libre.
 4. Reservar → pagar → aprobado pero tarde → la reserva se recupera.
 5. Panel: registrar una seña a mano, cancelar una reserva, cargar un fijo, bloquear un horario.
+6. Panel → **Asistente**: conversaciones de ejemplo, el chat de prueba, lo que aprende y el resumen semanal
+   (en el simulador las respuestas son de ejemplo; las de verdad las da Claude en el servidor).
 
 ## Seguridad
 - Las personas de afuera **solo pueden**: ver horarios libres (sin nombres), ver precios y crear reservas/solicitudes.

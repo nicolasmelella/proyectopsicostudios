@@ -71,6 +71,71 @@
     .leyenda-ag .l-b::before { background: #e0e0e0; }
     .leyenda-ag .l-l::before { background: var(--ok-fondo); border-left: 3px solid var(--ok); }
 
+    /* ---------- Asistente ---------- */
+    .asis-subs { margin-bottom: 14px; flex-wrap: wrap; }
+    .asis-chats { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 14px; align-items: start; }
+    .asis-lista { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+    .asis-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: left; font: inherit; color: var(--texto);
+                 background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radius); padding: .65em .8em; cursor: pointer; }
+    .asis-item:hover { border-color: var(--celeste); }
+    .asis-item.activo { border-color: var(--azul); box-shadow: inset 4px 0 0 var(--azul); }
+    .asis-item.atender { background: var(--alerta-fondo); }
+    .asis-nombre { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+    .asis-hora { font-size: .75rem; color: var(--texto-suave); }
+    .asis-ultimo { grid-column: 1 / -1; font-size: .85rem; color: var(--texto-suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asis-tags { grid-column: 1 / -1; display: flex; gap: 4px; }
+    .asis-chat { background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radius); padding: 12px; min-height: 300px; }
+    .asis-cab { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--borde); padding-bottom: 10px; }
+    .asis-cab .der { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+    .asis-volver { display: none; }
+    .asis-msjs { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; padding: 12px 4px; background: #eef1f6; border-radius: var(--radius); margin: 10px 0; }
+    .asis-b { max-width: 82%; padding: .55em .8em; border-radius: 12px; font-size: .95rem; line-height: 1.4; overflow-wrap: anywhere; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
+    .asis-cliente { align-self: flex-start; background: var(--blanco); border-top-left-radius: 3px; }
+    .asis-asistente { align-self: flex-end; background: #dfe7f2; border-top-right-radius: 3px; }
+    .asis-equipo { align-self: flex-end; background: var(--rosa); border-top-right-radius: 3px; }
+    .asis-quien { display: block; font-size: .72rem; font-weight: 700; color: var(--texto-suave); margin-bottom: 2px; }
+    .asis-adj { display: block; font-size: .85rem; font-weight: 600; }
+    .asis-h { display: block; text-align: right; font-size: .68rem; color: var(--texto-suave); margin-top: 2px; }
+    .asis-herr { display: block; font-size: .72rem; color: var(--texto-suave); margin-top: 4px; border-top: 1px dashed var(--borde); padding-top: 3px; }
+    .asis-fallo { display: block; font-size: .75rem; color: var(--error); font-weight: 600; }
+    .asis-nota { align-self: center; font-size: .75rem; color: var(--texto-suave); background: var(--blanco); border-radius: 999px; padding: .2em .8em; max-width: 90%; text-align: center; }
+    .asis-escribiendo { color: var(--texto-suave); font-style: italic; }
+    .asis-form { display: flex; gap: 8px; align-items: flex-end; }
+    .asis-form textarea { flex: 1; }
+    .asis-memoria { margin-top: 10px; font-size: .9rem; }
+    .asis-crm { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: .85rem; font-weight: 600; }
+    .asis-crm select { width: auto; min-height: 36px; padding: .2em .5em; margin-left: 4px; font-size: .9rem; }
+    .asis-vincular { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; margin: 8px 0; border: 1px dashed var(--borde); border-radius: var(--radius); font-size: .85rem; font-weight: 600; }
+    .asis-vincular input { width: auto; flex: 1 1 200px; min-height: 36px; padding: .2em .6em; }
+    .asis-sol .quien { display: grid; gap: 4px; margin: .6em 0; font-size: .9rem; }
+    .asis-sol .quien input { min-height: 40px; }
+    #modal input[type=checkbox], .asis-saber input[type=checkbox] { width: auto; min-height: 0; margin: 0 6px 0 0; vertical-align: -2px; }
+    .asis-corregir { display: inline; margin: 2px 0 0; padding: 0; font-size: .75rem; }
+    .asis-corregida { display: block; font-size: .78rem; color: var(--ok); margin-top: 3px; }
+    .asis-cita { margin: 0 0 10px; padding: .5em .8em; border-left: 3px solid var(--borde); background: #eef1f6; border-radius: 6px; font-size: .92rem; }
+    .asis-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .asis-check input { width: auto; min-height: 0; }
+    .asis-foto { display: block; max-width: 220px; width: 100%; border-radius: 8px; margin: 4px 0; }
+    .asis-barra { display: grid; grid-template-columns: 90px 1fr 36px; gap: 8px; align-items: center; margin: 6px 0; font-size: .9rem; }
+    .asis-barra-v { background: #eef1f6; border-radius: 6px; height: 14px; overflow: hidden; }
+    .asis-barra-v span { display: block; height: 100%; background: var(--azul); border-radius: 6px; }
+    .asis-memoria summary { cursor: pointer; font-weight: 600; }
+    .asis-sim { max-width: 760px; background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radius); padding: 12px; }
+    .asis-sim .asis-msjs { min-height: 320px; }
+    .asis-sim .chip { margin: 6px 6px 0 0; }
+    .asis-saber { display: grid; gap: 8px; max-width: 960px; }
+    .asis-k summary { cursor: pointer; }
+    .asis-k.inactivo { opacity: .7; }
+    .asis-prop .campo { margin-bottom: .5em; }
+    @media (max-width: 760px) {
+      .asis-chats { grid-template-columns: 1fr; }
+      .asis-chat { display: none; }
+      .asis-chat.abierto { display: block; position: fixed; inset: 0; z-index: 40; border-radius: 0; overflow-y: auto; }
+      .asis-chat.abierto .asis-msjs { max-height: calc(100vh - 260px); }
+      .asis-volver { display: inline-flex; }
+      .asis-b { max-width: 92%; }
+    }
+
     /* ---------- Listas ---------- */
     .lista { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
     .item { background: var(--crema-claro); border: 1px solid var(--borde); border-radius: var(--radius); padding: 1rem; }
@@ -264,6 +329,8 @@
   .alerta-cab { display: flex; align-items: center; gap: .5em; flex-wrap: wrap; margin-bottom: .3em; }
   .alerta-vencida { border-color: #e7b3ae; }
   .alerta-hoy { border-color: #f0d9a0; }
+  .alerta-no_pago { border-color: #c9a6e0; background: #f8f2fc; }
+  .pill-nopago { background: #6b3fa0; color: #fff; }
 </style>
 </head>
 <body>
@@ -328,6 +395,7 @@
         <button role="tab" data-tab="pendientes" aria-selected="false">Pendientes <span class="badge oculto" id="badge-pend"></span></button>
         <button role="tab" data-tab="fijos" aria-selected="false">Fijos</button>
         <button role="tab" data-tab="profesionales" aria-selected="false">Profesionales</button>
+        <button role="tab" data-tab="asistente" aria-selected="false">Asistente <span class="badge oculto" id="badge-asis"></span></button>
         <button role="tab" data-tab="ajustes" aria-selected="false">Precios y ajustes</button>
         <button role="tab" data-tab="equipo" aria-selected="false" id="tab-equipo" class="oculto">Equipo</button>
       </nav>
@@ -466,6 +534,122 @@
           <span class="suave chico" id="cant-prof"></span>
         </div>
         <div style="overflow-x:auto"><div id="lista-prof"></div></div>
+      </section>
+
+      <!-- ASISTENTE DE WHATSAPP (IA) -->
+      <section data-vista="asistente" class="oculto">
+        <div class="seccion-titulo" style="flex-wrap:wrap;gap:8px">
+          <h2>Asistente de WhatsApp</h2><span id="asis-estado"></span>
+        </div>
+        <div class="zoom asis-subs" role="group" aria-label="Secciones del asistente">
+          <button class="chip" data-asis="chats" aria-pressed="true">Conversaciones</button>
+          <button class="chip" data-asis="aprobar" aria-pressed="false">Para aprobar <span class="badge oculto" id="badge-aprobar"></span></button>
+          <button class="chip" data-asis="probar" aria-pressed="false">Probar</button>
+          <button class="chip" data-asis="aprender" aria-pressed="false">Aprendizaje</button>
+          <button class="chip" data-asis="resumen" aria-pressed="false">Resumen</button>
+          <button class="chip" data-asis="ajustes" aria-pressed="false">Ajustes</button>
+        </div>
+
+        <div data-asis-vista="chats">
+          <div class="asis-chats">
+            <div class="asis-col">
+              <label for="asis-filtro" class="oculto-visual">Filtrar</label>
+              <select id="asis-filtro" style="margin-bottom:8px">
+                <option value="todos">Todas las conversaciones</option>
+                <option value="atender">Para atender</option>
+                <option value="prioridad">🔥 Prioridad</option>
+                <option value="mios">Los que sigo yo</option>
+                <option value="interesado">Interesados</option>
+                <option value="consulta">Consultaron</option>
+                <option value="reservo">Reservaron (sin pagar)</option>
+                <option value="pago">Pagaron</option>
+                <option value="perdido">Perdidos</option>
+              </select>
+              <div id="asis-lista" class="asis-lista"></div>
+            </div>
+            <div id="asis-chat" class="asis-chat"><p class="suave">Elegí una conversación para verla y responder.</p></div>
+          </div>
+        </div>
+
+        <div data-asis-vista="aprobar" class="oculto">
+          <p class="como-usar">Lo que el asistente dejó armado y no hace solo: visitas para conocer el espacio, cambios de personas que todavía no reconoce por su WhatsApp, avisos con menos de 24 hs o pedidos de más tiempo para la seña.
+            Si hay un horario nuevo, queda <strong>guardado</strong> hasta que decidan. Al aprobar, se hace y el asistente le avisa por WhatsApp.</p>
+          <div id="asis-solicitudes" style="display:grid;gap:12px;max-width:760px"></div>
+          <div class="seccion-titulo"><h2>Próximas visitas</h2><span class="suave chico">Las que ya aprobaron</span></div>
+          <div id="asis-visitas" style="max-width:760px;overflow-x:auto"></div>
+        </div>
+
+        <div data-asis-vista="probar" class="oculto">
+          <p class="como-usar">Probalo como si fueras un cliente. Usa la agenda, los precios y lo que sabe de verdad, pero <strong>no reserva nada ni manda WhatsApp</strong>.
+            Debajo de cada respuesta se ve qué consultó.</p>
+          <div class="asis-sim">
+            <div id="asis-sim-msjs" class="asis-msjs" aria-live="polite"></div>
+            <form id="asis-sim-form" class="asis-form">
+              <label for="asis-sim-txt" class="oculto-visual">Mensaje de prueba</label>
+              <textarea id="asis-sim-txt" rows="2" maxlength="4000" placeholder="Escribí como cliente…"></textarea>
+              <button class="btn btn-primario">Enviar</button>
+            </form>
+            <button class="link-btn" id="asis-sim-nuevo" type="button">Empezar una charla nueva</button>
+          </div>
+        </div>
+
+        <div data-asis-vista="aprender" class="oculto">
+          <div class="seccion-titulo"><h2>Para aprobar</h2><span class="suave chico">Lo que el asistente propone aprender. Nada se usa hasta que lo aprueben.</span></div>
+          <div id="asis-props" class="lista"></div>
+          <div class="seccion-titulo"><h2>Lo que sabe</h2><span class="suave chico">Responde dudas solo con esto (más precios y agenda, que lee de la base).</span></div>
+          <div id="asis-saber" class="asis-saber"></div>
+          <div class="seccion-titulo"><h2>Ejemplos de cómo responder</h2><span class="suave chico">El asistente imita el tono y el formato de estos ejemplos (no copia los datos).</span></div>
+          <div id="asis-ejemplos" class="asis-saber"></div>
+          <form class="tarjeta" id="asis-nuevo-ejemplo" style="max-width:760px;margin-top:14px">
+            <h3>Agregar un ejemplo</h3>
+            <div class="campo"><label for="ne-sit">Cuándo se usa</label><input id="ne-sit" name="situacion" required maxlength="120" placeholder="Pregunta precios, confirma disponibilidad, pide visita…"></div>
+            <div class="campo"><label for="ne-cli">Lo que escribe el cliente (opcional)</label><input id="ne-cli" name="cliente" maxlength="400"></div>
+            <div class="campo"><label for="ne-resp">Cómo responden ustedes</label><textarea id="ne-resp" name="respuesta" rows="3" required maxlength="2000"></textarea></div>
+            <button class="btn btn-primario">Guardar ejemplo</button>
+          </form>
+          <div class="seccion-titulo"><h2>Enseñarle algo</h2></div>
+          <form class="tarjeta" id="asis-nuevo-saber" style="max-width:760px;margin-top:14px">
+            <h3>Enseñarle algo</h3>
+            <div class="fila2">
+              <div class="campo"><label for="ns-tema">Tema</label><input id="ns-tema" name="tema" placeholder="El espacio, Pagos, Reservas…" maxlength="60"></div>
+              <div class="campo"><label for="ns-preg">Pregunta</label><input id="ns-preg" name="pregunta" required maxlength="500" placeholder="¿Tienen estacionamiento?"></div>
+            </div>
+            <div class="campo"><label for="ns-resp">Respuesta</label><textarea id="ns-resp" name="respuesta" rows="3" required maxlength="2000"></textarea></div>
+            <button class="btn btn-primario">Guardar</button>
+          </form>
+        </div>
+
+        <div data-asis-vista="resumen" class="oculto">
+          <div class="barra-herr"><label for="asis-periodo" class="suave chico">Período</label>
+            <select id="asis-periodo" style="width:auto"><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option></select></div>
+          <div class="kpis" id="asis-kpis"></div>
+          <div class="nu-grid" style="margin-bottom:14px">
+            <article class="nu-card"><h3>Embudo</h3><p class="suave chico">En qué quedó cada persona que escribió en el período.</p><div id="asis-embudo"></div></article>
+            <article class="nu-card"><h3>🔥 Oportunidades abiertas</h3><p class="suave chico">Interesados que todavía no reservaron. Tocá para ver la charla.</p>
+              <div id="asis-oportunidades" class="asis-lista"></div></article>
+          </div>
+          <div class="seccion-titulo"><h2>Revisión semanal</h2><span class="suave chico">Cada lunes el asistente lee las charlas de la semana y deja este informe</span></div>
+          <div id="asis-informes" class="asis-saber"></div>
+        </div>
+
+        <div data-asis-vista="ajustes" class="oculto">
+          <div class="tarjeta" style="max-width:640px" id="asis-ajustes"></div>
+          <div class="seccion-titulo"><h2>Números de prueba y del equipo</h2></div>
+          <p class="suave chico" style="max-width:760px">En <strong>modo prueba</strong> el asistente solo contesta a estos números.
+            Los del <strong>equipo</strong> además le pueden pedir datos del panel por WhatsApp (“¿quién viene mañana?”, “¿qué falta cobrar?”), con los permisos de esa persona.</p>
+          <div id="asis-numeros" style="max-width:760px;overflow-x:auto"></div>
+          <p class="suave chico" id="asis-num-solo-admin">Solo un administrador puede agregar o quitar números.</p>
+          <form class="tarjeta oculto" id="asis-form-num" style="max-width:760px;margin-top:12px">
+            <h3>Agregar un número</h3>
+            <div class="fila2">
+              <div class="campo"><label for="an-num">WhatsApp (con código de área)</label><input id="an-num" required inputmode="tel" placeholder="11 2345 6789" maxlength="25"></div>
+              <div class="campo"><label for="an-tipo">Tipo</label><select id="an-tipo"><option value="prueba">Prueba</option><option value="equipo">Equipo</option></select></div>
+              <div class="campo"><label for="an-nombre">Nombre (opcional)</label><input id="an-nombre" maxlength="60"></div>
+              <div class="campo oculto" id="an-persona-campo"><label for="an-persona">¿De quién del equipo?</label><select id="an-persona"></select></div>
+            </div>
+            <button class="btn btn-primario">Agregar</button>
+          </form>
+        </div>
       </section>
 
       <!-- EQUIPO (solo administradores) -->
