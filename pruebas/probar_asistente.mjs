@@ -491,6 +491,7 @@ r = await panel({ accion: 'resolver_solicitud', id: solV, aprobar: true, nota: '
 assert.equal((await r.json()).envio, 'enviado');
 assert.match(enviados.at(-1).texto, /^Hola Sol! Te esperamos el \*.+ a las 17:30\* para que conozcas el espacio 😊 Estamos en Florida 100, 5º B\.$/);
 ok('el equipo elige día y hora: se le confirma por WhatsApp con la dirección');
+assert.match(mod.INSTRUCCIONES, /NO mandes el link todavía/); assert.match(mod.INSTRUCCIONES, /Avisame si querés y te paso el link/);
 assert.match(mod.INSTRUCCIONES, /no vender/); assert.match(mod.INSTRUCCIONES, /sin presión/i); ok('instrucciones: informar sin presionar');
 
 // =====================================================================
