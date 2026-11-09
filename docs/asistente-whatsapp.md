@@ -181,9 +181,12 @@ Supabase → **Edge Functions → Secrets**, agregá:
 | `WA_VERIFY_TOKEN` | una palabra inventada (ej. `psico-asistente-2026`): la vas a poner también en Meta |
 | `ASISTENTE_SECRETO` | otra clave larga inventada (40 letras y números al azar) |
 
-`WA_TOKEN`, `WA_PHONE_ID` y `SITIO_URL` ya están cargados de los avisos.
+También hacen falta `WA_TOKEN` (Meta → WhatsApp → **Configuración de la API** → token de acceso permanente,
+de un *usuario del sistema*) y `WA_PHONE_ID` (el **Identificador del número de teléfono**, en la misma pantalla).
+`SITIO_URL` ya está cargado.
 Para **entender audios**, agregá también `OPENAI_API_KEY` (ver abajo, *Audios*).
-Opcional: `ASISTENTE_MODELO` para usar otro modelo (por defecto `claude-opus-5-5`, el más capaz; ver *Costos*).
+La calidad (y el costo) se elige en **Asistente → Ajustes → Calidad de las respuestas** (por defecto, *Buena*; ver *Costos*).
+El secreto `ASISTENTE_MODELO`, si existe, manda sobre ese ajuste.
 
 ### 5. Conectar WhatsApp con la función (webhook)
 Meta for Developers → tu app → **WhatsApp → Configuración**:
