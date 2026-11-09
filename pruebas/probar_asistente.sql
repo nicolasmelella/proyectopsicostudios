@@ -229,5 +229,63 @@ select public.asistente_panel_reiniciar_simulador();
 reset role;
 select pg_temp.ok((select count(*) = 0 from public.asistente_chats where whatsapp = 'sim-' || :'a_equipo'), 'reiniciar el simulador borra esa charla');
 
+-- ---------------------------------------------------------------------
+-- CRM: etapas, precalificación, asignación y seguimiento
+-- ---------------------------------------------------------------------
+set role service_role;
+select pg_temp.espera_error(format($$select public.asistente_calificar(%s, 'pago')$$, :chat), 'ETAPA');
+select public.asistente_calificar(:chat, 'interesado', 'fijo', 136000, 'Fijo martes 15 a 17', true);
+select pg_temp.ok((select public.asistente_contexto(:chat)::jsonb->'crm'->>'etapa' = 'interesado'), 'el asistente califica: interesado en un fijo');
+-- reserva nueva: la etapa pasa sola a "reservó"
+create temp table as_p2 as select public.asistente_crear_pedido(:chat, 'Laura Vieja', 'Psicóloga', 'laura@x.com',
+  jsonb_build_array(jsonb_build_object('fecha', (select dia from as_ta), 'horas', jsonb_build_array(15, 16), 'consultorio', 3)))::jsonb as r;
+select pg_temp.ok((select public.asistente_etapa(:chat) = 'reservo'), 'con un pedido sin pagar: reservó (lo dice la base)');
+reset role;
+insert into public.pagos (reserva_id, monto, medio) values ((select (r->'reservas'->0->>'id')::bigint from as_p2), 9000, 'transferencia');
+set role service_role;
+select pg_temp.ok((select public.asistente_etapa(:chat) = 'pago'), 'con la seña registrada: pagó');
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_admin', false);
+select public.asistente_panel_asignar(:chat, :'a_equipo');
+select pg_temp.ok((select x->>'asignado' = 'Eli Equipo' and x->>'etapa' = 'pago' and (x->>'prioridad')::boolean
+                   from json_array_elements(public.asistente_panel_chats()) x where (x->>'id')::bigint = :chat), 'panel: asignado a Eli, etapa y prioridad');
+select pg_temp.espera_error(format($$select public.asistente_panel_etapa(%s, 'pago')$$, :chat), 'ETAPA');
+create temp table as_res as select public.asistente_panel_resumen(public.hoy_ar() - 7, public.hoy_ar())::jsonb as r;
+select pg_temp.ok((select (r->'embudo'->>'pago')::int = 1 from as_res), 'resumen: embudo por etapa');
+select pg_temp.ok((select r->'respuesta_segundos' ? 'asistente' from as_res), 'resumen: tiempo de respuesta del asistente y del equipo');
+reset role;
+
+-- Seguimiento: solo a quien consultó, se calló y no reservó; una vez; dentro de las 24 hs de WhatsApp
+set role service_role;
+create temp table as_sg as select public.asistente_entrada('5491188889999', 'Pedro', '¿cuánto sale la hora?', 'texto', null, 'wamid.sg1')::jsonb as r;
+select (select (r->>'chat_id')::bigint from as_sg) as sg \gset
+select public.asistente_guardar_turno(:sg, array[(select (r->>'mensaje_id')::bigint from as_sg)], 'La hora sale $9.000. ¿Qué día te sirve?', '[]', null);
+select public.asistente_calificar(:sg, 'consulta');
+reset role;
+update public.config set valor = 'no' where clave = 'asistente_solo_prueba';
+set role service_role;
+select pg_temp.ok((select json_array_length(public.asistente_para_seguir()) = 0), 'recién: todavía no hace seguimiento');
+reset role;
+update public.asistente_chats set ultimo_cliente_en = now() - interval '4 hours' where id = :sg;
+set role service_role;
+create temp table as_seg as select public.asistente_para_seguir()::jsonb as r;
+select pg_temp.ok((select r = jsonb_build_array(:sg) from as_seg), 'consultó y se calló hace 4 horas: hace seguimiento');
+select pg_temp.ok((select jsonb_path_exists(public.asistente_contexto(:sg)::jsonb, '$.nuevos[*] ? (@.texto like_regex "SEGUIMIENTO")')),
+                  'le deja la nota al asistente');
+select public.asistente_soltar_turno(:sg);
+select pg_temp.ok((select json_array_length(public.asistente_para_seguir()) = 0), 'una sola vez');
+reset role;
+update public.asistente_chats set seguimiento_en = null, ultimo_cliente_en = now() - interval '23 hours' where id = :sg;
+set role service_role;
+select pg_temp.ok((select json_array_length(public.asistente_para_seguir()) = 0), 'pasadas las 22 hs ya no (WhatsApp no deja escribir)');
+reset role;
+update public.asistente_chats set ultimo_cliente_en = now() - interval '4 hours', atender = true where id = :sg;
+set role service_role;
+select pg_temp.ok((select json_array_length(public.asistente_para_seguir()) = 0), 'si lo está atendiendo el equipo, no');
+reset role;
+update public.config set valor = 'si' where clave = 'asistente_solo_prueba';
+
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

@@ -103,6 +103,14 @@
     .asis-form { display: flex; gap: 8px; align-items: flex-end; }
     .asis-form textarea { flex: 1; }
     .asis-memoria { margin-top: 10px; font-size: .9rem; }
+    .asis-crm { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: .85rem; font-weight: 600; }
+    .asis-crm select { width: auto; min-height: 36px; padding: .2em .5em; margin-left: 4px; font-size: .9rem; }
+    .asis-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .asis-check input { width: auto; min-height: 0; }
+    .asis-foto { display: block; max-width: 220px; width: 100%; border-radius: 8px; margin: 4px 0; }
+    .asis-barra { display: grid; grid-template-columns: 90px 1fr 36px; gap: 8px; align-items: center; margin: 6px 0; font-size: .9rem; }
+    .asis-barra-v { background: #eef1f6; border-radius: 6px; height: 14px; overflow: hidden; }
+    .asis-barra-v span { display: block; height: 100%; background: var(--azul); border-radius: 6px; }
     .asis-memoria summary { cursor: pointer; font-weight: 600; }
     .asis-sim { max-width: 760px; background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radius); padding: 12px; }
     .asis-sim .asis-msjs { min-height: 320px; }
@@ -538,7 +546,13 @@
               <select id="asis-filtro" style="margin-bottom:8px">
                 <option value="todos">Todas las conversaciones</option>
                 <option value="atender">Para atender</option>
-                <option value="reservo">Reservaron</option>
+                <option value="prioridad">🔥 Prioridad</option>
+                <option value="mios">Los que sigo yo</option>
+                <option value="interesado">Interesados</option>
+                <option value="consulta">Consultaron</option>
+                <option value="reservo">Reservaron (sin pagar)</option>
+                <option value="pago">Pagaron</option>
+                <option value="perdido">Perdidos</option>
               </select>
               <div id="asis-lista" class="asis-lista"></div>
             </div>
@@ -580,6 +594,11 @@
           <div class="barra-herr"><label for="asis-periodo" class="suave chico">Período</label>
             <select id="asis-periodo" style="width:auto"><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option></select></div>
           <div class="kpis" id="asis-kpis"></div>
+          <div class="nu-grid" style="margin-bottom:14px">
+            <article class="nu-card"><h3>Embudo</h3><p class="suave chico">En qué quedó cada persona que escribió en el período.</p><div id="asis-embudo"></div></article>
+            <article class="nu-card"><h3>🔥 Oportunidades abiertas</h3><p class="suave chico">Interesados que todavía no reservaron. Tocá para ver la charla.</p>
+              <div id="asis-oportunidades" class="asis-lista"></div></article>
+          </div>
           <div class="seccion-titulo"><h2>Revisión semanal</h2><span class="suave chico">Cada lunes el asistente lee las charlas de la semana y deja este informe</span></div>
           <div id="asis-informes" class="asis-saber"></div>
         </div>

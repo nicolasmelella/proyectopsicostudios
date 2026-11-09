@@ -69,7 +69,7 @@ globalThis.fetch = async (url, opciones = {}) => {
   }
   throw new Error('fetch inesperado: ' + u);
 };
-globalThis.__enviarWhatsAppPrueba = async (para, texto) => { enviados.push({ para, texto }); };
+globalThis.__enviarWhatsAppPrueba = async (para, texto, extra = {}) => { enviados.push({ para, texto, ...extra }); };
 globalThis.__bajarMediaPrueba = async (id) => { if (!archivos[id]) throw new Error('no existe'); return archivos[id]; };
 globalThis.__subirArchivoPrueba = async (ruta, datos, mime) => {
   subidos.push({ ruta, mime, bytes: datos.length });
@@ -145,7 +145,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 15); ok('15 herramientas');
+assert.equal(p.tools.length, 17); ok('17 herramientas');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -271,11 +271,11 @@ pg(`delete from public.comprobantes where pedido_id = ${pedidoId}`);
 pg(`update public.asistente_pedidos set creado_en = now() - interval '2 hours' where pedido_id = ${pedidoId}`);
 pg(`update public.asistente_chats set pausa_hasta = null where id = ${chatId}`);
 r = await tarea('recordatorios');
-assert.deepEqual(await r.json(), { enviados: 1 });
+assert.deepEqual(await r.json(), { enviados: 1, seguimientos: 0 });
 assert.match(enviados.at(-1).texto, /^Hola Juan! Soy Sofía\. Te recuerdo que tu reserva #\d+ .* falta la seña de \*\$/);
 ok('recordatorio de seña automático, con nombre y monto');
 r = await tarea('recordatorios');
-assert.deepEqual(await r.json(), { enviados: 0 }); ok('no lo repite');
+assert.deepEqual(await r.json(), { enviados: 0, seguimientos: 0 }); ok('no lo repite');
 
 // =====================================================================
 // 9. Revisión semanal
@@ -303,6 +303,58 @@ ok('si el equipo contesta desde la app del celular, queda en el chat y el asiste
 const enviadosEco = enviados.length;
 await deWhatsApp(CEL, { type: 'text', text: { body: 'gracias Silvia!' } });
 assert.equal(enviados.length, enviadosEco); ok('…y no se mete en esa charla');
+
+// =====================================================================
+// 11. Fotos y CRM en una charla nueva
+// =====================================================================
+const CEL2 = '5491122223333';
+guion = [
+  { stop_reason: 'tool_use', usage: {}, content: [
+    { type: 'tool_use', id: 'f1', name: 'mandar_fotos', input: { cual: '3' } },
+    { type: 'tool_use', id: 'f2', name: 'calificar_contacto', input: { etapa: 'interesado', interes: 'fijo', valor_estimado_mensual: 136000, nota: 'Fijo martes 15 a 17', prioridad: true } }] },
+  (q) => {
+    const res = q.messages.at(-1).content;
+    assert.equal(res.length, 2); assert.ok(res.every((b) => b.type === 'tool_result' && !b.is_error));
+    return texto('Te mandé fotos del 3 ☝️ ¿Te reservo los martes de 15 a 17?');
+  },
+];
+const enviadosF = enviados.length;
+await deWhatsApp(CEL2, { type: 'text', text: { body: 'Hola! busco algo fijo los martes de 15 a 17, ¿cómo es el consultorio 3?' } }, 'Ana');
+const fotos = enviados.slice(enviadosF).filter((x) => x.imagen);
+assert.deepEqual(fotos.map((x) => x.imagen), ['https://reservas.prueba/img/consultorios/c3-a.jpg', 'https://reservas.prueba/img/consultorios/c3-b.jpg']);
+assert.match(fotos[0].texto, /Consultorio 3/);
+assert.match(enviados.at(-1).texto, /Te mandé fotos/);
+ok('manda las fotos del consultorio por WhatsApp (con epígrafe) y después el texto');
+const chat2 = Number(pg(`select id from public.asistente_chats where whatsapp = '${CEL2}'`));
+assert.equal(pg(`select count(*) from public.asistente_mensajes where chat_id = ${chat2} and tipo = 'imagen' and media->>'url' like '%c3-a.jpg'`), '1');
+ok('las fotos quedan en el chat del panel');
+assert.equal(pg(`select etapa || '|' || interes || '|' || valor_estimado || '|' || prioridad from public.asistente_chats where id = ${chat2}`), 'interesado|fijo|136000|true');
+ok('precalifica: interesado en un fijo, ~$136.000/mes, prioridad');
+
+// =====================================================================
+// 12. Seguimiento: se calló sin reservar → el asistente decide si escribir
+// =====================================================================
+pg(`update public.asistente_chats set ultimo_cliente_en = now() - interval '4 hours' where id = ${chat2}`);
+guion = [(q) => {
+  assert.match(q.messages.at(-1).content.map((b) => b.text || '').join(' '), /SEGUIMIENTO AUTOMÁTICO/);
+  assert.match(q.messages.at(-1).content[0].text, /PRIORIDAD/);
+  return texto('Hola Ana! Te cuento que los martes de 15 a 17 el Consultorio 3 sigue libre. ¿Te lo guardo?');
+}];
+r = await tarea('recordatorios');
+assert.deepEqual(await r.json(), { enviados: 0, seguimientos: 1 });
+assert.match(enviados.at(-1).texto, /sigue libre/); assert.equal(enviados.at(-1).para, CEL2);
+ok('seguimiento automático: le vuelve a escribir una vez, con lo que buscaba');
+pg(`update public.asistente_chats set seguimiento_en = null, ultimo_cliente_en = now() - interval '4 hours' where id = ${chat2}`);
+const enviadosN = enviados.length;
+guion = [texto('NADA')];
+r = await tarea('recordatorios');
+assert.deepEqual(await r.json(), { enviados: 0, seguimientos: 0 });
+assert.equal(enviados.length, enviadosN); ok('si decide que no corresponde ("NADA"), no manda nada');
+
+// Simulador: las fotos se devuelven para verlas en el panel (no se mandan)
+guion = [herramienta('mandar_fotos', { cual: 'espacio' }), texto('Ahí van fotos del espacio.')];
+r = await panel({ accion: 'simular', texto: '¿cómo es el lugar?' });
+assert.equal((await r.json()).fotos.length, 3); ok('simulador: muestra las fotos que mandaría');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

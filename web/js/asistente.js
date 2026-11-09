@@ -14,7 +14,12 @@ const NOMBRES_HERRAMIENTA = {
   reservar_horas: 'reservó', pedir_horario_fijo: 'pidió un fijo', estado_pedido: 'miró el estado del pedido',
   cancelar_pedido_sin_pagar: 'canceló un pedido sin pagar', guardar_comprobante: 'guardó un comprobante', recordar: 'anotó un dato',
   pasar_al_equipo: 'pasó al equipo', proponer_saber: 'propuso aprender algo', consulta_equipo: 'consultó el panel',
+  calificar_contacto: 'actualizó la ficha', mandar_fotos: 'mandó fotos',
 };
+const ETAPAS = [['nuevo', 'Nuevo'], ['consulta', 'Consultó'], ['interesado', 'Interesado'], ['reservo', 'Reservó'], ['pago', 'Pagó'], ['perdido', 'Perdido']];
+const nombreEtapa = (e) => ETAPAS.find(([v]) => v === e)?.[1] || e;
+const claseEtapa = { nuevo: 'pill-info', consulta: 'pill-info', interesado: 'pill-alerta', reservo: 'pill-ok', pago: 'pill-ok', perdido: 'pill-error' };
+const INTERES = { horas: 'horas sueltas', fijo: 'horario fijo', salon: 'el Salón', otro: 'otra cosa' };
 // Formato de WhatsApp (*negrita*, _cursiva_) a HTML, sin dejar pasar código
 const formato = (t) => esc(t).replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>').replace(/(^|\s)_([^_\n]+)_/g, '$1<em>$2</em>')
   .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
@@ -51,17 +56,20 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
   // ================================================================ CONVERSACIONES
   async function pintarChats(silencioso = false) {
     pintarEstado();
+    if (!est.equipo) est.equipo = ((await sb.from('equipo').select('user_id, nombre, activo').order('nombre')).data || []).filter((e) => e.activo !== false);
     const cont = $('#asis-lista');
     if (!silencioso) cont.innerHTML = '<div class="cargando">Cargando…</div>';
     try { est.chats = await llamar('asistente_panel_chats', {}); } catch (err) { cont.innerHTML = ''; return errorEn(null, err); }
     const filtro = $('#asis-filtro').value;
-    const lista = est.chats.filter((c) => !c.simulado && (filtro !== 'atender' || c.atender) && (filtro !== 'reservo' || c.reservo));
+    const yo = st.yo?.user_id;
+    const lista = est.chats.filter((c) => !c.simulado && (filtro === 'todos' || (filtro === 'atender' && c.atender)
+      || (filtro === 'prioridad' && c.prioridad) || (filtro === 'mios' && c.asignado_a && c.asignado_a === yo) || c.etapa === filtro));
     cont.innerHTML = lista.length ? lista.map((c) => `
       <button class="asis-item ${c.id === est.chat ? 'activo' : ''} ${c.atender ? 'atender' : ''}" data-chat="${c.id}">
         <span class="asis-nombre">${esc(c.nombre)}${c.urgente ? ' <span class="pill pill-error">Urgente</span>' : c.atender ? ' <span class="pill pill-alerta">Atender</span>' : ''}</span>
         <span class="asis-hora">${cuando(c.ultimo_mensaje_en)}</span>
         <span class="asis-ultimo">${c.ultimo_rol === 'asistente' ? '🤖 ' : c.ultimo_rol === 'equipo' ? '👤 ' : ''}${esc(c.ultimo || '')}</span>
-        <span class="asis-tags">${c.reservo ? '<span class="pill pill-ok">Reservó</span>' : ''}${c.pausa_hasta && new Date(c.pausa_hasta) > new Date() ? '<span class="pill pill-info">Pausado</span>' : ''}</span>
+        <span class="asis-tags"><span class="pill ${claseEtapa[c.etapa] || 'pill-info'}">${nombreEtapa(c.etapa)}</span>${c.prioridad ? '<span class="pill pill-alerta">🔥 Prioridad</span>' : ''}${c.valor_estimado ? `<span class="pill pill-info">~${pesos(c.valor_estimado)}/mes</span>` : ''}${c.asignado ? `<span class="pill pill-info">👤 ${esc(c.asignado.split(' ')[0])}</span>` : ''}${c.pausa_hasta && new Date(c.pausa_hasta) > new Date() ? '<span class="pill pill-info">Pausado</span>' : ''}</span>
       </button>`).join('') : `<p class="suave" style="padding:1em">${filtro === 'todos' ? 'Todavía no hay conversaciones.' : 'No hay conversaciones con ese filtro.'}</p>`;
     $$('[data-chat]', cont).forEach((b) => (b.onclick = () => abrirChat(Number(b.dataset.chat))));
     if (est.chat && !silencioso) abrirChat(est.chat, true);
@@ -93,6 +101,14 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
           <a class="btn btn-wa btn-chico" target="_blank" rel="noopener" href="${linkWhatsApp(wa, '')}">Abrir en WhatsApp</a>
         </div>
       </div>
+      <div class="asis-crm">
+        <label>Etapa <select id="asis-etapa" ${['reservo', 'pago'].includes(c.etapa) ? 'disabled title="Sale sola del pedido"' : ''}>
+          ${ETAPAS.filter(([v]) => !['reservo', 'pago'].includes(v) || v === c.etapa).map(([v, t]) => `<option value="${v}" ${v === c.etapa ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label>Lo sigue <select id="asis-asignado"><option value="">Nadie</option>
+          ${(est.equipo || []).map((e) => `<option value="${e.user_id}" ${e.user_id === c.asignado_a ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></label>
+        <label class="asis-check"><input type="checkbox" id="asis-prioridad" ${c.prioridad ? 'checked' : ''}> 🔥 Prioridad</label>
+        ${c.interes || c.nota_crm || c.valor_estimado ? `<p class="chico" style="margin:0;flex-basis:100%">${c.interes ? `Busca <strong>${INTERES[c.interes] || esc(c.interes)}</strong>` : ''}${c.valor_estimado ? ` · ~${pesos(c.valor_estimado)}/mes` : ''}${c.nota_crm ? ` · ${esc(c.nota_crm)}` : ''}</p>` : ''}
+      </div>
       ${c.atender ? `<p class="aviso aviso-alerta chico" style="margin:.5em 0">${c.urgente ? '<strong>URGENTE.</strong> ' : ''}Para atender: ${esc(c.motivo_atender || 'sin detalle')}</p>` : ''}
       ${pausado ? `<p class="aviso aviso-info chico" style="margin:.5em 0">El asistente no contesta en este chat hasta las ${hora(c.pausa_hasta)}.</p>` : ''}
       <div class="asis-msjs" id="asis-msjs">${d.mensajes.map(burbuja).join('') || '<p class="suave">Sin mensajes.</p>'}</div>
@@ -114,6 +130,16 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     $('#asis-atendido') && ($('#asis-atendido').onclick = async () => { await llamar('asistente_panel_atendido', { p_chat_id: id }, 'Marcado como atendido'); pintarChats(); badge(); });
     $('#asis-pausar') && ($('#asis-pausar').onclick = async () => { await llamar('asistente_panel_pausa', { p_chat_id: id, p_minutos: 120 }, 'Asistente pausado en este chat'); pintarChats(); });
     $('#asis-devolver') && ($('#asis-devolver').onclick = async () => { await llamar('asistente_panel_pausa', { p_chat_id: id, p_minutos: 0 }, 'El asistente vuelve a contestar'); pintarChats(); });
+    $('#asis-etapa').onchange = async (e) => {
+      try { await llamar('asistente_panel_etapa', { p_chat_id: id, p_etapa: e.target.value }, 'Etapa actualizada'); pintarChats(true); } catch (err) { errorEn(null, err); }
+    };
+    $('#asis-prioridad').onchange = async (e) => {
+      try { await llamar('asistente_panel_etapa', { p_chat_id: id, p_etapa: ['reservo', 'pago'].includes(c.etapa) ? 'interesado' : c.etapa, p_prioridad: e.target.checked }, 'Guardado'); pintarChats(true); }
+      catch (err) { errorEn(null, err); }
+    };
+    $('#asis-asignado').onchange = async (e) => {
+      try { await llamar('asistente_panel_asignar', { p_chat_id: id, p_user_id: e.target.value || null }, 'Asignado'); pintarChats(true); } catch (err) { errorEn(null, err); }
+    };
     $$('[data-borrar-memoria]', panel).forEach((b) => (b.onclick = async () => {
       await llamar('asistente_panel_borrar_memoria', { p_id: Number(b.dataset.borrarMemoria) }, 'Borrado'); abrirChat(id);
     }));
@@ -134,11 +160,13 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
 
   function burbuja(m) {
     if (m.rol === 'nota') return `<div class="asis-nota">${esc(m.texto)}</div>`;
+    if (m.rol === 'asistente' && !m.texto && !m.url) return '';   // seguimiento en el que decidió no escribir
     const quien = m.rol === 'cliente' ? '' : m.rol === 'asistente' ? '🤖 Asistente' : `👤 ${esc(m.autor || 'Equipo')}`;
     const adjunto = { imagen: '📷 Imagen', documento: '📄 Archivo', audio: '🎤 Audio', video: '🎬 Video' }[m.tipo];
     const fallo = m.envio && m.envio !== 'enviado' ? `<span class="asis-fallo">No se envió: ${esc(m.envio)}</span>` : '';
     return `<div class="asis-b asis-${m.rol}">${quien ? `<span class="asis-quien">${quien}</span>` : ''}
-      ${adjunto ? `<span class="asis-adj">${adjunto}</span>` : ''}${m.texto ? `<div>${formato(m.texto)}</div>` : ''}
+      ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener"><img class="asis-foto" src="${esc(m.url)}" alt="${esc(m.texto || 'Foto')}" loading="lazy"></a>`
+        : adjunto ? `<span class="asis-adj">${adjunto}</span>` : ''}${m.texto ? `<div>${formato(m.texto)}</div>` : ''}
       <span class="asis-h">${cuando(m.creado_en)}</span>${fallo}</div>`;
   }
 
@@ -149,6 +177,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     const caja = $('#asis-sim-msjs');
     caja.innerHTML = sim.mensajes.length ? sim.mensajes.map((m) => `
       <div class="asis-b ${m.yo ? 'asis-cliente' : 'asis-asistente'}">${m.yo ? '' : '<span class="asis-quien">🤖 Asistente</span>'}
+        ${(m.fotos || []).map((f) => `<img class="asis-foto" src="${esc(f.url)}" alt="${esc(f.texto || 'Foto')}" loading="lazy">`).join('')}
         <div>${formato(m.texto)}</div>
         ${m.herramientas?.length ? `<span class="asis-herr">${m.herramientas.map((h) => `${h.ok ? '🔧' : '⚠️'} ${esc(NOMBRES_HERRAMIENTA[h.nombre] || h.nombre)}`).join(' · ')}</span>` : ''}
       </div>`).join('') + (est.simulando ? '<div class="asis-b asis-asistente asis-escribiendo">escribiendo…</div>' : '')
@@ -168,7 +197,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     est.simulando = true; pintarProbar();
     try {
       const r = await invocar({ accion: 'simular', texto: txt });
-      sim.mensajes.push({ texto: r.texto || '(sin respuesta)', herramientas: r.herramientas });
+      sim.mensajes.push({ texto: r.texto || '(sin respuesta)', herramientas: r.herramientas, fotos: r.fotos });
     } catch (err) {
       sim.mensajes.push({ texto: `⚠️ ${err?.hint || err?.message || 'No se pudo responder'}` });
     } finally { est.simulando = false; pintarProbar(); }
@@ -246,6 +275,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
   };
 
   // ================================================================ RESUMEN
+  const segundos = (n) => (n == null ? '—' : n < 90 ? `${Math.round(n)} seg` : n < 5400 ? `${Math.round(n / 60)} min` : `${Math.round(n / 3600)} h`);
   async function pintarResumen() {
     const dias = Number($('#asis-periodo').value);
     const desde = sumarDias(hoyAR(), -(dias - 1));
@@ -258,10 +288,21 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       kpi(r.respuestas_asistente, 'respuestas del asistente', `${r.respuestas_equipo} del equipo`),
       kpi(r.pedidos, 'reservas tomadas', `${conv}% de las charlas`),
       kpi(r.pedidos_confirmados, 'reservas pagadas', pesos(r.monto_reservado)),
+      kpi(r.charlas ? Math.round(((r.embudo?.pago || 0) / r.charlas) * 100) + '%' : '—', 'tasa de cierre', 'charlas que terminaron en pago'),
+      kpi(segundos(r.respuesta_segundos?.asistente), 'tarda en responder el asistente', `el equipo: ${segundos(r.respuesta_segundos?.equipo)}`),
       kpi(r.para_atender, 'chats para atender'),
       kpi(r.propuestas, 'cosas para aprobar'),
       kpi(Math.round((r.tokens.entrada + r.tokens.salida) / 1000).toLocaleString('es-AR') + ' mil', 'tokens usados', 'el costo se ve en console.anthropic.com'),
     ].join('');
+    const emb = r.embudo || {};
+    const maximo = Math.max(1, ...ETAPAS.map(([v]) => emb[v] || 0));
+    $('#asis-embudo').innerHTML = ETAPAS.map(([v, t]) => `<div class="asis-barra"><span>${t}</span>
+      <span class="asis-barra-v"><span style="width:${((emb[v] || 0) / maximo) * 100}%"></span></span><strong>${emb[v] || 0}</strong></div>`).join('');
+    $('#asis-oportunidades').innerHTML = (r.oportunidades || []).length ? r.oportunidades.map((o) => `
+      <button class="asis-item" data-ir-chat="${o.id}"><span class="asis-nombre">${esc(o.nombre)}</span><span class="asis-hora">${cuando(o.ultimo_mensaje_en)}</span>
+        <span class="asis-ultimo">${o.interes ? `Busca ${INTERES[o.interes] || esc(o.interes)}` : ''}${o.valor_estimado ? ` · ~${pesos(o.valor_estimado)}/mes` : ''}${o.nota ? ` · ${esc(o.nota)}` : ''}</span></button>`).join('')
+      : '<p class="suave chico">No hay interesados sin reservar en las últimas 2 semanas.</p>';
+    $$('[data-ir-chat]').forEach((b) => (b.onclick = () => { est.chat = Number(b.dataset.irChat); irA('chats'); }));
     const { data: informes } = await sb.from('asistente_informes').select('*').order('id', { ascending: false }).limit(6);
     const lista = (titulo, xs, fn = esc) => (xs?.length ? `<h4>${titulo}</h4><ul>${xs.map((x) => `<li>${fn(x)}</li>`).join('')}</ul>` : '');
     $('#asis-informes').innerHTML = (informes || []).length ? informes.map((i, n) => `
@@ -287,6 +328,8 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
     ['asistente_horas_charla', 'Horas sin mensajes para empezar una charla nueva', 'number'],
     ['asistente_recordar_sena', 'Recordar la seña a quien reservó y no pagó', 'sino'],
     ['asistente_minutos_recordatorio', 'Minutos después de reservar para recordarla', 'number'],
+    ['asistente_seguimiento', 'Volver a escribirle UNA vez a quien consultó y no reservó', 'sino'],
+    ['asistente_horas_seguimiento', 'Horas de silencio antes de ese seguimiento', 'number'],
     ['asistente_esfuerzo', 'Cuánto piensa antes de responder', 'esfuerzo'],
   ];
   async function pintarAjustes() {

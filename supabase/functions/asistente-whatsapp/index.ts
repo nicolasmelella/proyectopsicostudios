@@ -137,6 +137,28 @@ async function enviarTexto(para: string, texto: string) {
   }
 }
 
+async function enviarImagen(para: string, link: string, epigrafe: string) {
+  const prueba = (globalThis as any).__enviarWhatsAppPrueba;
+  if (prueba) return prueba(para, epigrafe, { imagen: link });
+  const r = await fetch(`${GRAPH}/${variable('WA_PHONE_ID')}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${variable('WA_TOKEN')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: para, type: 'image', image: { link, caption: epigrafe } }),
+  });
+  if (!r.ok) throw new Error(`WhatsApp respondió ${r.status}: ${(await r.text()).slice(0, 300)}`);
+}
+
+// Fotos de la web (web/img/consultorios) que el asistente puede mandar
+export const FOTOS: Record<string, { archivos: string[]; texto: string }> = {
+  espacio: { archivos: ['espacio-a', 'espacio-b', 'espacio-c'], texto: 'El espacio: recepción, sala de espera y la vista desde el edificio' },
+  '1': { archivos: ['c1-a', 'c1-b'], texto: 'Consultorio 1: con escritorio y sillas' },
+  '2': { archivos: ['c2-a', 'c2-b'], texto: 'Consultorio 2: con sofá y sillones' },
+  '3': { archivos: ['c3-a', 'c3-b'], texto: 'Consultorio 3: con sofá, sillones y ventanales' },
+  '4': { archivos: ['c4-a', 'c4-b'], texto: 'Consultorio 4: con sillones enfrentados y ventanales' },
+  '5': { archivos: ['c5-a', 'c5-b'], texto: 'Consultorio 5: con escritorio y sillones' },
+  '6': { archivos: ['c6-a', 'c6-b'], texto: 'Salón: para grupos, talleres y supervisiones' },
+};
+
 // "Leído" + "escribiendo…" mientras piensa (si falla, no importa)
 async function marcarLeido(waId: string) {
   if ((globalThis as any).__enviarWhatsAppPrueba || !env('WA_TOKEN')) return;
@@ -246,6 +268,8 @@ CÓMO ESCRIBÍS
 - Fechas como "jueves 12/11" y horarios como "de 10 a 12 hs". Montos como $17.000.
 - Saludá solo al principio de la charla. Algún emoji ocasional está bien.
 - Si es la primera vez que te escribe, presentate con tu nombre en una línea.
+- Si te escriben en otro idioma, respondé en ese idioma (con las mismas reglas).
+- Si falta un dato, preguntá una cosa por vez.
 
 REGLAS (no se negocian)
 1. Nunca inventes. Precios, horarios, reglas, disponibilidad y estado de pedidos salen SIEMPRE de tus herramientas. Para dudas sobre el espacio usá buscar_saber. Si no está, no lo supongas: decí que lo consultás y usá pasar_al_equipo.
@@ -260,6 +284,11 @@ REGLAS (no se negocian)
 10. Temas clínicos o de salud: no das consejo. Si alguien expresa una crisis o riesgo, respondé con calidez, sugerí comunicarse ya con emergencias (SAME 107 o 911) y usá pasar_al_equipo como urgente.
 11. Si la persona está enojada, pide hablar con una persona, o hay algo que no podés resolver: pasá al equipo sin vueltas y avisale.
 12. Audios: no los podés escuchar. Pedí con amabilidad que lo escriban.
+13. Fotos: si preguntan cómo son los consultorios o el espacio, o están dudando entre consultorios, mandá fotos con mandar_fotos (no más de 2 envíos por charla).
+
+SEGUIMIENTO Y OPORTUNIDADES
+- Usá calificar_contacto cuando sepas qué busca la persona: "consulta" si solo pregunta, "interesado" si quiere reservar o pidió algo concreto, "perdido" si dijo que no o eligió otro lugar. Estimá el valor por mes (horas por semana × precio × 4) y marcá prioridad si busca horario fijo, varias horas por semana o el Salón: son las oportunidades más valiosas.
+- Si recibís una [Nota del sistema] de SEGUIMIENTO AUTOMÁTICO, decidí si vale la pena escribirle. Si sí: un solo mensaje breve, cálido y concreto (por ejemplo, que lo que buscaba sigue libre, con el horario), sin presionar. Si no: respondé exactamente NADA.
 
 APRENDIZAJE
 - recordar: anotá datos estables útiles para la próxima: consultorio u horario preferido, días habituales, cómo prefiere pagar, si atiende por obra social, cómo prefiere que le digan. Nunca datos de salud, de pacientes, ni cosas de un solo uso.
@@ -368,6 +397,24 @@ const HERRAMIENTAS = [
       required: ['pregunta', 'respuesta', 'motivo'] },
   },
   {
+    name: 'calificar_contacto',
+    description: 'Actualiza la ficha del contacto en el CRM del panel: etapa (consulta, interesado, perdido), qué busca, valor estimado por mes y si es prioridad. Reservó y pagó se marcan solos.',
+    input_schema: { type: 'object', properties: {
+      etapa: { type: 'string', enum: ['consulta', 'interesado', 'perdido'] },
+      interes: { type: 'string', enum: ['horas', 'fijo', 'salon', 'otro'] },
+      valor_estimado_mensual: { type: 'integer', description: 'En pesos, aproximado' },
+      nota: { type: 'string', description: 'Qué busca, en una línea. Ej: "Fijo martes 15 a 17, prefiere Consultorio 3"' },
+      prioridad: { type: 'boolean', description: 'true si es una oportunidad grande (fijo, muchas horas, Salón)' } },
+      required: ['etapa'] },
+  },
+  {
+    name: 'mandar_fotos',
+    description: 'Manda por WhatsApp fotos de un consultorio (1 a 5), del Salón (6) o del espacio en general (recepción, sala de espera, vista).',
+    input_schema: { type: 'object', properties: {
+      cual: { type: 'string', enum: ['espacio', '1', '2', '3', '4', '5', '6'], description: '"espacio" o el número de consultorio (6 = Salón)' } },
+      required: ['cual'] },
+  },
+  {
     name: 'consulta_equipo',
     description: 'SOLO si quien escribe es del equipo. Datos del panel: agenda (quién viene), libres (lugar por día), alertas_pago, falta_cobrar, numeros (ocupación y cobros del período), pendientes (qué hay para atender).',
     input_schema: { type: 'object', properties: {
@@ -397,7 +444,7 @@ function pagoParaCliente(r: any, cfg: Record<string, string>) {
   };
 }
 
-type Turno = { chat: any; cfg: Record<string, string>; usadas: { nombre: string; ok: boolean }[] };
+type Turno = { chat: any; cfg: Record<string, string>; usadas: { nombre: string; ok: boolean }[]; fotos: { url: string; texto: string }[] };
 
 async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
   const { chat, cfg } = t;
@@ -495,6 +542,24 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
         p_conocimiento_id: e.corrige_id ? Number(e.corrige_id) : null });
       return { propuesto: !!id, nota: 'El equipo lo revisa. Hasta que lo apruebe, no lo des por cierto.' };
     }
+    case 'calificar_contacto':
+      return rpc('asistente_calificar', { p_chat_id: chat.chat_id, p_etapa: e.etapa, p_interes: e.interes || null,
+        p_valor: Number.isFinite(Number(e.valor_estimado_mensual)) && e.valor_estimado_mensual !== undefined ? Math.round(Number(e.valor_estimado_mensual)) : null,
+        p_nota: e.nota || null, p_prioridad: typeof e.prioridad === 'boolean' ? e.prioridad : null });
+    case 'mandar_fotos': {
+      const f = FOTOS[String(e.cual)];
+      if (!f) throw { message: 'NO_HAY_FOTOS', hint: 'Elegí "espacio" o un consultorio del 1 al 6' };
+      const sitio = env('SITIO_URL').replace(/\/+$/, '');
+      if (!sitio) throw { message: 'SIN_SITIO', hint: 'No está configurada la dirección de la web' };
+      const fotos = f.archivos.map((a, i) => ({ url: `${sitio}/img/consultorios/${a}.jpg`, texto: i === 0 ? f.texto : '' }));
+      for (const foto of fotos) {
+        t.fotos.push(foto);
+        if (chat.simulado) continue;
+        await enviarImagen(wa, foto.url, foto.texto);
+        await rpc('asistente_registrar_foto', { p_chat_id: chat.chat_id, p_url: foto.url, p_texto: foto.texto });
+      }
+      return { enviadas: fotos.length, que: f.texto, nota: 'Ya se mandaron: no las describas de nuevo, seguí la charla.' };
+    }
     case 'consulta_equipo':
       if (!chat.equipo) throw { message: 'NO_AUTORIZADO', hint: 'Solo para números del equipo' };
       return rpc('asistente_consulta_equipo', { p_whatsapp: wa, p_que: e.que, p_desde: e.desde && FECHA.test(e.desde) ? e.desde : null,
@@ -519,6 +584,10 @@ export function textoContexto(ctx: any, cfg: Record<string, string>, ahora = new
     l.push(`Cliente registrado: ${c.nombre}${c.profesion ? `, ${c.profesion}` : ''}${c.email ? `, ${c.email}` : ''}. Cliente desde ${c.cliente_desde}; ${c.reservas_hechas} reservas confirmadas${c.tiene_fijo ? '; tiene horario fijo' : ''}.`);
   } else if (!ctx.simulado) {
     l.push('No está registrado todavía (primera vez o con otro número).');
+  }
+  if (ctx.crm && ctx.crm.etapa !== 'nuevo') {
+    const c = ctx.crm;
+    l.push(`Ficha (CRM): etapa ${c.etapa}${c.interes ? `, busca ${c.interes}` : ''}${c.valor_estimado ? `, valor estimado ${pesos(c.valor_estimado)}/mes` : ''}${c.prioridad ? ', PRIORIDAD' : ''}${c.nota ? `. ${c.nota}` : ''}.`);
   }
   if (ctx.memoria?.length) l.push(`Lo que recordás de esta persona:\n${ctx.memoria.map((d: string) => `• ${d}`).join('\n')}`);
   if (!ctx.historial?.length) l.push('Es el comienzo de la charla.');
@@ -563,7 +632,7 @@ export async function correrTurno(chatId: number, cfg?: Record<string, string>) 
   cfg = cfg || await leerConfig();
   const ctx = await rpc('asistente_contexto', { p_chat_id: chatId });
   if (!ctx.nuevos.length) { await rpc('asistente_soltar_turno', { p_chat_id: chatId }); return null; }
-  const t: Turno = { chat: ctx, cfg, usadas: [] };
+  const t: Turno = { chat: ctx, cfg, usadas: [], fotos: [] };
   const historial: any[] = (ctx.historial || []).flat();
   const mensajes: any[] = [...historial, { role: 'user', content: await armarEntrada(ctx, cfg) }];
   const uso: any = {};
@@ -609,7 +678,10 @@ export async function correrTurno(chatId: number, cfg?: Record<string, string>) 
     problema = true;
   }
 
-  if (!texto) {
+  // Seguimiento automático: si decidió que no corresponde escribir, no se manda nada
+  const callado = !problema && /^NADA[.!]?$/i.test(texto);
+  if (callado) texto = '';
+  if (!texto && !callado) {
     problema = true;
     texto = TEXTO_PROBLEMA;
     await rpc('asistente_derivar', { p_chat_id: chatId, p_motivo: 'El asistente no pudo responder: revisar la charla', p_urgente: false }).catch(() => {});
@@ -619,11 +691,11 @@ export async function correrTurno(chatId: number, cfg?: Record<string, string>) 
   const api = problema ? null : mensajes.slice(historial.length);
   const g = await rpc('asistente_guardar_turno', { p_chat_id: chatId, p_leidos: problema ? [] : ctx.nuevos.map((m: any) => m.id),
     p_texto: texto, p_api: api, p_uso: uso });
-  if (!ctx.simulado) {
+  if (!ctx.simulado && !callado) {
     try { await enviarTexto(ctx.whatsapp, texto); await rpc('asistente_resultado_envio', { p_mensaje_id: g.mensaje_id, p_resultado: 'enviado' }); }
     catch (e) { console.error('No se pudo enviar', e); await rpc('asistente_resultado_envio', { p_mensaje_id: g.mensaje_id, p_resultado: String((e as Error)?.message ?? e) }).catch(() => {}); }
   }
-  return { texto, herramientas: t.usadas, hay_mas: g.hay_mas && !problema, problema, uso };
+  return { texto, herramientas: t.usadas, fotos: t.fotos, hay_mas: g.hay_mas && !problema, problema, callado, uso };
 }
 
 // Llegó un mensaje: espera unos segundos (por si manda varios seguidos) y contesta una vez
@@ -762,7 +834,13 @@ async function recordatorios() {
     try { await enviarTexto(x.whatsapp, texto); await rpc('asistente_resultado_envio', { p_mensaje_id: id, p_resultado: 'enviado' }); enviados++; }
     catch (e) { await rpc('asistente_resultado_envio', { p_mensaje_id: id, p_resultado: String((e as Error)?.message ?? e) }).catch(() => {}); }
   }
-  return { enviados };
+  // Seguimientos: consultaron y no reservaron (el asistente decide si escribir y qué)
+  let seguimientos = 0;
+  for (const chatId of await rpc('asistente_para_seguir')) {
+    try { const r = await correrTurno(chatId, cfg); if (r && !r.callado && !r.problema) seguimientos++; }
+    catch (e) { console.error(`Seguimiento ${chatId}:`, e); await rpc('asistente_soltar_turno', { p_chat_id: chatId }).catch(() => {}); }
+  }
+  return { enviados, seguimientos };
 }
 
 // ---------------------------------------------------------------- panel
@@ -790,7 +868,7 @@ async function accionPanel(req: Request, cuerpo: any) {
     }
     try {
       const r = await correrTurno(e.chat_id);
-      return responder({ texto: r?.texto, herramientas: r?.herramientas || [], uso: r?.uso });
+      return responder({ texto: r?.texto, herramientas: r?.herramientas || [], fotos: r?.fotos || [], uso: r?.uso });
     } catch (err) {
       await rpc('asistente_soltar_turno', { p_chat_id: e.chat_id }).catch(() => {});
       throw err;

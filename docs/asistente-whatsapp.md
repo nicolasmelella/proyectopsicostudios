@@ -16,7 +16,11 @@ Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la 
 | Le dice a cada persona el estado de **sus** reservas (solo las de su número) | |
 | Cancela un pedido **sin pagar** si la persona lo pide | |
 | **Recuerda la seña** una vez a quien reservó y no pagó | |
+| **Seguimiento:** si alguien consultó y no reservó, le vuelve a escribir **una vez** con algo concreto (“el martes a las 15 sigue libre”), o decide no escribir si sería insistente | |
+| Manda **fotos** de los consultorios, del Salón y del espacio | |
+| **Precalifica** a cada contacto (qué busca, cuánto vale por mes) y marca como 🔥 prioridad los fijos, muchas horas o el Salón | |
 | Reconoce a quien ya es cliente (“¿lo mismo de siempre, martes a la tarde?”) | |
+| Responde en el idioma en que le escriben | |
 
 Lo que reserva aparece en el panel como cualquier reserva, con las mismas reglas (seña, plazos, límites).
 Los pedidos que toma quedan marcados con origen **WhatsApp**.
@@ -24,6 +28,16 @@ Los pedidos que toma quedan marcados con origen **WhatsApp**.
 **Para el equipo:** si escribe un número cargado como *Equipo*, además puede preguntarle cosas del panel:
 “¿quién viene mañana?”, “¿qué falta cobrar?”, “¿cómo vamos este mes?”, “¿qué hay pendiente?”.
 Responde con los permisos del usuario del panel de esa persona.
+
+## CRM: cada contacto con su etapa
+
+En *Asistente → Conversaciones* cada contacto tiene una **etapa**: Nuevo → Consultó → Interesado → Reservó → Pagó (o Perdido).
+- *Consultó / Interesado / Perdido* los pone el asistente (o el equipo a mano). *Reservó* y *Pagó* **salen solos de la base**
+  (de los pedidos y pagos reales), así que no se pueden “inflar”.
+- Cada contacto muestra qué busca, el valor estimado por mes y si es 🔥 **prioridad**. Se puede **asignar** a alguien del equipo
+  (“Lo sigue: Silvia”) y filtrar por etapa, prioridad o “los que sigo yo”.
+- En *Asistente → Resumen*: **embudo**, **tasa de cierre**, **cuánto tarda en responder** el asistente y el equipo, y la lista
+  de **oportunidades abiertas** (interesados que todavía no reservaron).
 
 ## Cómo aprende (y por qué es seguro)
 
@@ -123,6 +137,8 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
 | Minutos de pausa | 60 | Cuánto se calla en un chat cuando contesta el equipo |
 | Horas para charla nueva | 24 | Después de este tiempo sin mensajes, empieza de cero (recuerda igual los datos del cliente) |
 | Recordar la seña | Sí | Un recordatorio a quien reservó por WhatsApp y no pagó |
+| Seguimiento | Sí | Una vez, a quien consultó y no reservó (solo dentro de las 24 hs que deja WhatsApp) |
+| Horas antes del seguimiento | 3 | Cuánto silencio espera antes de volver a escribir |
 | Minutos para recordarla | 60 | Cuándo manda ese recordatorio (antes de que se libere) |
 | Cuánto piensa | Normal | *Poco*: más rápido y barato. *Mucho*: más cuidadoso y lento |
 
@@ -138,6 +154,12 @@ Para apagarlo en cualquier momento: **Asistente prendido: No** (los mensajes se 
   las plantillas. Ver <https://developers.facebook.com/docs/whatsapp/pricing>.
 - WhatsApp **no deja escribir primero** a alguien que no escribió en las últimas 24 hs (salvo con plantillas aprobadas).
   Por eso el recordatorio de seña solo sale si la persona escribió hace menos de 23 hs, y el panel avisa si pasó ese plazo.
+
+## Audios (pendiente)
+
+Hoy **no escucha audios**: pide con amabilidad que lo escriban. Claude no recibe audio directamente; para entenderlos hace falta
+sumar un servicio de **transcripción** (por ejemplo OpenAI Whisper, Deepgram o Google Speech), con su propia cuenta y costo
+(del orden de centavos de dólar por minuto). Con eso, el audio se pasa a texto antes de llegar al asistente y se ve transcripto en el panel.
 
 ## Seguridad y privacidad
 

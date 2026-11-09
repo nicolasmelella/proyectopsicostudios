@@ -23,6 +23,7 @@ export function crearClienteDemo() {
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
       ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
       ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'si'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
+      ['asistente_seguimiento', 'si'], ['asistente_horas_seguimiento', '3'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -170,7 +171,7 @@ export function crearClienteDemo() {
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
   // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
-  if (!db.asistente_chats) {
+  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa)) {
     const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
     const saber = [
       ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
@@ -197,16 +198,26 @@ export function crearClienteDemo() {
       asistente_pedidos: [],
       asistente_chats: [
         { id: 9001, whatsapp: '5491133334444', nombre: 'Carla Gómez', profesional_id: null, simulado: false, atender: true, urgente: false,
-          motivo_atender: 'Pide factura A para su monotributo', pausa_hasta: null, ultimo_mensaje_en: hace(12), ultimo_cliente_en: hace(12), reservo: true },
+          motivo_atender: 'Pide factura A para su monotributo', pausa_hasta: null, ultimo_mensaje_en: hace(12), ultimo_cliente_en: hace(12), reservo: true,
+          etapa: 'reservo', interes: 'horas', valor_estimado: 17000, nota_crm: 'Jueves de 10 a 12, prefiere el Consultorio 3', prioridad: false, asignado_a: null },
         { id: 9002, whatsapp: '5491155557777', nombre: 'Martín (WhatsApp)', profesional_id: null, simulado: false, atender: false, urgente: false,
-          motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(95), ultimo_cliente_en: hace(96), reservo: false },
+          motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(95), ultimo_cliente_en: hace(96), reservo: false,
+          etapa: 'interesado', interes: 'fijo', valor_estimado: 136000, nota_crm: 'Busca fijo martes y jueves a la tarde', prioridad: true, asignado_a: null },
+        { id: 9003, whatsapp: '5491166660000', nombre: 'Lucía P.', profesional_id: null, simulado: false, atender: false, urgente: false,
+          motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(400), ultimo_cliente_en: hace(420), reservo: false,
+          etapa: 'consulta', interes: 'salon', valor_estimado: null, nota_crm: 'Taller grupal un sábado', prioridad: true, asignado_a: null },
       ],
       asistente_mensajes: [
         [9001, 'cliente', '¡Hola! ¿Tienen lugar el jueves de 10 a 12?', 30], [9001, 'asistente', '¡Hola Carla! Soy Sofía 😊 El jueves de 10 a 12 hs está libre el *Consultorio 3*, el que te gusta. ¿Te lo reservo?', 29],
         [9001, 'cliente', 'Sí, dale', 20], [9001, 'asistente', '¡Listo! Te reservé el jueves de 10 a 12 hs en el Consultorio 3. Total $17.000, seña *$8.500*. Transferí a *psicostudios.demo* y mandame la captura por acá 🙌', 19],
         [9001, 'cliente', 'Genial. ¿Me pueden hacer factura A?', 12], [9001, 'asistente', 'Eso lo ve el equipo: ya les pasé tu consulta y te responden por acá en un rato.', 12],
         [9002, 'cliente', 'Buenas, ¿cuánto sale la hora?', 96], [9002, 'asistente', '¡Hola Martín! Por horas: mañana (8 a 13 hs) *$8.500* y tarde (13 a 21 hs) *$9.000*. Con horario fijo semanal es más barato. ¿Qué día te sirve?', 95],
-      ].map(([chat_id, rol, texto, min]) => ({ id: nuevoId(), chat_id, rol, texto, tipo: 'texto', envio: rol === 'asistente' ? 'enviado' : null, creado_en: hace(min) })),
+        [9002, 'cliente', 'Me interesa fijo martes y jueves de 17 a 19. ¿Cómo son los consultorios?', 94],
+        [9002, 'asistente', '', 93, 'img/consultorios/c3-a.jpg', 'Consultorio 3: con sofá, sillones y ventanales'],
+        [9002, 'asistente', 'Te mandé fotos del 3, que está libre esos días ☝️ Con horario fijo la tarde sale *$8.500* la hora: unos *$136.000* por mes. ¿Te lo pido?', 93],
+        [9003, 'cliente', 'Hola! ¿Se puede alquilar el Salón un sábado para un taller?', 420], [9003, 'asistente', '¡Hola Lucía! Sí, el Salón es para grupos y talleres. ¿Qué sábado y en qué horario lo necesitás?', 419],
+      ].map(([chat_id, rol, texto, min, url, pie]) => ({ id: nuevoId(), chat_id, rol, texto: url ? pie : texto, tipo: url ? 'imagen' : 'texto', url,
+        envio: rol === 'asistente' ? 'enviado' : null, creado_en: hace(min) })),
     });
   }
   const guardar = () => {
@@ -902,14 +913,22 @@ export function crearClienteDemo() {
       soloEquipo();
       return db.asistente_chats.map((c) => {
         const ult = db.asistente_mensajes.filter((m) => m.chat_id === c.id && m.rol !== 'nota').at(-1);
-        return { ...c, ultimo: ult?.texto?.slice(0, 120), ultimo_rol: ult?.rol };
-      }).sort((a, b) => (b.atender - a.atender) || (a.ultimo_mensaje_en < b.ultimo_mensaje_en ? 1 : -1));
+        return { ...c, ultimo: ult?.texto?.slice(0, 120), ultimo_rol: ult?.rol, asignado: db.equipo.find((e) => e.user_id === c.asignado_a)?.nombre || null };
+      }).sort((a, b) => (b.atender - a.atender) || (b.prioridad - a.prioridad) || (a.ultimo_mensaje_en < b.ultimo_mensaje_en ? 1 : -1));
     },
     asistente_panel_mensajes({ p_chat_id }) {
       soloEquipo();
       const c = chatDe(p_chat_id);
       return { mensajes: db.asistente_mensajes.filter((m) => m.chat_id === p_chat_id),
         memoria: db.asistente_memoria.filter((m) => m.whatsapp === c?.whatsapp), pedidos: c?.reservo ? [db.pedidos[0]?.id || 1] : [] };
+    },
+    asistente_panel_asignar({ p_chat_id, p_user_id }) { soloEquipo(); chatDe(p_chat_id).asignado_a = p_user_id || null; },
+    asistente_panel_etapa({ p_chat_id, p_etapa, p_prioridad }) {
+      soloEquipo();
+      if (!['nuevo', 'consulta', 'interesado', 'perdido'].includes(p_etapa)) return err('ETAPA', 'Reservó y pagó se marcan solos cuando hay un pedido');
+      const c = chatDe(p_chat_id);
+      if (!['reservo', 'pago'].includes(c.etapa)) c.etapa = p_etapa;
+      if (typeof p_prioridad === 'boolean') c.prioridad = p_prioridad;
     },
     asistente_panel_atendido({ p_chat_id }) { soloEquipo(); Object.assign(chatDe(p_chat_id), { atender: false, urgente: false, motivo_atender: null }); },
     asistente_panel_pausa({ p_chat_id, p_minutos }) { soloEquipo(); chatDe(p_chat_id).pausa_hasta = p_minutos > 0 ? ahoraISO(p_minutos) : null; },
@@ -951,13 +970,18 @@ export function crearClienteDemo() {
       soloEquipo();
       return { charlas: 23, mensajes_recibidos: 88, respuestas_asistente: 71, respuestas_equipo: 6, pedidos: 6, pedidos_confirmados: 4,
         monto_reservado: 68000, para_atender: rpcs.asistente_panel_badge() - db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length,
-        propuestas: db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length, tokens: { entrada: 412000, salida: 23000 } };
+        propuestas: db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length, tokens: { entrada: 412000, salida: 23000 },
+        embudo: { nuevo: 2, consulta: 6, interesado: 5, reservo: 2, pago: 4, perdido: 4 }, respuesta_segundos: { asistente: 9, equipo: 1260 },
+        oportunidades: db.asistente_chats.filter((c) => c.etapa === 'interesado').map((c) => ({ id: c.id, nombre: c.nombre, etapa: c.etapa,
+          interes: c.interes, valor_estimado: c.valor_estimado, nota: c.nota_crm, ultimo_mensaje_en: c.ultimo_mensaje_en })) };
     },
   });
   // Respuesta de ejemplo para el simulador del panel (la de verdad la da Claude en el servidor)
   const respuestaDemo = (texto) => {
     const t = texto.toLowerCase();
     const k = db.asistente_conocimiento.find((x) => x.activo && x.pregunta.toLowerCase().split(/\W+/).filter((w) => w.length > 4).some((w) => t.includes(w)));
+    if (/c[oó]mo (es|son)|foto|ver el|conocer/.test(t)) return { texto: 'Te mandé fotos del espacio ☝️ ¿Querés ver algún consultorio en particular?',
+      herramientas: [{ nombre: 'mandar_fotos', ok: true }], fotos: ['espacio-a', 'espacio-b', 'espacio-c'].map((f) => ({ url: `img/consultorios/${f}.jpg` })) };
     if (/cu[aá]nto|precio|sale|valor/.test(t)) return { texto: 'Por horas: mañana (8 a 13 hs) *$8.500* y tarde (13 a 21 hs) *$9.000*. Con horario fijo semanal es más barato. ¿Qué día te sirve?', herramientas: [{ nombre: 'info_general', ok: true }] };
     if (/lugar|libre|disponib|turno|reserv/.test(t)) return { texto: 'Me fijo… ✨ Ese día hay lugar a la mañana en los Consultorios 1, 2 y 4, y a la tarde desde las 17 hs en el 3. ¿Qué horario preferís?', herramientas: [{ nombre: 'ver_horarios_libres', ok: true }] };
     if (k) return { texto: k.respuesta, herramientas: [{ nombre: 'buscar_saber', ok: true }] };

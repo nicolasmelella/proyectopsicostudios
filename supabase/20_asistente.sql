@@ -25,7 +25,9 @@ insert into public.config (clave, valor, descripcion) values
   ('asistente_horas_charla',    '24',  'Horas sin mensajes después de las que el asistente empieza la charla de cero (recuerda igual los datos del cliente)'),
   ('asistente_recordar_sena',   'si',  'si = si alguien reservó por WhatsApp y no pagó, el asistente le recuerda la seña una vez'),
   ('asistente_minutos_recordatorio', '60', 'Minutos después de reservar en que el asistente recuerda la seña'),
-  ('asistente_esfuerzo',        'medium', 'Cuánto piensa antes de responder: low (más rápido y barato), medium o high')
+  ('asistente_esfuerzo',        'medium', 'Cuánto piensa antes de responder: low (más rápido y barato), medium o high'),
+  ('asistente_seguimiento',     'si',  'si = si alguien consultó y no reservó, el asistente le vuelve a escribir UNA vez (con disponibilidad real)'),
+  ('asistente_horas_seguimiento', '3', 'Horas de silencio después de las que el asistente hace ese seguimiento')
 on conflict (clave) do nothing;
 
 -- ---------------------------------------------------------------------
@@ -60,6 +62,17 @@ create table if not exists public.asistente_chats (
   creado_en timestamptz not null default now()
 );
 create index if not exists asistente_chats_orden on public.asistente_chats (atender desc, ultimo_mensaje_en desc);
+-- CRM: en qué etapa está cada contacto, qué busca, cuánto vale y quién del equipo lo sigue
+alter table public.asistente_chats add column if not exists etapa text not null default 'nuevo';
+alter table public.asistente_chats drop constraint if exists asistente_chats_etapa_check;
+alter table public.asistente_chats add constraint asistente_chats_etapa_check
+  check (etapa in ('nuevo', 'consulta', 'interesado', 'reservo', 'pago', 'perdido'));
+alter table public.asistente_chats add column if not exists interes text;          -- horas, fijo, salon, otro
+alter table public.asistente_chats add column if not exists valor_estimado integer; -- $ por mes aprox.
+alter table public.asistente_chats add column if not exists nota_crm text;          -- lo que busca, en una línea
+alter table public.asistente_chats add column if not exists prioridad boolean not null default false;
+alter table public.asistente_chats add column if not exists asignado_a uuid references public.equipo (user_id) on delete set null;
+alter table public.asistente_chats add column if not exists seguimiento_en timestamptz;
 
 create table if not exists public.asistente_mensajes (
   id bigint generated always as identity primary key,
@@ -67,7 +80,7 @@ create table if not exists public.asistente_mensajes (
   rol text not null check (rol in ('cliente', 'asistente', 'equipo', 'nota')),
   texto text not null default '',
   tipo text not null default 'texto',        -- texto, imagen, documento, audio, otro
-  media jsonb,                               -- {id, mime, nombre} de WhatsApp
+  media jsonb,                               -- {id, mime, nombre} de WhatsApp, o {url} si lo mandó el asistente
   wa_id text unique,                         -- id del mensaje en WhatsApp (evita duplicados)
   leido boolean not null default false,      -- ya lo tuvo en cuenta el asistente
   api jsonb,                                 -- (asistente) la charla exacta con la IA en ese turno
@@ -287,6 +300,8 @@ begin
   select * into n from public.asistente_numeros where whatsapp = public.solo_numeros(c.whatsapp) and tipo = 'equipo';
   return json_build_object(
     'chat_id', c.id, 'whatsapp', c.whatsapp, 'nombre_perfil', c.nombre_perfil, 'simulado', c.simulado,
+    'crm', json_build_object('etapa', public.asistente_etapa(c.id), 'interes', c.interes, 'valor_estimado', c.valor_estimado,
+                             'nota', c.nota_crm, 'prioridad', c.prioridad),
     'equipo', case when n.whatsapp is not null and exists (select 1 from public.equipo e where e.user_id = n.user_id and e.activo)
                    then json_build_object('nombre', coalesce(n.nombre, (select nombre from public.equipo where user_id = n.user_id))) end,
     'cliente', case when pr.id is not null then json_build_object(
@@ -642,6 +657,78 @@ begin
     else null end;
 end $$;
 
+-- Etapa real: si reservó o pagó lo dice la base, no la IA
+create or replace function public.asistente_etapa(p_chat_id bigint) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from public.asistente_pedidos ap where ap.chat_id = c.id
+                 and (exists (select 1 from public.reservas r where r.pedido_id = ap.pedido_id and (r.estado = 'confirmada' or public.monto_pagado_reserva(r.id) > 0))
+                      or exists (select 1 from public.fijos f where f.pedido_id = ap.pedido_id and f.estado = 'activo'))) then 'pago'
+    when exists (select 1 from public.asistente_pedidos ap where ap.chat_id = c.id
+                 and (exists (select 1 from public.reservas r where r.pedido_id = ap.pedido_id and r.estado = 'pendiente')
+                      or exists (select 1 from public.fijos f where f.pedido_id = ap.pedido_id and f.estado = 'solicitud'))) then 'reservo'
+    else c.etapa end
+  from public.asistente_chats c where c.id = p_chat_id
+$$;
+
+-- El asistente califica al contacto (precalificación): etapa, qué busca y cuánto vale
+create or replace function public.asistente_calificar(
+  p_chat_id bigint, p_etapa text, p_interes text default null, p_valor integer default null, p_nota text default null, p_prioridad boolean default null
+) returns json
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_etapa not in ('nuevo', 'consulta', 'interesado', 'perdido') then
+    raise exception 'ETAPA' using hint = 'Etapas que puede poner el asistente: consulta, interesado o perdido (reservó y pagó salen solos de la base)';
+  end if;
+  update public.asistente_chats
+  set etapa = p_etapa, interes = coalesce(nullif(p_interes, ''), interes), valor_estimado = coalesce(p_valor, valor_estimado),
+      nota_crm = coalesce(nullif(left(p_nota, 200), ''), nota_crm), prioridad = coalesce(p_prioridad, prioridad)
+  where id = p_chat_id;
+  return json_build_object('etapa', public.asistente_etapa(p_chat_id));
+end $$;
+
+-- El asistente mandó una foto (queda en el chat)
+create or replace function public.asistente_registrar_foto(p_chat_id bigint, p_url text, p_texto text) returns bigint
+language sql security definer set search_path = public as $$
+  insert into public.asistente_mensajes (chat_id, rol, texto, tipo, media, leido, envio)
+  values (p_chat_id, 'asistente', coalesce(p_texto, ''), 'imagen', jsonb_build_object('url', p_url), true, 'enviado')
+  returning id
+$$;
+
+-- Seguimiento: consultó, se quedó callado y no reservó → el asistente le escribe UNA vez
+-- (solo dentro de las 24 hs que deja WhatsApp; nunca si el equipo lo está atendiendo)
+create or replace function public.asistente_para_seguir() returns json
+language plpgsql security definer set search_path = public as $$
+declare v json;
+begin
+  if public.cfg_texto('asistente_seguimiento') <> 'si' or public.cfg_texto('asistente_activo') <> 'si' then return '[]'::json; end if;
+  with candidatos as (
+    select c.id from public.asistente_chats c
+    where not c.simulado and not c.atender
+      and c.etapa in ('consulta', 'interesado')
+      and public.asistente_etapa(c.id) in ('consulta', 'interesado')
+      and (c.seguimiento_en is null or c.seguimiento_en < now() - interval '3 days')
+      and c.ultimo_cliente_en < now() - make_interval(hours => coalesce(public.cfg('asistente_horas_seguimiento'), 3))
+      and c.ultimo_cliente_en > now() - interval '22 hours'
+      and (c.pausa_hasta is null or c.pausa_hasta < now())
+      and (c.procesando_desde is null or c.procesando_desde < now() - interval '3 minutes')
+      and (public.cfg_texto('asistente_solo_prueba') <> 'si' or exists (select 1 from public.asistente_numeros n where n.whatsapp = c.whatsapp))
+      and (select m.rol from public.asistente_mensajes m where m.chat_id = c.id and m.rol <> 'nota' order by m.id desc limit 1) = 'asistente'
+    for update of c skip locked
+  ), marcados as (
+    update public.asistente_chats c set seguimiento_en = now(), procesando_desde = now()
+    from candidatos k where c.id = k.id returning c.id
+  ), notas as (
+    insert into public.asistente_mensajes (chat_id, rol, texto)
+    select id, 'nota', 'SEGUIMIENTO AUTOMÁTICO: la persona consultó y no volvió a escribir. Si tiene sentido, mandale UN mensaje corto y útil '
+      || '(revisá que lo que buscaba siga libre y proponé algo concreto). Si no corresponde escribirle (ya dijo que no, se resolvió, '
+      || 'o sería insistente), respondé exactamente: NADA'
+    from marcados returning chat_id
+  )
+  select coalesce(json_agg(chat_id), '[]'::json) into v from notas;
+  return v;
+end $$;
+
 -- Recordatorio de seña: pedidos tomados por el asistente que siguen sin pagar
 create or replace function public.asistente_para_recordar() returns json
 language plpgsql security definer set search_path = public as $$
@@ -701,15 +788,17 @@ create or replace function public.asistente_panel_chats() returns json
 language plpgsql stable security definer set search_path = public as $$
 begin
   perform public.exigir_equipo();
-  return coalesce((select json_agg(x order by x.atender desc, x.urgente desc, x.ultimo_mensaje_en desc nulls last) from (
+  return coalesce((select json_agg(x order by x.atender desc, x.urgente desc, x.prioridad desc, x.ultimo_mensaje_en desc nulls last) from (
     select c.id, c.whatsapp, c.simulado, c.atender, c.urgente, c.motivo_atender, c.pausa_hasta, c.ultimo_mensaje_en, c.ultimo_cliente_en,
+           public.asistente_etapa(c.id) as etapa, c.interes, c.valor_estimado, c.nota_crm, c.prioridad, c.asignado_a,
+           (select nombre from public.equipo where user_id = c.asignado_a) as asignado,
            coalesce(pr.nombre, c.nombre_perfil, c.whatsapp) as nombre, pr.id as profesional_id,
            (select left(m.texto, 120) from public.asistente_mensajes m where m.chat_id = c.id and m.rol <> 'nota' order by m.id desc limit 1) as ultimo,
            (select m.rol from public.asistente_mensajes m where m.chat_id = c.id and m.rol <> 'nota' order by m.id desc limit 1) as ultimo_rol,
            exists (select 1 from public.asistente_pedidos ap where ap.chat_id = c.id) as reservo
     from public.asistente_chats c left join public.profesionales pr on pr.id = c.profesional_id
     where not c.simulado or c.whatsapp = 'sim-' || auth.uid()
-    order by c.atender desc, c.ultimo_mensaje_en desc nulls last limit 200) x), '[]'::json);
+    order by c.atender desc, c.ultimo_mensaje_en desc nulls last limit 300) x), '[]'::json);
 end $$;
 
 create or replace function public.asistente_panel_mensajes(p_chat_id bigint) returns json
@@ -720,6 +809,7 @@ begin
   select * into c from public.asistente_chats where id = p_chat_id;
   return json_build_object(
     'mensajes', coalesce((select json_agg(json_build_object('id', m.id, 'rol', m.rol, 'texto', m.texto, 'tipo', m.tipo, 'envio', m.envio,
+                                                            'url', m.media->>'url',
                                                             'creado_en', m.creado_en,
                                                             'autor', (select nombre from public.equipo where user_id = m.autor)) order by m.id)
                           from (select * from public.asistente_mensajes where chat_id = p_chat_id order by id desc limit 300) m), '[]'::json),
@@ -762,6 +852,28 @@ language plpgsql security definer set search_path = public as $$
 begin
   perform public.exigir_equipo();
   update public.asistente_chats set atender = false, urgente = false, motivo_atender = null where id = p_chat_id;
+end $$;
+
+-- CRM: asignar el contacto a alguien del equipo (null = nadie)
+create or replace function public.asistente_panel_asignar(p_chat_id bigint, p_user_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.exigir_equipo();
+  if p_user_id is not null and not exists (select 1 from public.equipo where user_id = p_user_id and activo) then
+    raise exception 'NO_ENCONTRADO' using hint = 'Esa persona no está en el equipo';
+  end if;
+  update public.asistente_chats set asignado_a = p_user_id where id = p_chat_id;
+end $$;
+
+-- CRM: cambiar la etapa a mano (reservó y pagó salen solos de la base)
+create or replace function public.asistente_panel_etapa(p_chat_id bigint, p_etapa text, p_prioridad boolean default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.exigir_equipo();
+  if p_etapa not in ('nuevo', 'consulta', 'interesado', 'perdido') then
+    raise exception 'ETAPA' using hint = 'Reservó y pagó se marcan solos cuando hay un pedido';
+  end if;
+  update public.asistente_chats set etapa = p_etapa, prioridad = coalesce(p_prioridad, prioridad) where id = p_chat_id;
 end $$;
 
 -- El simulador del panel empieza una charla nueva
@@ -901,6 +1013,27 @@ begin
                                  or exists (select 1 from public.fijos f where f.pedido_id = ap.pedido_id and f.estado = 'activo'))),
     'monto_reservado', coalesce((select sum(r.precio_total) from public.asistente_pedidos ap join public.reservas r on r.pedido_id = ap.pedido_id
                                  where ap.creado_en >= v_ini and ap.creado_en < v_fin and r.estado = 'confirmada'), 0),
+    'embudo', (select json_object_agg(e, n) from (
+        select public.asistente_etapa(c.id) as e, count(*) as n from public.asistente_chats c
+        where not c.simulado and c.ultimo_mensaje_en >= v_ini and c.creado_en < v_fin group by 1) x),
+    'respuesta_segundos', (select json_build_object(
+        'asistente', percentile_cont(0.5) within group (order by seg) filter (where quien = 'asistente'),
+        'equipo', percentile_cont(0.5) within group (order by seg) filter (where quien = 'equipo'))
+      from (select r.rol as quien, extract(epoch from r.creado_en - m.creado_en) as seg
+            from public.asistente_mensajes m
+            join public.asistente_chats c on c.id = m.chat_id and not c.simulado
+            cross join lateral (select x.rol, x.creado_en from public.asistente_mensajes x
+                                where x.chat_id = m.chat_id and x.id > m.id and x.rol in ('asistente', 'equipo') order by x.id limit 1) r
+            where m.rol = 'cliente' and m.creado_en >= v_ini and m.creado_en < v_fin
+              and not exists (select 1 from public.asistente_mensajes p where p.chat_id = m.chat_id and p.id < m.id and p.id > coalesce(
+                    (select max(q.id) from public.asistente_mensajes q where q.chat_id = m.chat_id and q.id < m.id and q.rol in ('asistente', 'equipo')), 0)
+                    and p.rol = 'cliente')) t),
+    'oportunidades', coalesce((select json_agg(json_build_object('id', c.id, 'nombre', coalesce(pr.nombre, c.nombre_perfil, c.whatsapp),
+        'etapa', public.asistente_etapa(c.id), 'interes', c.interes, 'valor_estimado', c.valor_estimado, 'nota', c.nota_crm,
+        'ultimo_mensaje_en', c.ultimo_mensaje_en) order by c.prioridad desc, c.valor_estimado desc nulls last, c.ultimo_mensaje_en desc)
+      from public.asistente_chats c left join public.profesionales pr on pr.id = c.profesional_id
+      where not c.simulado and c.etapa = 'interesado' and public.asistente_etapa(c.id) = 'interesado'
+        and c.ultimo_mensaje_en > now() - interval '14 days'), '[]'::json),
     'para_atender', (select count(*) from public.asistente_chats where atender and not simulado),
     'propuestas', (select count(*) from public.asistente_propuestas where estado = 'pendiente'),
     'tokens', (select json_build_object('entrada', coalesce(sum((m.uso->>'input_tokens')::bigint + coalesce((m.uso->>'cache_read_input_tokens')::bigint, 0)
@@ -940,7 +1073,7 @@ where not exists (select 1 from public.asistente_conocimiento);
 -- ---------------------------------------------------------------------
 -- 7. TAREAS AUTOMÁTICAS (pg_cron + pg_net, solo en Supabase)
 --    Necesitan en ajustes_privados: url_asistente y secreto_asistente (ver docs)
---    · cada 5 minutos: recordatorios de seña
+--    · cada 5 minutos: recordatorios de seña y seguimientos
 --    · lunes 9:00 (hora Argentina): revisión semanal del asistente
 -- ---------------------------------------------------------------------
 do $$
@@ -957,7 +1090,8 @@ begin
                                       'x-asistente-secreto', (select valor from public.ajustes_privados where clave = 'secreto_asistente')),
         body := '{"accion":"recordatorios"}'::jsonb)
       where exists (select 1 from public.ajustes_privados where clave = 'url_asistente')
-        and exists (select 1 from public.asistente_pedidos where recordatorio_en is null and creado_en > now() - interval '1 day')
+        and (exists (select 1 from public.asistente_pedidos where recordatorio_en is null and creado_en > now() - interval '1 day')
+             or exists (select 1 from public.asistente_chats where etapa in ('consulta', 'interesado') and ultimo_cliente_en > now() - interval '1 day'))
     $cron$);
     perform cron.schedule('psicostudios-asistente-revision', '0 12 * * 1', $cron$
       select net.http_post(
