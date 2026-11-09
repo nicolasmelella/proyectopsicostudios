@@ -21,6 +21,8 @@ export function crearClienteDemo() {
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
       ['titular_transferencia', 'Psico Studios (demo)'], ['whatsapp_contacto', '5491100000000'],
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
+      ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
+      ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'si'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -167,6 +169,46 @@ export function crearClienteDemo() {
       seq = guardado.seq;
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
+  // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
+  if (!db.asistente_chats) {
+    const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
+    const saber = [
+      ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
+      ['El espacio', '¿Qué incluye?', 'Wifi de alta velocidad, aire acondicionado, recepción y sala de espera, y café y snacks para vos. Sin contratos ni costos ocultos.'],
+      ['El espacio', '¿Están habilitados?', 'Sí: están habilitados por el Ministerio de Salud y para obras sociales.'],
+      ['Reservas', '¿Cómo se confirma una reserva por horas?', 'Los horarios quedan guardados mientras se paga la seña (50% del total). Se paga por transferencia (y se manda la captura por este chat) o por Mercado Pago. El saldo, hasta el día anterior a cada turno.'],
+      ['Horario fijo', '¿Qué es el horario fijo?', 'Es el mismo día y horario todas las semanas, con precio preferencial. Se confirma pagando el primer mes.'],
+    ];
+    Object.assign(db, {
+      asistente_conocimiento: saber.map(([tema, pregunta, respuesta], i) => ({ id: nuevoId(), tema, pregunta, respuesta, activo: true, origen: 'inicial', usos: [12, 7, 3, 9, 4][i], creado_en: hace(9000) })),
+      asistente_numeros: [{ whatsapp: '5491100001111', tipo: 'prueba', nombre: 'Celular de prueba', user_id: null, creado_en: hace(5000) }],
+      asistente_memoria: [{ id: nuevoId(), whatsapp: '5491133334444', dato: 'Prefiere el Consultorio 3', creado_en: hace(3000) }],
+      asistente_propuestas: [{ id: nuevoId(), tema: 'El espacio', pregunta: '¿Se puede ir con mascota?', respuesta: 'Sí, perros chicos en la sala de espera, avisando antes.',
+        motivo: 'Lo respondió Silvia en una charla', origen: 'equipo', estado: 'pendiente', creado_en: hace(200) }],
+      asistente_informes: [{ id: nuevoId(), desde: sumarDias(hoy, -7), hasta: sumarDias(hoy, -1), datos: {
+        resumen: 'Escribieron 23 personas. El asistente resolvió 19 sin ayuda y tomó 6 reservas (4 ya pagaron la seña). Lo que más preguntan es disponibilidad de martes y jueves a la tarde.',
+        temas_frecuentes: [{ tema: 'Disponibilidad', veces: 14 }, { tema: 'Precios', veces: 9 }, { tema: 'Horario fijo', veces: 5 }],
+        preguntas_sin_respuesta: ['¿Tienen estacionamiento?', '¿Emiten factura A?'],
+        reservas_perdidas: [{ motivo: 'Sin lugar', detalle: 'Dos personas querían jueves de 18 a 20 y estaba todo ocupado.' }],
+        demanda_sin_lugar: ['Jueves de 17 a 21', 'Martes de 18 a 20'],
+        errores_del_asistente: [],
+        ideas_para_el_negocio: ['Ofrecer las mañanas de martes y jueves a quienes piden la tarde (hay mucho lugar).'],
+        propuestas: [] }, creado_en: hace(60) }],
+      asistente_pedidos: [],
+      asistente_chats: [
+        { id: 9001, whatsapp: '5491133334444', nombre: 'Carla Gómez', profesional_id: null, simulado: false, atender: true, urgente: false,
+          motivo_atender: 'Pide factura A para su monotributo', pausa_hasta: null, ultimo_mensaje_en: hace(12), ultimo_cliente_en: hace(12), reservo: true },
+        { id: 9002, whatsapp: '5491155557777', nombre: 'Martín (WhatsApp)', profesional_id: null, simulado: false, atender: false, urgente: false,
+          motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(95), ultimo_cliente_en: hace(96), reservo: false },
+      ],
+      asistente_mensajes: [
+        [9001, 'cliente', '¡Hola! ¿Tienen lugar el jueves de 10 a 12?', 30], [9001, 'asistente', '¡Hola Carla! Soy Sofía 😊 El jueves de 10 a 12 hs está libre el *Consultorio 3*, el que te gusta. ¿Te lo reservo?', 29],
+        [9001, 'cliente', 'Sí, dale', 20], [9001, 'asistente', '¡Listo! Te reservé el jueves de 10 a 12 hs en el Consultorio 3. Total $17.000, seña *$8.500*. Transferí a *psicostudios.demo* y mandame la captura por acá 🙌', 19],
+        [9001, 'cliente', 'Genial. ¿Me pueden hacer factura A?', 12], [9001, 'asistente', 'Eso lo ve el equipo: ya les pasé tu consulta y te responden por acá en un rato.', 12],
+        [9002, 'cliente', 'Buenas, ¿cuánto sale la hora?', 96], [9002, 'asistente', '¡Hola Martín! Por horas: mañana (8 a 13 hs) *$8.500* y tarde (13 a 21 hs) *$9.000*. Con horario fijo semanal es más barato. ¿Qué día te sirve?', 95],
+      ].map(([chat_id, rol, texto, min]) => ({ id: nuevoId(), chat_id, rol, texto, tipo: 'texto', envio: rol === 'asistente' ? 'enviado' : null, creado_en: hace(min) })),
+    });
+  }
   const guardar = () => {
     try {
       const { ocupaciones, ...resto } = db;
@@ -850,6 +892,78 @@ export function crearClienteDemo() {
     },
   };
 
+  // ---- asistente de WhatsApp (20_asistente.sql) ----
+  const soloEquipo = () => { if (!rpcs.es_equipo()) throw new Error('NO_AUTORIZADO'); };
+  const chatDe = (id) => db.asistente_chats.find((c) => c.id === id);
+  Object.assign(rpcs, {
+    asistente_panel_badge: () => (rpcs.es_equipo() ? db.asistente_chats.filter((c) => c.atender && !c.simulado).length
+      + db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length : 0),
+    asistente_panel_chats() {
+      soloEquipo();
+      return db.asistente_chats.map((c) => {
+        const ult = db.asistente_mensajes.filter((m) => m.chat_id === c.id && m.rol !== 'nota').at(-1);
+        return { ...c, ultimo: ult?.texto?.slice(0, 120), ultimo_rol: ult?.rol };
+      }).sort((a, b) => (b.atender - a.atender) || (a.ultimo_mensaje_en < b.ultimo_mensaje_en ? 1 : -1));
+    },
+    asistente_panel_mensajes({ p_chat_id }) {
+      soloEquipo();
+      const c = chatDe(p_chat_id);
+      return { mensajes: db.asistente_mensajes.filter((m) => m.chat_id === p_chat_id),
+        memoria: db.asistente_memoria.filter((m) => m.whatsapp === c?.whatsapp), pedidos: c?.reservo ? [db.pedidos[0]?.id || 1] : [] };
+    },
+    asistente_panel_atendido({ p_chat_id }) { soloEquipo(); Object.assign(chatDe(p_chat_id), { atender: false, urgente: false, motivo_atender: null }); },
+    asistente_panel_pausa({ p_chat_id, p_minutos }) { soloEquipo(); chatDe(p_chat_id).pausa_hasta = p_minutos > 0 ? ahoraISO(p_minutos) : null; },
+    asistente_panel_borrar_memoria({ p_id }) { soloEquipo(); db.asistente_memoria = db.asistente_memoria.filter((m) => m.id !== p_id); },
+    asistente_panel_propuestas() {
+      soloEquipo();
+      return db.asistente_propuestas.filter((p) => p.estado === 'pendiente').map((p) => ({ ...p,
+        corrige: p.conocimiento_id ? db.asistente_conocimiento.find((k) => k.id === p.conocimiento_id) : null }));
+    },
+    asistente_panel_resolver({ p_id, p_aprobar, p_pregunta, p_respuesta, p_tema }) {
+      soloEquipo();
+      const p = db.asistente_propuestas.find((x) => x.id === p_id && x.estado === 'pendiente');
+      if (!p) throw new Error('NO_ENCONTRADO');
+      if (p_aprobar) db.asistente_conocimiento.push({ id: nuevoId(), tema: p_tema || p.tema, pregunta: p_pregunta || p.pregunta,
+        respuesta: p_respuesta || p.respuesta, activo: true, origen: 'aprendido', usos: 0, creado_en: ahoraISO() });
+      p.estado = p_aprobar ? 'aprobada' : 'descartada';
+    },
+    asistente_panel_guardar_saber({ p_id, p_tema, p_pregunta, p_respuesta, p_activo }) {
+      soloEquipo();
+      if (String(p_pregunta || '').trim().length < 3 || String(p_respuesta || '').trim().length < 2) return err('INCOMPLETO', 'Completá la pregunta y la respuesta');
+      const v = { tema: String(p_tema || '').trim() || 'General', pregunta: p_pregunta.trim(), respuesta: p_respuesta.trim(), activo: p_activo !== false };
+      if (p_id) Object.assign(db.asistente_conocimiento.find((k) => k.id === p_id), v);
+      else db.asistente_conocimiento.push({ id: nuevoId(), ...v, origen: 'equipo', usos: 0, creado_en: ahoraISO() });
+    },
+    asistente_panel_borrar_saber({ p_id }) { soloEquipo(); db.asistente_conocimiento = db.asistente_conocimiento.filter((k) => k.id !== p_id); },
+    asistente_panel_guardar_numero({ p_whatsapp, p_tipo, p_nombre, p_user_id }) {
+      if (!rpcs.es_admin()) return err('NO_AUTORIZADO', 'Solo un administrador puede hacer esto');
+      const n = String(p_whatsapp).replace(/\D/g, '');
+      if (n.length < 10) return err('WHATSAPP_INVALIDO', 'Escribí el número con código de área, ej: 11 2345 6789');
+      const tel = n.startsWith('54') ? n : '549' + n.replace(/^0/, '');
+      db.asistente_numeros = db.asistente_numeros.filter((x) => x.whatsapp !== tel);
+      db.asistente_numeros.push({ whatsapp: tel, tipo: p_tipo, nombre: p_nombre || null, user_id: p_tipo === 'equipo' ? p_user_id : null, creado_en: ahoraISO() });
+    },
+    asistente_panel_borrar_numero({ p_whatsapp }) {
+      if (!rpcs.es_admin()) return err('NO_AUTORIZADO', 'Solo un administrador puede hacer esto');
+      db.asistente_numeros = db.asistente_numeros.filter((x) => x.whatsapp !== p_whatsapp);
+    },
+    asistente_panel_resumen() {
+      soloEquipo();
+      return { charlas: 23, mensajes_recibidos: 88, respuestas_asistente: 71, respuestas_equipo: 6, pedidos: 6, pedidos_confirmados: 4,
+        monto_reservado: 68000, para_atender: rpcs.asistente_panel_badge() - db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length,
+        propuestas: db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length, tokens: { entrada: 412000, salida: 23000 } };
+    },
+  });
+  // Respuesta de ejemplo para el simulador del panel (la de verdad la da Claude en el servidor)
+  const respuestaDemo = (texto) => {
+    const t = texto.toLowerCase();
+    const k = db.asistente_conocimiento.find((x) => x.activo && x.pregunta.toLowerCase().split(/\W+/).filter((w) => w.length > 4).some((w) => t.includes(w)));
+    if (/cu[aá]nto|precio|sale|valor/.test(t)) return { texto: 'Por horas: mañana (8 a 13 hs) *$8.500* y tarde (13 a 21 hs) *$9.000*. Con horario fijo semanal es más barato. ¿Qué día te sirve?', herramientas: [{ nombre: 'info_general', ok: true }] };
+    if (/lugar|libre|disponib|turno|reserv/.test(t)) return { texto: 'Me fijo… ✨ Ese día hay lugar a la mañana en los Consultorios 1, 2 y 4, y a la tarde desde las 17 hs en el 3. ¿Qué horario preferís?', herramientas: [{ nombre: 'ver_horarios_libres', ok: true }] };
+    if (k) return { texto: k.respuesta, herramientas: [{ nombre: 'buscar_saber', ok: true }] };
+    return { texto: '¡Hola! Soy Sofía, el asistente de Psico Studios 😊 ¿En qué te ayudo? Puedo contarte precios, ver disponibilidad y reservarte un consultorio.', herramientas: [] };
+  };
+
   // ---- login de mentira (cualquier usuario/contraseña entra) ----
   let sesion = null;
   // Links de invitación o de "olvidé mi contraseña" (en el simulador: panel.html#type=invite&email=...)
@@ -910,6 +1024,21 @@ export function crearClienteDemo() {
     functions: {
       async invoke(nombre, { body }) {
         await new Promise((r) => setTimeout(r, 400));
+        if (nombre === 'asistente-whatsapp') {
+          if (!rpcs.es_equipo()) return { data: null, error: { message: 'NO_AUTORIZADO', context: { json: async () => ({ message: 'NO_AUTORIZADO', hint: 'Tu sesión venció.' }) } } };
+          if (body.accion === 'simular') {
+            await new Promise((r) => setTimeout(r, 700));
+            return { data: body.reiniciar ? { ok: true } : { ...respuestaDemo(String(body.texto || '')), uso: {} }, error: null };
+          }
+          if (body.accion === 'responder') {
+            const c = chatDe(Number(body.chat_id));
+            db.asistente_mensajes.push({ id: nuevoId(), chat_id: c.id, rol: 'equipo', texto: String(body.texto), tipo: 'texto', envio: 'enviado',
+              autor: db.equipo.find((e) => e.user_id === sesion.user.id)?.nombre, creado_en: ahoraISO() });
+            Object.assign(c, { atender: false, urgente: false, pausa_hasta: ahoraISO(Number(cfg('asistente_minutos_pausa')) || 60), ultimo_mensaje_en: ahoraISO() });
+            guardar();
+            return { data: { ok: true, envio: 'enviado' }, error: null };
+          }
+        }
         if (nombre === 'equipo-admin') {
           const falla = (message, hint) => ({ data: null, error: { message, hint, context: { json: async () => ({ message, hint }) } } });
           if (!rpcs.es_admin()) return falla('NO_AUTORIZADO', 'Solo un administrador puede invitar personas.');

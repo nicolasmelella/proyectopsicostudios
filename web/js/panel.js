@@ -3,6 +3,7 @@ import {
   crearCliente, esc, pesos, hoyAR, sumarDias, diaSemana, fechaLarga, fechaCorta, horaTxt, rangos,
   faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, DIAS_CORTOS, preguntar,
 } from './comun.js';
+import { crearAsistente } from './asistente.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -17,6 +18,9 @@ const MEDIOS = [['transferencia', 'Transferencia'], ['efectivo', 'Efectivo'], ['
 
 // Lunes de la semana de una fecha (el domingo muestra la semana que empieza)
 const lunesDe = (f) => (diaSemana(f) === 7 ? sumarDias(f, 1) : sumarDias(f, 1 - diaSemana(f)));
+
+// Pestaña "Asistente" (asistente.js). Se crea al final, cuando ya están todas las funciones.
+let asistente = { pintar() {}, badge() {} };
 
 const st = {
   fecha: hoyAR(),
@@ -287,7 +291,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes })[tab]();
+  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -297,6 +301,7 @@ async function refrescar() {
 }
 
 async function actualizarBadge() {
+  asistente.badge();
   const [a, m, c] = await Promise.all([
     sb.rpc('alertas_pago'),
     sb.from('pagos_a_revisar').select('id').eq('resuelto', false),
@@ -1921,6 +1926,8 @@ $('#form-invitar').onsubmit = async (e) => {
 
 // ================================================================ arranque
 setInterval(() => { if (!$('#app').classList.contains('oculto') && $('#modal').classList.contains('oculto')) refrescar(); }, 60000);
+
+asistente = crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion, preguntar });
 
 const { data: { session } } = await sb.auth.getSession();
 if (session && (tipoLink === 'invite' || tipoLink === 'recovery')) mostrarNuevaClave(tipoLink);
