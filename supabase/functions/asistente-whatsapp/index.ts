@@ -319,8 +319,9 @@ CLIENTES QUE YA ALQUILAN (mover horarios, avisar que no vienen)
 - Mover un turno o UNA semana del fijo a otro día, hora o consultorio: buscá lugar libre, mostrá el cambio (de → a) y lo que cuesta, esperá un "sí" y usá mover_turno. Misma duración; para cambiar la duración o el fijo para siempre, pasá al equipo.
 - Si avisa que una semana NO viene a su fijo: confirmá qué día y usá no_vengo. Si el mes estaba pago, le quedan horas a favor (ofrecele recuperarlas con recuperar_horas); si no, esa semana no se le cobra. Contale lo que corresponda según la respuesta de la herramienta.
 - Si el horario nuevo cuesta más, decí la diferencia antes de confirmar: queda como saldo a pagar (se paga igual que siempre).
-- Si la herramienta dice POCA_ANTICIPACION (faltan menos de 24 hs), explicá con amabilidad que con tan poco aviso lo tiene que ver el equipo, y usá pasar_al_equipo con el detalle.
-- Si dice SIN_IDENTIFICAR (no reconocemos su WhatsApp), NO muevas nada: pedile nombre y apellido y el mail con el que alquila, y pasá al equipo con el motivo "Vincular: dice ser <nombre> (<mail>), quiere <qué>". Explicale que es por seguridad y que es una sola vez.
+- Si la herramienta dice POCA_ANTICIPACION (faltan menos de 24 hs) o SIN_IDENTIFICAR (no reconocemos su WhatsApp), no lo podés hacer vos: usá solicitar_cambio para que el equipo lo apruebe con un toque. Si no la reconocemos, antes pedile nombre y apellido y qué horario tiene (día y hora), y nunca le digas qué reservas o fijos figuran a su nombre. Primero mirá que el horario nuevo esté libre. Después decile que el lugar nuevo le quedó guardado y que el equipo se lo confirma por acá; si la persona no está identificada, aclará que es por seguridad y que desde ahí la vamos a reconocer.
+- Si dice que va a transferir más tarde y el plazo de la seña se le vence, usá pedir_mas_tiempo (lo aprueba el equipo).
+- Si el contexto dice que ya tiene solicitudes esperando al equipo, no las dupliques: decile que están en manos del equipo.
 
 SEGUIMIENTO Y OPORTUNIDADES
 - Usá calificar_contacto cuando sepas qué busca la persona: "consulta" si solo pregunta, "interesado" si quiere reservar o pidió algo concreto, "perdido" si dijo que no o eligió otro lugar. Estimá el valor por mes (horas por semana × precio × 4) y marcá prioridad si busca horario fijo, varias horas por semana o el Salón: son las oportunidades más valiosas.
@@ -455,6 +456,27 @@ const HERRAMIENTAS = [
     input_schema: { type: 'object', properties: {
       fecha: { type: 'string', description: 'AAAA-MM-DD' }, horas: { type: 'array', items: { type: 'integer' } }, consultorio_id: { type: 'integer' } },
       required: ['fecha', 'horas'] },
+  },
+  {
+    name: 'solicitar_cambio',
+    description: 'Deja un cambio armado para que el equipo lo apruebe con un toque (y guarda el lugar nuevo). Usala cuando mover_turno / no_vengo / recuperar_horas dicen SIN_IDENTIFICAR o POCA_ANTICIPACION.',
+    input_schema: { type: 'object', properties: {
+      tipo: { type: 'string', enum: ['mover_reserva', 'mover_fijo', 'no_vengo', 'recuperar_horas'] },
+      motivo: { type: 'string', enum: ['sin_identificar', 'poca_anticipacion'] },
+      nombre: { type: 'string', description: 'Nombre y apellido que dijo (si no la reconocemos)' },
+      fecha_original: { type: 'string', description: 'AAAA-MM-DD del turno o semana que quiere mover o liberar' },
+      horas_originales: { type: 'array', items: { type: 'integer' } },
+      nueva_fecha: { type: 'string', description: 'AAAA-MM-DD (para mover o recuperar)' },
+      nuevas_horas: { type: 'array', items: { type: 'integer' } },
+      consultorio_id: { type: 'integer' },
+      reserva_id: { type: 'integer' }, fijo_id: { type: 'integer' },
+      resumen: { type: 'string', description: 'Lo que pide, en una línea, para el equipo. Ej: "Pasar su fijo del martes 17/11 15-17 al jueves 19/11 15-17"' } },
+      required: ['tipo', 'motivo', 'resumen'] },
+  },
+  {
+    name: 'pedir_mas_tiempo',
+    description: 'Pide al equipo más tiempo para pagar la seña de un pedido (cuando la persona avisa que transfiere más tarde).',
+    input_schema: { type: 'object', properties: { pedido: { type: 'integer' }, minutos: { type: 'integer', description: 'Cuánto más necesita (por defecto 60)' } }, required: ['pedido'] },
   },
   {
     name: 'calificar_contacto',
@@ -631,6 +653,24 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
         p_consultorio: e.consultorio_id ? Number(e.consultorio_id) : null });
       return { ...r, dia: fechaCorta(String(r.fecha)), horario: rangos(r.horas), a_pagar: pesos(r.a_pagar) };
     }
+    case 'solicitar_cambio': {
+      if (chat.simulado) return { simulado: 'SIMULADOR: la solicitud no se creó de verdad (en el sistema real, el equipo la aprueba con un toque).' };
+      const datos: Record<string, unknown> = {};
+      for (const k of ['fecha_original', 'nueva_fecha']) if (e[k]) datos[k] = fecha(e[k]);
+      for (const k of ['horas_originales', 'nuevas_horas']) if (Array.isArray(e[k]) && e[k].length) datos[k] = enteros(e[k]);
+      for (const k of ['consultorio_id', 'reserva_id', 'fijo_id']) if (e[k]) datos[k] = Number(e[k]);
+      const r = await rpc('asistente_solicitar', { p_chat_id: chat.chat_id, p_tipo: e.tipo, p_motivo: e.motivo === 'poca_anticipacion' ? 'poca_anticipacion' : 'sin_identificar',
+        p_resumen: String(e.resumen || ''), p_datos: datos, p_nombre: e.nombre || null });
+      return { ...r, nota: 'El equipo la aprueba o rechaza desde el panel y la persona recibe la respuesta por acá. No prometas que se aprueba.' };
+    }
+    case 'pedir_mas_tiempo': {
+      if (chat.simulado) return { simulado: 'SIMULADOR: no se pidió de verdad.' };
+      await rpc('asistente_token_pedido_chat', { p_chat_id: chat.chat_id, p_pedido: Number(e.pedido) });
+      const r = await rpc('asistente_solicitar', { p_chat_id: chat.chat_id, p_tipo: 'extender_sena', p_motivo: 'pedido',
+        p_resumen: `Más tiempo para pagar la seña del pedido #${Number(e.pedido)} (${Number(e.minutos) || 60} min)`,
+        p_datos: { pedido: Number(e.pedido), minutos: Math.min(Number(e.minutos) || 60, 24 * 60) }, p_nombre: null });
+      return { ...r, nota: 'Lo aprueba el equipo; mientras tanto los horarios siguen guardados.' };
+    }
     case 'calificar_contacto':
       return rpc('asistente_calificar', { p_chat_id: chat.chat_id, p_etapa: e.etapa, p_interes: e.interes || null,
         p_valor: Number.isFinite(Number(e.valor_estimado_mensual)) && e.valor_estimado_mensual !== undefined ? Math.round(Number(e.valor_estimado_mensual)) : null,
@@ -678,6 +718,7 @@ export function textoContexto(ctx: any, cfg: Record<string, string>, ahora = new
     const c = ctx.crm;
     l.push(`Ficha (CRM): etapa ${c.etapa}${c.interes ? `, busca ${c.interes}` : ''}${c.valor_estimado ? `, valor estimado ${pesos(c.valor_estimado)}/mes` : ''}${c.prioridad ? ', PRIORIDAD' : ''}${c.nota ? `. ${c.nota}` : ''}.`);
   }
+  if (ctx.solicitudes?.length) l.push(`Solicitudes esperando al equipo: ${ctx.solicitudes.map((x: any) => `#${x.id} ${x.resumen}`).join(' · ')}.`);
   if (ctx.memoria?.length) l.push(`Lo que recordás de esta persona:\n${ctx.memoria.map((d: string) => `• ${d}`).join('\n')}`);
   if (!ctx.historial?.length) l.push('Es el comienzo de la charla.');
   return l.join('\n');
@@ -937,6 +978,32 @@ async function recordatorios() {
   return { enviados, seguimientos };
 }
 
+// ---------------------------------------------------------------- respuesta al cliente cuando el equipo resuelve
+export function textoRespuestaSolicitud(r: any) {
+  const n = primerNombre(r.nombre);
+  const hola = n ? `Hola ${n}! ` : '¡Hola! ';
+  if (!r.aprobada) {
+    return `${hola}El equipo revisó tu pedido (${r.resumen.charAt(0).toLowerCase() + r.resumen.slice(1)}) y esta vez no se pudo hacer${r.nota ? `: ${r.nota}` : '.'} Si querés, buscamos otra opción 🙌`;
+  }
+  const x = r.resultado || {};
+  const cuando = x.fecha ? `${fechaCorta(String(x.fecha))} ${rangos(x.horas || [])}${x.consultorio ? `, ${x.consultorio}` : ''}` : '';
+  const dif = Number(x.a_pagar ?? x.diferencia ?? 0);
+  const extra = dif > 0 ? ` Como el horario nuevo sale un poco más, quedan *${pesos(dif)}* de diferencia (se pagan igual que siempre).` : '';
+  switch (r.tipo) {
+    case 'mover_reserva':
+    case 'mover_fijo':
+      return `${hola}¡Listo! El equipo confirmó tu cambio: te esperamos el *${cuando}*.${extra}`;
+    case 'no_vengo':
+      return `${hola}Listo, liberamos tu horario del ${fechaCorta(String(x.fecha))}.${x.horas_a_favor ? ` Te quedan *${x.horas_a_favor} horas a favor* hasta el ${fechaCorta(String(x.vencen))}: avisame cuándo querés usarlas.` : ' Esa semana no se te cobra.'}`;
+    case 'recuperar_horas':
+      return `${hola}¡Listo! Usamos tus horas a favor: te esperamos el *${cuando}*.${extra}`;
+    case 'extender_sena':
+      return `${hola}Listo, te dimos más tiempo para la seña del pedido #${x.pedido}: tenés hasta el ${cuandoAR(x.hasta)}. Cuando transfieras, mandame la captura por acá 🙌`;
+    default:
+      return `${hola}El equipo ya resolvió tu pedido.`;
+  }
+}
+
 // ---------------------------------------------------------------- panel
 async function quienLlama(req: Request) {
   const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
@@ -967,6 +1034,21 @@ async function accionPanel(req: Request, cuerpo: any) {
       await rpc('asistente_soltar_turno', { p_chat_id: e.chat_id }).catch(() => {});
       throw err;
     }
+  }
+
+  if (cuerpo.accion === 'resolver_solicitud') {
+    const r = await rpc('asistente_panel_resolver_solicitud', { p_id: Number(cuerpo.id), p_aprobar: !!cuerpo.aprobar,
+      p_profesional_id: cuerpo.profesional_id ? Number(cuerpo.profesional_id) : null, p_nota: cuerpo.nota || null }, yo.jwt);
+    const texto = textoRespuestaSolicitud(r);
+    let envio = 'enviado';
+    if (!r.simulado) {
+      if (!r.ventana_abierta) envio = 'No se le pudo avisar: pasaron más de 24 hs desde su último mensaje. Escribile desde el celular.';
+      else { try { await enviarTexto(r.whatsapp, texto); } catch (e) { envio = String((e as Error)?.message ?? e); } }
+      const id = await rpc('asistente_mensaje_sistema', { p_chat_id: r.chat_id, p_texto: texto,
+        p_nota: `El equipo ${r.aprobada ? 'APROBÓ' : 'RECHAZÓ'} la solicitud "${r.resumen}"${r.nota ? ` (nota: ${r.nota})` : ''}. Se le avisó: "${texto}"` });
+      await rpc('asistente_resultado_envio', { p_mensaje_id: id, p_resultado: envio });
+    }
+    return responder({ ok: true, envio, texto });
   }
 
   if (cuerpo.accion === 'responder') {

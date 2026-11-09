@@ -42,9 +42,24 @@ El asistente reconoce a la persona por su WhatsApp y ve sus turnos, su horario f
 | Con **menos de 24 hs**, cambiar la duración, cambiar el fijo para siempre | Lo pasa al equipo |
 
 - Cada cambio queda en la agenda (con un comentario “movida por el asistente”) y en *Asistente → Conversaciones*, debajo del chat.
-- **Seguridad:** si escribe un número que no está en ninguna ficha, el asistente **no toca nada**: pide nombre y mail y lo pasa al equipo.
-  En el chat aparece **“¿Ya alquila? Vincular con su ficha”**: se elige a la persona y desde ese momento el asistente la reconoce
-  (se guarda su WhatsApp en la ficha). Conviene cargar los WhatsApp completos (con código de área) en *Profesionales*: hoy la mayoría de las fichas no lo tiene.
+- **Seguridad:** el asistente reconoce a cada persona **solo por el número de WhatsApp** (un nombre o un mail los puede escribir cualquiera).
+  Conviene cargar los WhatsApp completos (con código de área) en *Profesionales*: hoy la mayoría de las fichas no lo tiene.
+
+### Lo que no puede hacer solo: “Para aprobar”
+
+Cuando el pedido no entra en las reglas, el asistente **deja el cambio armado** y ustedes lo aprueban con un toque en
+*Asistente → Para aprobar*:
+
+| Caso | Qué deja armado |
+|---|---|
+| Escribe alguien que **no reconoce** por su WhatsApp y dice quién es (“soy Graciela, mi fijo de los jueves…”) | El cambio pedido, con la **ficha sugerida** por el nombre y el horario que dijo (sin contarle a la persona qué figura a su nombre) |
+| Aviso con **menos de 24 hs** | El cambio pedido |
+| “Transfiero más tarde” | Más tiempo para pagar la seña |
+
+- El **lugar nuevo queda guardado** mientras deciden (en la agenda se ve como bloqueado “Guardado por el asistente”), así no lo toma otra persona.
+- **Aprobar:** se hace el cambio, el WhatsApp de la persona queda **vinculado a su ficha** (la próxima vez lo hace solo) y el asistente le avisa por WhatsApp.
+- **Rechazar:** se suelta el lugar guardado y se le avisa, con el motivo si lo escriben.
+- También existe **“¿Ya alquila? Vincular con su ficha”** en cada chat, para vincular sin que haya un pedido.
 - Supuesto a confirmar: si el horario nuevo es **más barato**, no se devuelve la diferencia.
 
 ## CRM: cada contacto con su etapa

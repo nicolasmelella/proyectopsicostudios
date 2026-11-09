@@ -136,9 +136,9 @@ reset role;
 
 -- Simulador: no es nadie y no reserva de verdad
 set role service_role;
-create temp table as_s1 as select public.asistente_entrada('sim-' || :'a_equipo', 'Simulador', 'hola', 'texto', null, null, true)::jsonb as r;
-select pg_temp.ok((select (r->>'contestar')::boolean from as_s1), 'simulador: contesta siempre (aunque esté en modo prueba)');
-select (select (r->>'chat_id')::bigint from as_s1) as sim \gset
+create temp table as_sol1 as select public.asistente_entrada('sim-' || :'a_equipo', 'Simulador', 'hola', 'texto', null, null, true)::jsonb as r;
+select pg_temp.ok((select (r->>'contestar')::boolean from as_sol1), 'simulador: contesta siempre (aunque esté en modo prueba)');
+select (select (r->>'chat_id')::bigint from as_sol1) as sim \gset
 select pg_temp.ok((select profesional_id is null from public.asistente_chats where id = :sim), 'el simulador no coincide con ningún profesional');
 select pg_temp.espera_error(format($$select public.asistente_crear_pedido(%s, 'a', 'Psicóloga', 'a@a.com', '[]')$$, :sim), 'SIMULADO');
 select pg_temp.ok((select (public.asistente_simular_pedido(jsonb_build_array(jsonb_build_object('fecha', (select dia from as_ta), 'horas', jsonb_build_array(10, 11), 'consultorio', 2)))::jsonb->>'total')::int > 0),
@@ -351,6 +351,70 @@ select pg_temp.ok((select whatsapp = '1177770000' from public.profesionales wher
 set role service_role;
 select pg_temp.ok((select public.asistente_contexto(:otro)::jsonb->'cliente'->>'nombre' = 'Marta Sin Celular'), 'y el asistente ya la reconoce');
 reset role;
+
+-- ---------------------------------------------------------------------
+-- Solicitudes para aprobar: alguien que no reconocemos quiere mover su fijo
+-- ---------------------------------------------------------------------
+insert into public.profesionales (nombre, whatsapp, profesion) values ('Graciela Ruiz', '777', 'Psicóloga') returning id as graciela \gset
+insert into public.fijos (profesional_id, consultorio_id, dia_semana, horas, precio_semanal, estado, desde)
+values (:graciela, 4, 1, array[19, 20]::smallint[], 17000, 'activo', (select lunes + 14 from as_f)) returning id as fijo_g \gset
+select public.ocupar_fijo(:fijo_g, false);
+set role service_role;
+create temp table as_grac as select public.asistente_entrada('5491166661234', 'Gra', 'hola soy graciela', 'texto', null, 'wamid.g1')::jsonb as r;
+select (select (r->>'chat_id')::bigint from as_grac) as chat_g \gset
+select pg_temp.espera_error(format($$select public.asistente_liberar_fijo(%s, %s, %L)$$, :chat_g, :fijo_g, (select lunes + 14 from as_f)), 'SIN_IDENTIFICAR');
+create temp table as_pedido_a as select public.asistente_solicitar(:chat_g, 'mover_fijo', 'sin_identificar', 'Pasar su fijo del lunes al miércoles 19 a 21',
+  jsonb_build_object('fecha_original', (select lunes + 14 from as_f), 'nueva_fecha', (select lunes + 16 from as_f), 'nuevas_horas', jsonb_build_array(19, 20)),
+  'graciela RUIZ')::jsonb as r;
+select (select (r->>'solicitud')::bigint from as_pedido_a) as sol_a \gset
+select pg_temp.ok((select (r->>'lugar_guardado')::boolean from as_pedido_a), 'deja la solicitud y guarda el lugar nuevo');
+reset role;
+select pg_temp.ok((select profesional_id = :graciela from public.asistente_solicitudes where id = :sol_a),
+                  'sugiere la ficha por el nombre y el horario que dijo');
+select pg_temp.ok((select count(*) = 2 from public.ocupaciones o join public.bloqueos b on b.id = o.bloqueo_id where o.fecha = (select lunes + 16 from as_f)
+                   and b.motivo like 'Guardado por el asistente%'), 'el miércoles queda guardado (nadie más lo puede tomar)');
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select pg_temp.ok((select public.asistente_panel_badge() >= 1 and json_array_length(public.asistente_panel_solicitudes()) = 1), 'aparece en Para aprobar');
+create temp table as_apr as select public.asistente_panel_resolver_solicitud(:sol_a, true)::jsonb as r;
+select pg_temp.ok((select r->>'nombre' = 'Graciela Ruiz' and (r->'resultado'->>'movido')::boolean from as_apr), 'aprobar: se hace el cambio');
+reset role;
+select pg_temp.ok((select count(*) = 0 from public.ocupaciones where fijo_id = :fijo_g and fecha = (select lunes + 14 from as_f)), 'el lunes quedó libre');
+select pg_temp.ok((select count(*) = 2 from public.ocupaciones o join public.reservas r on r.id = o.reserva_id where r.profesional_id = :graciela
+                   and o.fecha = (select lunes + 16 from as_f)), 'el miércoles es de ella (ya no es un lugar guardado)');
+select pg_temp.ok((select whatsapp = '1166661234' from public.profesionales where id = :graciela), 'y su WhatsApp quedó en la ficha: la próxima vez la reconoce');
+
+-- Rechazar: se suelta el lugar guardado
+set role service_role;
+create temp table as_pedido_b as select public.asistente_solicitar(:chat_g, 'mover_fijo', 'poca_anticipacion', 'Otro cambio',
+  jsonb_build_object('fecha_original', (select lunes + 21 from as_f), 'nueva_fecha', (select lunes + 23 from as_f), 'nuevas_horas', jsonb_build_array(10)), null)::jsonb as r;
+select (select (r->>'solicitud')::bigint from as_pedido_b) as sol_b \gset
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select public.asistente_panel_resolver_solicitud(:sol_b, false, null, 'Ese día cerramos temprano');
+select pg_temp.espera_error(format($$select public.asistente_panel_resolver_solicitud(%s, true)$$, :sol_b), 'NO_ENCONTRADO');
+reset role;
+select pg_temp.ok((select count(*) = 0 from public.ocupaciones o where o.fecha = (select lunes + 23 from as_f) and o.hora = 10 and o.bloqueo_id is not null),
+                  'rechazar: el lugar guardado vuelve a estar libre');
+
+-- Más tiempo para la seña
+set role service_role;
+create temp table as_ped3 as select public.asistente_crear_pedido(:chat_g, 'Graciela Ruiz', 'Psicóloga', 'gra@x.com',
+  jsonb_build_array(jsonb_build_object('fecha', (select dia from as_ta), 'horas', jsonb_build_array(20))))::jsonb as r;
+select pg_temp.espera_error(format($$select public.asistente_token_pedido_chat(%s, %s)$$, :chat, (select (r->>'pedido')::bigint from as_ped3)), 'NO_ENCONTRADO');
+create temp table as_pedido_c as select public.asistente_solicitar(:chat_g, 'extender_sena', 'pedido', 'Más tiempo',
+  jsonb_build_object('pedido', (select (r->>'pedido')::bigint from as_ped3), 'minutos', 120), null)::jsonb as r;
+select (select (r->>'solicitud')::bigint from as_pedido_c) as sol_c \gset
+reset role;
+select (select (r->>'pedido')::bigint from as_ped3) as ped3 \gset
+select max(expira_en) as antes from public.reservas where pedido_id = :ped3 \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select public.asistente_panel_resolver_solicitud(:sol_c, true);
+reset role;
+select pg_temp.ok((select max(expira_en) >= :'antes'::timestamptz + interval '119 minutes' from public.reservas where pedido_id = :ped3),
+                  'aprobar más tiempo: la seña vence 2 horas más tarde');
 
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

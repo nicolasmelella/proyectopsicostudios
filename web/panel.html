@@ -107,6 +107,8 @@
     .asis-crm select { width: auto; min-height: 36px; padding: .2em .5em; margin-left: 4px; font-size: .9rem; }
     .asis-vincular { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; margin: 8px 0; border: 1px dashed var(--borde); border-radius: var(--radius); font-size: .85rem; font-weight: 600; }
     .asis-vincular input { width: auto; flex: 1 1 200px; min-height: 36px; padding: .2em .6em; }
+    .asis-sol .quien { display: grid; gap: 4px; margin: .6em 0; font-size: .9rem; }
+    .asis-sol .quien input { min-height: 40px; }
     .asis-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
     .asis-check input { width: auto; min-height: 0; }
     .asis-foto { display: block; max-width: 220px; width: 100%; border-radius: 8px; margin: 4px 0; }
@@ -535,6 +537,7 @@
         </div>
         <div class="zoom asis-subs" role="group" aria-label="Secciones del asistente">
           <button class="chip" data-asis="chats" aria-pressed="true">Conversaciones</button>
+          <button class="chip" data-asis="aprobar" aria-pressed="false">Para aprobar <span class="badge oculto" id="badge-aprobar"></span></button>
           <button class="chip" data-asis="probar" aria-pressed="false">Probar</button>
           <button class="chip" data-asis="aprender" aria-pressed="false">Aprendizaje</button>
           <button class="chip" data-asis="resumen" aria-pressed="false">Resumen</button>
@@ -560,6 +563,12 @@
             </div>
             <div id="asis-chat" class="asis-chat"><p class="suave">Elegí una conversación para verla y responder.</p></div>
           </div>
+        </div>
+
+        <div data-asis-vista="aprobar" class="oculto">
+          <p class="como-usar">Cambios que el asistente dejó armados y no puede hacer solo: personas que todavía no reconoce por su WhatsApp, avisos con menos de 24 hs o pedidos de más tiempo para la seña.
+            El lugar nuevo queda <strong>guardado</strong> hasta que decidan. Al aprobar, se hace el cambio y el asistente le avisa por WhatsApp.</p>
+          <div id="asis-solicitudes" style="display:grid;gap:12px;max-width:760px"></div>
         </div>
 
         <div data-asis-vista="probar" class="oculto">

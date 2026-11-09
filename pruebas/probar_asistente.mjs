@@ -152,7 +152,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 20); ok('20 herramientas');
+assert.equal(p.tools.length, 22); ok('22 herramientas');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -435,6 +435,43 @@ guion = [
 ];
 await deWhatsApp('5491199990000', { type: 'text', text: { body: 'Hola, soy fija de los lunes y este no voy' } }, 'Desconocida');
 assert.match(enviados.at(-1).texto, /Por seguridad/); ok('un número que no reconoce no puede mover ni liberar nada');
+
+// =====================================================================
+// 15. Alguien que no reconocemos pide mover su fijo → el equipo aprueba → se le avisa
+// =====================================================================
+const lunesM = pg("select (public.hoy_ar() + 14 + ((1 - extract(isodow from public.hoy_ar() + 14)::int + 7) % 7))::date");
+const mirta = pg("insert into public.profesionales (nombre, whatsapp, profesion) values ('Mirta Gómez', '0', 'Psicóloga') returning id");
+const fijoM = pg(`insert into public.fijos (profesional_id, consultorio_id, dia_semana, horas, precio_semanal, estado, desde)
+  values (${mirta}, 2, 1, array[12, 13]::smallint[], 16700, 'activo', '${lunesM}') returning id`);
+pg(`select public.ocupar_fijo(${fijoM}, false)`);
+const miercoles = pg(`select date '${lunesM}' + 2`);
+const CEL4 = '5491133338888';
+guion = [
+  herramienta('solicitar_cambio', { tipo: 'mover_fijo', motivo: 'sin_identificar', nombre: 'Mirta Gomez', fecha_original: lunesM, nueva_fecha: miercoles,
+    nuevas_horas: [12, 13], resumen: `Pasar su fijo del lunes ${lunesM} 12-14 al miércoles, misma hora` }),
+  (q) => {
+    const r = JSON.parse(q.messages.at(-1).content[0].content);
+    assert.equal(r.lugar_guardado, true);
+    return texto('Te dejé guardado el miércoles de 12 a 14. Como todavía no tengo tu WhatsApp en tu ficha, lo confirma el equipo por acá 🙌');
+  },
+];
+await deWhatsApp(CEL4, { type: 'text', text: { body: 'Hola soy Mirta Gomez, ¿puedo pasar mi lunes al miércoles?' } }, 'Mirta');
+const solId = Number(pg(`select max(id) from public.asistente_solicitudes where tipo = 'mover_fijo' and estado = 'pendiente'`));
+assert.equal(pg(`select profesional_id from public.asistente_solicitudes where id = ${solId}`), mirta);
+ok('número desconocido: deja el cambio armado para aprobar, con la ficha sugerida y el lugar guardado');
+r = await panel({ accion: 'resolver_solicitud', id: solId, aprobar: true });
+const res = await r.json();
+assert.equal(res.ok, true); assert.equal(res.envio, 'enviado');
+assert.equal(enviados.at(-1).para, CEL4); assert.match(enviados.at(-1).texto, /^Hola Mirta! ¡Listo! El equipo confirmó tu cambio: te esperamos el \*miércoles/);
+ok('el equipo aprueba con un toque: se mueve y el asistente le avisa por WhatsApp');
+assert.equal(pg(`select count(*) from public.ocupaciones o join public.reservas x on x.id = o.reserva_id where x.profesional_id = ${mirta} and o.fecha = '${miercoles}'`), '2');
+assert.equal(pg(`select whatsapp from public.profesionales where id = ${mirta}`), '1133338888');
+ok('queda en la agenda y su WhatsApp en la ficha');
+assert.match(pg(`select texto from public.asistente_mensajes m join public.asistente_chats c on c.id = m.chat_id where c.whatsapp = '${CEL4}' and m.rol = 'nota' order by m.id desc limit 1`), /APROBÓ/);
+ok('el asistente se entera de lo que resolvió el equipo');
+assert.match(mod.textoRespuestaSolicitud({ aprobada: false, nombre: 'Ana López', resumen: 'Pasar su martes al jueves', nota: 'ese día cerramos temprano' }),
+  /^Hola Ana! El equipo revisó tu pedido \(pasar su martes al jueves\) y esta vez no se pudo hacer: ese día cerramos temprano/);
+ok('si se rechaza, le avisa con el motivo');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

@@ -171,7 +171,7 @@ export function crearClienteDemo() {
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
   // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
-  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio')) {
+  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio') || !db.asistente_solicitudes) {
     const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
     const saber = [
       ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
@@ -196,6 +196,9 @@ export function crearClienteDemo() {
         ideas_para_el_negocio: ['Ofrecer las mañanas de martes y jueves a quienes piden la tarde (hay mucho lugar).'],
         propuestas: [] }, creado_en: hace(60) }],
       asistente_pedidos: [],
+      asistente_solicitudes: [{ id: nuevoId(), chat_id: 9004, tipo: 'mover_fijo', motivo: 'sin_identificar', estado: 'pendiente',
+        resumen: `Pasar su fijo del martes ${Number(sumarDias(hoy, 8).slice(8))}/${Number(sumarDias(hoy, 8).slice(5, 7))} de 15 a 17 al jueves, misma hora`,
+        nombre_dicho: 'Graciela Ruiz', profesional_id: null, datos: {}, lugar_guardado: true, creado_en: hace(25) }],
       asistente_chats: [
         { id: 9001, whatsapp: '5491133334444', nombre: 'Carla Gómez', profesional_id: null, simulado: false, atender: true, urgente: false,
           motivo_atender: 'Pide factura A para su monotributo', pausa_hasta: null, ultimo_mensaje_en: hace(12), ultimo_cliente_en: hace(12), reservo: true,
@@ -203,6 +206,9 @@ export function crearClienteDemo() {
         { id: 9002, whatsapp: '5491155557777', nombre: 'Martín (WhatsApp)', profesional_id: null, simulado: false, atender: false, urgente: false,
           motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(95), ultimo_cliente_en: hace(96), reservo: false,
           etapa: 'interesado', interes: 'fijo', valor_estimado: 136000, nota_crm: 'Busca fijo martes y jueves a la tarde', prioridad: true, asignado_a: null },
+        { id: 9004, whatsapp: '5491177771234', nombre: 'Graciela (WhatsApp)', profesional_id: null, simulado: false, atender: false, urgente: false,
+          motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(25), ultimo_cliente_en: hace(26), reservo: false,
+          etapa: 'consulta', interes: null, valor_estimado: null, nota_crm: null, prioridad: false, asignado_a: null },
         { id: 9003, whatsapp: '5491166660000', nombre: 'Lucía P.', profesional_id: null, simulado: false, atender: false, urgente: false,
           motivo_atender: null, pausa_hasta: null, ultimo_mensaje_en: hace(400), ultimo_cliente_en: hace(420), reservo: false,
           etapa: 'consulta', interes: 'salon', valor_estimado: null, nota_crm: 'Taller grupal un sábado', prioridad: true, asignado_a: null },
@@ -215,6 +221,8 @@ export function crearClienteDemo() {
         [9002, 'cliente', 'Me interesa fijo martes y jueves de 17 a 19. ¿Cómo son los consultorios?', 94],
         [9002, 'asistente', '', 93, 'img/consultorios/c3-a.jpg', 'Consultorio 3: con sofá, sillones y ventanales'],
         [9002, 'asistente', 'Te mandé fotos del 3, que está libre esos días ☝️ Con horario fijo la tarde sale *$8.500* la hora: unos *$136.000* por mes. ¿Te lo pido?', 93],
+        [9004, 'cliente', 'Hola, soy Graciela Ruiz, tengo fijo los martes de 15 a 17. ¿El martes que viene lo puedo pasar al jueves?', 26],
+        [9004, 'asistente', '¡Hola Graciela! El jueves de 15 a 17 está libre y te lo dejé *guardado*. Como todavía no tengo tu WhatsApp asociado a tu ficha, el cambio lo confirma el equipo: te escriben por acá en un rato. Es por seguridad, y desde ahí ya te voy a reconocer 🙌', 25],
         [9003, 'cliente', 'Hola! ¿Se puede alquilar el Salón un sábado para un taller? Somos unas doce personas, sería a la mañana.', 420, null, null, 'audio'], [9003, 'asistente', '¡Hola Lucía! Sí, el Salón es para grupos y talleres. ¿Qué sábado y en qué horario lo necesitás?', 419],
       ].map(([chat_id, rol, texto, min, url, pie, tipo]) => ({ id: nuevoId(), chat_id, rol, texto: url ? pie : texto, tipo: tipo || (url ? 'imagen' : 'texto'), url,
         envio: rol === 'asistente' ? 'enviado' : null, creado_en: hace(min) })),
@@ -908,7 +916,14 @@ export function crearClienteDemo() {
   const chatDe = (id) => db.asistente_chats.find((c) => c.id === id);
   Object.assign(rpcs, {
     asistente_panel_badge: () => (rpcs.es_equipo() ? db.asistente_chats.filter((c) => c.atender && !c.simulado).length
-      + db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length : 0),
+      + db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length + db.asistente_solicitudes.filter((x) => x.estado === 'pendiente').length : 0),
+    asistente_panel_solicitudes() {
+      soloEquipo();
+      return db.asistente_solicitudes.filter((x) => x.estado === 'pendiente').map((x) => {
+        const c = chatDe(x.chat_id);
+        return { ...x, chat: c?.nombre, whatsapp: c?.whatsapp, identificado: !!c?.profesional_id };
+      });
+    },
     asistente_panel_chats() {
       soloEquipo();
       return db.asistente_chats.map((c) => {
@@ -1057,6 +1072,17 @@ export function crearClienteDemo() {
           if (body.accion === 'simular') {
             await new Promise((r) => setTimeout(r, 700));
             return { data: body.reiniciar ? { ok: true } : { ...respuestaDemo(String(body.texto || '')), uso: {} }, error: null };
+          }
+          if (body.accion === 'resolver_solicitud') {
+            const x = db.asistente_solicitudes.find((y) => y.id === Number(body.id) && y.estado === 'pendiente');
+            if (!x) return { data: null, error: { message: 'NO_ENCONTRADO', context: { json: async () => ({ message: 'NO_ENCONTRADO', hint: 'Ya la resolvió otra persona' }) } } };
+            x.estado = body.aprobar ? 'aprobada' : 'rechazada';
+            const c = chatDe(x.chat_id);
+            if (body.aprobar && body.profesional_id) { const p = db.profesionales.find((y) => y.id === body.profesional_id); if (p) { c.profesional_id = p.id; c.nombre = p.nombre; } }
+            const texto = body.aprobar ? '¡Listo! El equipo confirmó tu cambio: te esperamos el jueves de 15 a 17 hs.' : `El equipo revisó tu pedido y esta vez no se pudo hacer${body.nota ? ': ' + body.nota : '.'}`;
+            db.asistente_mensajes.push({ id: nuevoId(), chat_id: c.id, rol: 'asistente', texto, tipo: 'texto', envio: 'enviado', creado_en: ahoraISO() });
+            guardar();
+            return { data: { ok: true, envio: 'enviado', texto }, error: null };
           }
           if (body.accion === 'responder') {
             const c = chatDe(Number(body.chat_id));
