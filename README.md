@@ -131,6 +131,11 @@ Después volvé a desplegar la función `enviar-avisos`.
 Y `supabase/19_sin_subida_web.sql` → **Run**. **Un solo camino:** la persona transfiere y **envía la reserva por WhatsApp**
 con el comprobante; desde la web no se puede subir nada. El equipo registra el pago en **Pendientes → Alertas de pago → Registrar pago**.
 
+Y `supabase/21_sin_sena_una_hora.sql` → **Run**. **Completar los datos no alcanza:** la reserva por la web aparta
+el horario **1 hora**; si en ese tiempo el equipo no registra la seña, el horario se libera solo y la reserva queda en
+**Pendientes → Alertas de pago** como **"No pagó"** (con *Registrar pago*, que la recupera si el horario sigue libre,
+*Volver a apartar 1 hora* o *Descartar*). Las del panel, las del Excel, los fijos y las que ya tienen algún pago no se liberan nunca.
+
 Opcional: `supabase/20_asistente.sql` → **Run** → *"Asistente de WhatsApp instalado (apagado y en modo prueba)"*.
 Es el **asistente de WhatsApp con IA**; el resto de la puesta en marcha está en [`docs/asistente-whatsapp.md`](docs/asistente-whatsapp.md).
 

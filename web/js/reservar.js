@@ -660,6 +660,7 @@ function pantallaPago(p, nombre = '') {
       <h2 id="titulo-resultado">${esFijo ? 'Tu horario fijo está reservado' : pagado ? (n > 1 ? 'Tus reservas están confirmadas' : 'Tu reserva está confirmada')
         : n > 1 ? 'Tus horarios están reservados' : 'Tu horario está reservado'}</h2>
       <span class="reloj-chip">${ICONO.reloj}<span>${esFijo ? 'Se confirma al pagar el primer mes' : pagado ? `Saldo: hasta el ${esc(fechaLarga(sumarDias(p.reservas[0].fecha, -1)))}`
+        : p.expira_en && new Date(p.expira_en) > new Date() ? `Te lo guardamos <strong id="cuenta">${esc(faltan(p.expira_en))}</strong>: mandá la seña para confirmarlo`
         : `Pagá la seña para confirmar · el saldo, hasta el ${esc(fechaLarga(sumarDias(p.reservas[0].fecha, -1)))}`}</span></span>
       <span class="pago-pedido">Pedido #${esc(p.pedido)}</span>
     </div>
@@ -698,7 +699,8 @@ function pantallaPago(p, nombre = '') {
           <li><span>3</span><div>Mandá la captura de la transferencia <strong>en ese mismo chat</strong>. Te confirmamos por ahí.</div></li>
         </ol>
         <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
-        <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong></p>
+        <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong>${!esFijo && !pagado && p.expira_en
+          ? '<br>El horario queda guardado 1 hora: si en ese tiempo no llega la seña, se libera para otra persona.' : ''}</p>
         ${hayDatos ? `<p class="cuenta-titulo">Datos para transferir <span>(también te llegan en el chat)</span></p><div class="cuenta-datos">
             ${fila('Monto', pesos(monto), String(monto), false)}
             ${configurado(estado.cfg.alias_transferencia) ? fila('Alias', estado.cfg.alias_transferencia, estado.cfg.alias_transferencia, true) : ''}
@@ -733,7 +735,7 @@ function pantallaPago(p, nombre = '') {
 // Lista de los turnos de un pedido (en la pantalla de resultado)
 function listaReservas(reservas, conEstado = false) {
   const etiqueta = { confirmada: '<span class="pill-mini ok">Confirmada</span>', pendiente: '<span class="pill-mini alerta">Sin seña</span>',
-                     vencida: '<span class="pill-mini error">Vencida</span>', cancelada: '<span class="pill-mini error">Cancelada</span>' };
+                     vencida: '<span class="pill-mini error">Vencida (no llegó la seña)</span>', cancelada: '<span class="pill-mini error">Cancelada</span>' };
   return `<ul class="resumen-lista">${reservas.map((x) => `<li><span>${esc(fechaLarga(x.fecha))}<br><small class="suave">${esc(rangos(x.horas))}</small></span>
     <span>${esc(x.consultorio)}${conEstado ? `<br>${etiqueta[x.estado] || ''}` : ''}</span></li>`).join('')}</ul>`;
 }
