@@ -416,5 +416,26 @@ reset role;
 select pg_temp.ok((select max(expira_en) >= :'antes'::timestamptz + interval '119 minutes' from public.reservas where pedido_id = :ped3),
                   'aprobar más tiempo: la seña vence 2 horas más tarde');
 
+-- ---------------------------------------------------------------------
+-- Visitas: el asistente las pide, el equipo elige día y hora y aprueba
+-- ---------------------------------------------------------------------
+set role service_role;
+create temp table as_vis as select public.asistente_solicitar(:chat_g, 'visita', 'pedido', 'Visita para conocer el espacio: jueves a la tarde',
+  jsonb_build_object('preferencia', 'jueves a la tarde'), 'Graciela')::jsonb as r;
+select (select (r->>'solicitud')::bigint from as_vis) as sol_v \gset
+select pg_temp.ok((select not (r->>'lugar_guardado')::boolean from as_vis), 'una visita no bloquea consultorios');
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'a_equipo', false);
+select pg_temp.espera_error(format($$select public.asistente_panel_resolver_solicitud(%s, true)$$, :sol_v), 'FALTA_FECHA');
+create temp table as_vok as select public.asistente_panel_resolver_solicitud(:sol_v, true, null, 'Estamos en Florida 100, 5º B',
+  jsonb_build_object('fecha', public.hoy_ar() + 3, 'hora', '17:30'))::jsonb as r;
+select pg_temp.ok((select r->'resultado'->>'hora' = '17:30' and r->>'tipo' = 'visita' from as_vok), 'aprobar la visita con el día y la hora que eligió el equipo');
+select pg_temp.ok((select json_array_length(public.asistente_panel_visitas()) = 1), 'aparece en Próximas visitas');
+reset role;
+set role service_role;
+select pg_temp.ok((select jsonb_array_length(public.asistente_contexto(:chat_g)::jsonb->'visitas') = 1), 'el asistente sabe que tiene la visita');
+reset role;
+
 \o
 select 'PRUEBAS DEL ASISTENTE PASARON' as resultado;

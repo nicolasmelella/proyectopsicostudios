@@ -13,7 +13,7 @@ const NOMBRES_HERRAMIENTA = {
   ver_horarios_libres: 'miró horarios libres', ver_libres_fijo: 'miró libres para fijo', mis_reservas: 'miró sus reservas',
   reservar_horas: 'reservó', pedir_horario_fijo: 'pidió un fijo', estado_pedido: 'miró el estado del pedido',
   cancelar_pedido_sin_pagar: 'canceló un pedido sin pagar', guardar_comprobante: 'guardó un comprobante', recordar: 'anotó un dato',
-  pasar_al_equipo: 'pasó al equipo', solicitar_cambio: 'dejó un cambio para aprobar', pedir_mas_tiempo: 'pidió más tiempo para la seña', proponer_saber: 'propuso aprender algo', consulta_equipo: 'consultó el panel',
+  pasar_al_equipo: 'pasó al equipo', pedir_visita: 'pidió una visita', solicitar_cambio: 'dejó un cambio para aprobar', pedir_mas_tiempo: 'pidió más tiempo para la seña', proponer_saber: 'propuso aprender algo', consulta_equipo: 'consultó el panel',
   calificar_contacto: 'actualizó la ficha', mandar_fotos: 'mandó fotos',
   mover_turno: 'movió un horario', no_vengo: 'liberó una semana del fijo', recuperar_horas: 'usó horas a favor',
 };
@@ -189,7 +189,7 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
 
   // ================================================================ PARA APROBAR
   const TIPO_SOL = { mover_reserva: 'Mover un turno', mover_fijo: 'Mover una semana del fijo', no_vengo: 'No viene una semana (fijo)',
-    recuperar_horas: 'Recuperar horas a favor', extender_sena: 'Más tiempo para la seña' };
+    recuperar_horas: 'Recuperar horas a favor', extender_sena: 'Más tiempo para la seña', visita: 'Visita para conocer el espacio' };
   const MOTIVO_SOL = { sin_identificar: '<span class="pill pill-alerta">No reconocido por su WhatsApp</span>',
     poca_anticipacion: '<span class="pill pill-alerta">Menos de 24 hs de aviso</span>', pedido: '<span class="pill pill-info">Lo pide la persona</span>' };
   async function pintarSolicitudes() {
@@ -205,22 +205,30 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
         <div style="display:flex;gap:6px;flex-wrap:wrap">${MOTIVO_SOL[x.motivo] || ''}${x.lugar_guardado ? '<span class="pill pill-ok">Lugar guardado</span>' : ''}</div>
         <div class="quien">
           <span>Escribió <strong>${esc(x.chat)}</strong> (+${esc(x.whatsapp)})${x.nombre_dicho ? ` · dice ser <strong>${esc(x.nombre_dicho)}</strong>` : ''}</span>
-          ${x.identificado ? '' : `<label for="sol-prof-${x.id}">¿Quién es? (se vincula su WhatsApp a la ficha)</label>
+          ${x.tipo === 'visita' ? `<span>Le queda cómodo: <strong>${esc(x.datos?.preferencia || '—')}</strong></span>
+            <div class="fila2"><div class="campo" style="margin:0"><label for="sol-fecha-${x.id}">Día</label><input id="sol-fecha-${x.id}" name="vfecha" type="date" value="${esc(x.datos?.fecha || '')}"></div>
+            <div class="campo" style="margin:0"><label for="sol-hora-${x.id}">Hora</label><input id="sol-hora-${x.id}" name="vhora" type="time" step="900" value="${esc(x.datos?.hora || '')}"></div></div>`
+          : x.identificado ? '' : `<label for="sol-prof-${x.id}">¿Quién es? (se vincula su WhatsApp a la ficha)</label>
             <input id="sol-prof-${x.id}" name="prof" list="sol-profs" value="${esc(x.profesional || '')}" placeholder="Elegí la ficha" autocomplete="off">
             ${x.profesional ? '<span class="suave chico">Sugerido por el nombre y el horario que dijo.</span>' : '<span class="suave chico">No encontramos una ficha que coincida: elegila.</span>'}`}
         </div>
-        <label for="sol-nota-${x.id}" class="suave chico">Si lo rechazan, motivo para la persona (opcional)</label>
-        <input id="sol-nota-${x.id}" name="nota" maxlength="200" placeholder="Ej: ese día cerramos temprano">
+        <label for="sol-nota-${x.id}" class="suave chico">${x.tipo === 'visita' ? 'Mensaje para la persona (opcional): ej. la dirección o a quién preguntar' : 'Si lo rechazan, motivo para la persona (opcional)'}</label>
+        <input id="sol-nota-${x.id}" name="nota" maxlength="200" placeholder="${x.tipo === 'visita' ? 'Ej: Estamos en … 1234, 5º piso. Tocá timbre B.' : 'Ej: ese día cerramos temprano'}">
         <div class="acciones"><button class="btn btn-primario btn-chico" value="si">Aprobar</button>
           <button class="btn btn-borde btn-chico" value="no">Rechazar</button>
           <button class="btn btn-borde btn-chico" type="button" data-ver-chat="${x.chat_id}">Ver la charla</button></div>
       </form>`).join('') + `<datalist id="sol-profs">${(st.profesionales || []).map((p) => `<option value="${esc(p.nombre)}">`).join('')}</datalist>`
       : '<p class="suave">No hay nada para aprobar.</p>';
+    pintarVisitas();
     $$('[data-ver-chat]', cont).forEach((b) => (b.onclick = () => { est.chat = Number(b.dataset.verChat); irA('chats'); }));
     $$('[data-sol]', cont).forEach((f) => (f.onsubmit = async (e) => {
       e.preventDefault();
       const aprobar = e.submitter?.value === 'si';
-      let profesional_id = null;
+      let profesional_id = null, datos = null;
+      if (f.vfecha) {
+        if (aprobar && (!f.vfecha.value || !f.vhora.value)) return errorEn(null, 'Elegí el día y la hora de la visita.');
+        datos = { fecha: f.vfecha.value, hora: f.vhora.value };
+      }
       if (f.prof) {
         const p = (st.profesionales || []).find((x) => x.nombre.toLowerCase() === f.prof.value.trim().toLowerCase());
         if (aprobar && !p) return errorEn(null, 'Elegí de la lista la ficha de la persona.');
@@ -228,11 +236,25 @@ export function crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion,
       }
       $$('button', f).forEach((b) => (b.disabled = true));
       try {
-        const r = await invocar({ accion: 'resolver_solicitud', id: Number(f.dataset.sol), aprobar, profesional_id, nota: f.nota.value });
+        const r = await invocar({ accion: 'resolver_solicitud', id: Number(f.dataset.sol), aprobar, profesional_id, nota: f.nota.value, datos });
         toast(aprobar ? (r.envio === 'enviado' ? 'Aprobado: ya se le avisó por WhatsApp' : `Aprobado. ${r.envio}`)
                       : (r.envio === 'enviado' ? 'Rechazado: ya se le avisó' : `Rechazado. ${r.envio}`));
         pintarSolicitudes(); badge();
       } catch (err) { errorEn(null, err); $$('button', f).forEach((b) => (b.disabled = false)); }
+    }));
+  }
+
+  async function pintarVisitas() {
+    const cont = $('#asis-visitas');
+    let lista;
+    try { lista = await llamar('asistente_panel_visitas', {}); } catch { return; }
+    cont.innerHTML = lista.length ? `<table class="tabla"><thead><tr><th>Día</th><th>Hora</th><th>Quién</th><th></th></tr></thead><tbody>${lista.map((v) => `
+      <tr><td>${fechaCorta(v.fecha)}</td><td>${esc(v.hora)}</td><td>${esc(v.nombre || '')} <span class="suave chico">+${esc(v.whatsapp || '')}</span></td>
+      <td><button class="btn btn-borde btn-chico" data-cancelar-visita="${v.id}">Cancelar</button></td></tr>`).join('')}</tbody></table>`
+      : '<p class="suave chico">No hay visitas agendadas.</p>';
+    $$('[data-cancelar-visita]', cont).forEach((b) => (b.onclick = async () => {
+      if (await preguntar({ titulo: '¿Cancelar la visita?', texto: 'Avisale a la persona desde el chat.', aceptar: 'Cancelar visita', peligro: true }) === null) return;
+      try { await llamar('asistente_panel_cancelar_visita', { p_id: Number(b.dataset.cancelarVisita) }, 'Visita cancelada'); pintarVisitas(); } catch (err) { errorEn(null, err); }
     }));
   }
 

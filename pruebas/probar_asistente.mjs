@@ -152,7 +152,7 @@ assert.deepEqual(p.thinking, { type: 'adaptive', block_binding: { prefix_mismatc
 assert.equal(p.fallbacks, 'default'); assert.ok(p.betas.includes('server-side-fallback-2026-07-01')); ok('si el modelo declina, reintenta solo en otro (fallback)');
 assert.equal(p.output_config.effort, 'medium'); ok('esfuerzo desde Ajustes: medium');
 assert.equal(p.system[0].text, mod.INSTRUCCIONES); ok('instrucciones fijas (no cambian entre mensajes)');
-assert.equal(p.tools.length, 22); ok('22 herramientas');
+assert.equal(p.tools.length, 23); ok('23 herramientas');
 const ctx0 = p.messages[0].content[0].text;
 assert.match(ctx0, /\[Contexto/); assert.match(ctx0, /Tu nombre: Sofía/); assert.match(ctx0, /No está registrado/); assert.match(ctx0, /comienzo de la charla/);
 assert.match(ctx0, new RegExp(`${mod.fechaCorta(dia)} = ${dia}`)); ok('contexto: fecha con días de la semana, nombre, cliente nuevo');
@@ -472,6 +472,24 @@ ok('el asistente se entera de lo que resolvió el equipo');
 assert.match(mod.textoRespuestaSolicitud({ aprobada: false, nombre: 'Ana López', resumen: 'Pasar su martes al jueves', nota: 'ese día cerramos temprano' }),
   /^Hola Ana! El equipo revisó tu pedido \(pasar su martes al jueves\) y esta vez no se pudo hacer: ese día cerramos temprano/);
 ok('si se rechaza, le avisa con el motivo');
+
+// =====================================================================
+// 16. Visita: la pide el asistente, el equipo elige día y hora, se le confirma
+// =====================================================================
+const CEL5 = '5491155550101';
+guion = [
+  herramienta('pedir_visita', { nombre: 'Sol', preferencia: 'viernes a la tarde, después de las 17' }),
+  texto('¡Genial! Le paso al equipo que te queda cómodo el viernes después de las 17; te confirman por acá 😊'),
+];
+await deWhatsApp(CEL5, { type: 'text', text: { body: 'Me gustaría conocer el espacio antes de decidir' } }, 'Sol');
+const solV = Number(pg("select max(id) from public.asistente_solicitudes where tipo = 'visita' and estado = 'pendiente'"));
+assert.ok(solV > 0); ok('pide la visita sin confirmar hora (la confirma el equipo)');
+const viernes = pg("select public.hoy_ar() + 4");
+r = await panel({ accion: 'resolver_solicitud', id: solV, aprobar: true, nota: 'Estamos en Florida 100, 5º B.', datos: { fecha: viernes, hora: '17:30' } });
+assert.equal((await r.json()).envio, 'enviado');
+assert.match(enviados.at(-1).texto, /^Hola Sol! Te esperamos el \*.+ a las 17:30\* para que conozcas el espacio 😊 Estamos en Florida 100, 5º B\.$/);
+ok('el equipo elige día y hora: se le confirma por WhatsApp con la dirección');
+assert.match(mod.INSTRUCCIONES, /no vender/); assert.match(mod.INSTRUCCIONES, /sin presión/i); ok('instrucciones: informar sin presionar');
 
 // Utilidades
 assert.equal(mod.rangos([10, 11, 15]), '10 a 12 hs y 15 a 16 hs'); ok('horarios: "10 a 12 hs y 15 a 16 hs"');

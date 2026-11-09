@@ -288,7 +288,13 @@ export const INSTRUCCIONES = `Sos el asistente virtual de Psico Studios: consult
 
 Cada mensaje del cliente llega con un bloque [Contexto] al principio (fecha y hora, tu nombre, quién escribe, qué recordás de esa persona). Usalo, pero no lo menciones ni lo copies.
 
-Tu objetivo: que la persona resuelva lo que necesita en el chat —dudas, disponibilidad, precios, reservar, el estado de su pedido— con trato cálido y profesional, y que el equipo intervenga solo cuando de verdad hace falta.
+Tu objetivo es ayudar e informar, no vender. Que la persona tenga toda la información que necesita —cómo es el espacio, precios, disponibilidad, cómo se reserva— con trato cálido, tranquilo y profesional, y que decida a su ritmo. Si le interesa, podés ofrecerle una visita para conocer los consultorios. Si quiere reservar, la ayudás. Que el equipo intervenga solo cuando de verdad hace falta.
+
+TONO: sin presión
+- Respondé lo que pregunta, completo y claro. No apures, no insistas, no uses urgencia ("quedan pocos lugares", "aprovechá") ni descuentos.
+- No ofrezcas reservar en cada mensaje. Proponelo solo si la persona muestra interés concreto o lo pide; si no, cerrá con algo abierto ("cualquier duda, acá estoy").
+- Si duda, está comparando o quiere ver el lugar, ofrecé la visita.
+- Mostrá horarios cuando los pide o cuando hace falta para responder su pregunta.
 
 CÓMO ESCRIBÍS
 - Español rioplatense, de "vos", amable y concreto. Mensajes cortos, como en WhatsApp: de 1 a 4 párrafos breves.
@@ -313,6 +319,7 @@ REGLAS (no se negocian)
 11. Si la persona está enojada, pide hablar con una persona, o hay algo que no podés resolver: pasá al equipo sin vueltas y avisale.
 12. Audios: llegan transcriptos automáticamente ("[Audio del cliente, transcripto …]"). Respondé al contenido con normalidad, sin comentar que era un audio. La transcripción puede tener errores: si un dato clave (fecha, hora, nombre, mail) suena raro o ambiguo, confirmalo antes de reservar. Si dice que no se pudo transcribir, pedí con amabilidad que lo escriban.
 13. Fotos: si preguntan cómo son los consultorios o el espacio, o están dudando entre consultorios, mandá fotos con mandar_fotos (no más de 2 envíos por charla).
+14. Visitas: si quiere conocer el espacio, preguntale qué día y en qué horario le quedaría cómodo (y su nombre si no lo sabés) y usá pedir_visita. La visita la confirma el equipo: decile que le escriben por acá para confirmar día y hora. No le confirmes vos una hora.
 
 CLIENTES QUE YA ALQUILAN (mover horarios, avisar que no vienen)
 - Usá mis_reservas para ver sus turnos (reserva_id), sus horarios fijos (fijo_id y proximas_fechas) y sus horas a favor.
@@ -324,8 +331,8 @@ CLIENTES QUE YA ALQUILAN (mover horarios, avisar que no vienen)
 - Si el contexto dice que ya tiene solicitudes esperando al equipo, no las dupliques: decile que están en manos del equipo.
 
 SEGUIMIENTO Y OPORTUNIDADES
-- Usá calificar_contacto cuando sepas qué busca la persona: "consulta" si solo pregunta, "interesado" si quiere reservar o pidió algo concreto, "perdido" si dijo que no o eligió otro lugar. Estimá el valor por mes (horas por semana × precio × 4) y marcá prioridad si busca horario fijo, varias horas por semana o el Salón: son las oportunidades más valiosas.
-- Si recibís una [Nota del sistema] de SEGUIMIENTO AUTOMÁTICO, decidí si vale la pena escribirle. Si sí: un solo mensaje breve, cálido y concreto (por ejemplo, que lo que buscaba sigue libre, con el horario), sin presionar. Si no: respondé exactamente NADA.
+- Usá calificar_contacto (es interno, la persona no lo ve) cuando sepas qué busca: "consulta" si solo pregunta, "interesado" si quiere reservar o pidió algo concreto, "perdido" si dijo que no o eligió otro lugar. Estimá el valor por mes (horas por semana × precio × 4) y marcá prioridad si busca horario fijo, varias horas por semana o el Salón: son las oportunidades más valiosas.
+- Si recibís una [Nota del sistema] de SEGUIMIENTO AUTOMÁTICO, decidí si vale la pena escribirle. Si sí: un solo mensaje breve y cordial, sin presión (por ejemplo, si le sirve más información o coordinar una visita). Si no: respondé exactamente NADA.
 
 APRENDIZAJE
 - recordar: anotá datos estables útiles para la próxima: consultorio u horario preferido, días habituales, cómo prefiere pagar, si atiende por obra social, cómo prefiere que le digan. Nunca datos de salud, de pacientes, ni cosas de un solo uso.
@@ -472,6 +479,16 @@ const HERRAMIENTAS = [
       reserva_id: { type: 'integer' }, fijo_id: { type: 'integer' },
       resumen: { type: 'string', description: 'Lo que pide, en una línea, para el equipo. Ej: "Pasar su fijo del martes 17/11 15-17 al jueves 19/11 15-17"' } },
       required: ['tipo', 'motivo', 'resumen'] },
+  },
+  {
+    name: 'pedir_visita',
+    description: 'Pide al equipo una visita para que la persona conozca el espacio. El equipo elige día y hora (según la preferencia) y le confirma por WhatsApp.',
+    input_schema: { type: 'object', properties: {
+      nombre: { type: 'string' },
+      preferencia: { type: 'string', description: 'Qué días y horarios le quedan cómodos, con sus palabras. Ej: "jueves o viernes a la tarde, después de las 17"' },
+      fecha: { type: 'string', description: 'AAAA-MM-DD si dijo un día concreto (opcional)' },
+      hora: { type: 'string', description: 'HH:MM si dijo una hora concreta (opcional)' } },
+      required: ['preferencia'] },
   },
   {
     name: 'pedir_mas_tiempo',
@@ -663,6 +680,15 @@ async function ejecutar(nombre: string, e: any, t: Turno): Promise<unknown> {
         p_resumen: String(e.resumen || ''), p_datos: datos, p_nombre: e.nombre || null });
       return { ...r, nota: 'El equipo la aprueba o rechaza desde el panel y la persona recibe la respuesta por acá. No prometas que se aprueba.' };
     }
+    case 'pedir_visita': {
+      if (chat.simulado) return { simulado: 'SIMULADOR: la visita no se pidió de verdad (en el sistema real queda en Para aprobar).' };
+      const datos: Record<string, unknown> = { preferencia: String(e.preferencia || '').slice(0, 200) };
+      if (e.fecha && FECHA.test(e.fecha)) datos.fecha = e.fecha;
+      if (e.hora && /^\d{1,2}:\d{2}$/.test(e.hora)) datos.hora = e.hora;
+      const r = await rpc('asistente_solicitar', { p_chat_id: chat.chat_id, p_tipo: 'visita', p_motivo: 'pedido',
+        p_resumen: `Visita para conocer el espacio: ${datos.preferencia}`, p_datos: datos, p_nombre: e.nombre || null });
+      return { ...r, nota: 'Lo confirma el equipo por este chat. No le confirmes vos día ni hora.' };
+    }
     case 'pedir_mas_tiempo': {
       if (chat.simulado) return { simulado: 'SIMULADOR: no se pidió de verdad.' };
       await rpc('asistente_token_pedido_chat', { p_chat_id: chat.chat_id, p_pedido: Number(e.pedido) });
@@ -718,6 +744,7 @@ export function textoContexto(ctx: any, cfg: Record<string, string>, ahora = new
     const c = ctx.crm;
     l.push(`Ficha (CRM): etapa ${c.etapa}${c.interes ? `, busca ${c.interes}` : ''}${c.valor_estimado ? `, valor estimado ${pesos(c.valor_estimado)}/mes` : ''}${c.prioridad ? ', PRIORIDAD' : ''}${c.nota ? `. ${c.nota}` : ''}.`);
   }
+  if (ctx.visitas?.length) l.push(`Tiene una visita confirmada: ${ctx.visitas.map((v: any) => `${fechaCorta(String(v.fecha))} a las ${v.hora}`).join(', ')}.`);
   if (ctx.solicitudes?.length) l.push(`Solicitudes esperando al equipo: ${ctx.solicitudes.map((x: any) => `#${x.id} ${x.resumen}`).join(' · ')}.`);
   if (ctx.memoria?.length) l.push(`Lo que recordás de esta persona:\n${ctx.memoria.map((d: string) => `• ${d}`).join('\n')}`);
   if (!ctx.historial?.length) l.push('Es el comienzo de la charla.');
@@ -982,6 +1009,11 @@ async function recordatorios() {
 export function textoRespuestaSolicitud(r: any) {
   const n = primerNombre(r.nombre);
   const hola = n ? `Hola ${n}! ` : '¡Hola! ';
+  if (r.tipo === 'visita') {
+    return r.aprobada
+      ? `${hola}Te esperamos el *${fechaCorta(String(r.resultado.fecha))} a las ${r.resultado.hora}* para que conozcas el espacio 😊${r.nota ? ` ${r.nota}` : ''}`
+      : `${hola}No pudimos coordinar la visita en ese horario${r.nota ? `: ${r.nota}` : '.'} ¿Qué otro día y horario te quedaría cómodo?`;
+  }
   if (!r.aprobada) {
     return `${hola}El equipo revisó tu pedido (${r.resumen.charAt(0).toLowerCase() + r.resumen.slice(1)}) y esta vez no se pudo hacer${r.nota ? `: ${r.nota}` : '.'} Si querés, buscamos otra opción 🙌`;
   }
@@ -1038,7 +1070,8 @@ async function accionPanel(req: Request, cuerpo: any) {
 
   if (cuerpo.accion === 'resolver_solicitud') {
     const r = await rpc('asistente_panel_resolver_solicitud', { p_id: Number(cuerpo.id), p_aprobar: !!cuerpo.aprobar,
-      p_profesional_id: cuerpo.profesional_id ? Number(cuerpo.profesional_id) : null, p_nota: cuerpo.nota || null }, yo.jwt);
+      p_profesional_id: cuerpo.profesional_id ? Number(cuerpo.profesional_id) : null, p_nota: cuerpo.nota || null,
+      p_datos: cuerpo.datos && typeof cuerpo.datos === 'object' ? cuerpo.datos : null }, yo.jwt);
     const texto = textoRespuestaSolicitud(r);
     let envio = 'enviado';
     if (!r.simulado) {

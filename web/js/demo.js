@@ -171,7 +171,7 @@ export function crearClienteDemo() {
     }
   } catch { /* navegador sin almacenamiento: se usa la demo de cero */ }
   // ---- asistente de WhatsApp (20_asistente.sql): datos de ejemplo ----
-  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio') || !db.asistente_solicitudes) {
+  if (!db.asistente_chats || !db.asistente_chats.some((c) => c.etapa) || !db.asistente_mensajes.some((m) => m.tipo === 'audio') || !db.asistente_solicitudes || !db.asistente_visitas) {
     const hace = (min) => new Date(Date.now() - min * 60000).toISOString();
     const saber = [
       ['El espacio', '¿Dónde están?', 'Estamos en pleno Microcentro, Buenos Aires. La dirección exacta se la pasamos al confirmar la reserva.'],
@@ -196,7 +196,11 @@ export function crearClienteDemo() {
         ideas_para_el_negocio: ['Ofrecer las mañanas de martes y jueves a quienes piden la tarde (hay mucho lugar).'],
         propuestas: [] }, creado_en: hace(60) }],
       asistente_pedidos: [],
-      asistente_solicitudes: [{ id: nuevoId(), chat_id: 9004, tipo: 'mover_fijo', motivo: 'sin_identificar', estado: 'pendiente',
+      asistente_visitas: [],
+      asistente_solicitudes: [{ id: nuevoId(), chat_id: 9002, tipo: 'visita', motivo: 'pedido', estado: 'pendiente',
+        resumen: 'Visita para conocer el espacio: jueves o viernes a la tarde, después de las 17', nombre_dicho: 'Martín',
+        datos: { preferencia: 'jueves o viernes a la tarde, después de las 17' }, profesional_id: null, lugar_guardado: false, creado_en: hace(90) },
+        { id: nuevoId(), chat_id: 9004, tipo: 'mover_fijo', motivo: 'sin_identificar', estado: 'pendiente',
         resumen: `Pasar su fijo del martes ${Number(sumarDias(hoy, 8).slice(8))}/${Number(sumarDias(hoy, 8).slice(5, 7))} de 15 a 17 al jueves, misma hora`,
         nombre_dicho: 'Graciela Ruiz', profesional_id: null, datos: {}, lugar_guardado: true, creado_en: hace(25) }],
       asistente_chats: [
@@ -917,6 +921,8 @@ export function crearClienteDemo() {
   Object.assign(rpcs, {
     asistente_panel_badge: () => (rpcs.es_equipo() ? db.asistente_chats.filter((c) => c.atender && !c.simulado).length
       + db.asistente_propuestas.filter((p) => p.estado === 'pendiente').length + db.asistente_solicitudes.filter((x) => x.estado === 'pendiente').length : 0),
+    asistente_panel_visitas() { soloEquipo(); return db.asistente_visitas.filter((v) => v.estado === 'confirmada').sort((a, b) => (a.fecha + a.hora < b.fecha + b.hora ? -1 : 1)); },
+    asistente_panel_cancelar_visita({ p_id }) { soloEquipo(); const v = db.asistente_visitas.find((x) => x.id === p_id); if (v) v.estado = 'cancelada'; },
     asistente_panel_solicitudes() {
       soloEquipo();
       return db.asistente_solicitudes.filter((x) => x.estado === 'pendiente').map((x) => {
@@ -1075,6 +1081,15 @@ export function crearClienteDemo() {
           }
           if (body.accion === 'resolver_solicitud') {
             const x = db.asistente_solicitudes.find((y) => y.id === Number(body.id) && y.estado === 'pendiente');
+            if (x?.tipo === 'visita' && body.aprobar) {
+              if (!body.datos?.fecha || !body.datos?.hora) return { data: null, error: { message: 'FALTA_FECHA', context: { json: async () => ({ message: 'FALTA_FECHA', hint: 'Elegí el día y la hora de la visita' }) } } };
+              db.asistente_visitas.push({ id: nuevoId(), chat_id: x.chat_id, nombre: x.nombre_dicho, whatsapp: chatDe(x.chat_id)?.whatsapp, fecha: body.datos.fecha, hora: body.datos.hora, estado: 'confirmada' });
+              x.estado = 'aprobada';
+              const [, mm, dd] = body.datos.fecha.split('-');
+              const texto = `¡Hola ${x.nombre_dicho}! Te esperamos el ${Number(dd)}/${Number(mm)} a las ${body.datos.hora} para que conozcas el espacio 😊${body.nota ? ' ' + body.nota : ''}`;
+              db.asistente_mensajes.push({ id: nuevoId(), chat_id: x.chat_id, rol: 'asistente', texto, tipo: 'texto', envio: 'enviado', creado_en: ahoraISO() });
+              guardar(); return { data: { ok: true, envio: 'enviado', texto }, error: null };
+            }
             if (!x) return { data: null, error: { message: 'NO_ENCONTRADO', context: { json: async () => ({ message: 'NO_ENCONTRADO', hint: 'Ya la resolvió otra persona' }) } } };
             x.estado = body.aprobar ? 'aprobada' : 'rechazada';
             const c = chatDe(x.chat_id);

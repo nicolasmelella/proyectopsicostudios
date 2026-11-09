@@ -3,6 +3,19 @@
 Un asistente (por defecto se llama **Sofía**) que contesta el WhatsApp de Psico Studios solo, las 24 horas.
 Usa **Claude** (la inteligencia artificial de Anthropic) y está conectado a la misma base que la web y el panel.
 
+## Para qué está (y para qué no)
+
+- **Informa, no vende.** Responde con calma y completo: cómo es el espacio, precios, disponibilidad, cómo se reserva.
+  No apura, no insiste, no usa urgencia ni descuentos. Ofrece reservar solo si la persona muestra interés o lo pide.
+- **Visitas:** si alguien quiere conocer el espacio, le pregunta qué día y horario le queda cómodo y lo deja en
+  *Para aprobar*. Ustedes eligen día y hora y aprueban; el asistente le confirma por WhatsApp (con la dirección, si la escriben).
+- **Disponibilidad y reservas:** muestra horarios libres y reserva cuando se lo piden.
+- **Los que ya alquilan:** los ayuda a reagendar o a encontrar más disponibilidad cuando escriben.
+- **Nunca escribe primero**, salvo dos avisos que se pueden apagar en *Ajustes*: un recordatorio de seña a quien reservó
+  por el asistente y no pagó, y un seguimiento cordial (sin presión) a quien consultó y quedó con algo pendiente.
+- **No hace:** escribir a gente que no le escribió, ofrecer horarios por su cuenta, ni pedir pagos a los fijos.
+  Eso lo maneja el equipo.
+
 ## Qué hace
 
 | Hace solo | Siempre lo pasa al equipo |
@@ -55,6 +68,7 @@ Cuando el pedido no entra en las reglas, el asistente **deja el cambio armado** 
 | Escribe alguien que **no reconoce** por su WhatsApp y dice quién es (“soy Graciela, mi fijo de los jueves…”) | El cambio pedido, con la **ficha sugerida** por el nombre y el horario que dijo (sin contarle a la persona qué figura a su nombre) |
 | Aviso con **menos de 24 hs** | El cambio pedido |
 | “Transfiero más tarde” | Más tiempo para pagar la seña |
+| “Quiero conocer el espacio” | Una visita con los días y horarios que le quedan cómodos (ustedes eligen día y hora al aprobar) |
 
 - El **lugar nuevo queda guardado** mientras deciden (en la agenda se ve como bloqueado “Guardado por el asistente”), así no lo toma otra persona.
 - **Aprobar:** se hace el cambio, el WhatsApp de la persona queda **vinculado a su ficha** (la próxima vez lo hace solo) y el asistente le avisa por WhatsApp.

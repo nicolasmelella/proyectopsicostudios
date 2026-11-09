@@ -175,7 +175,7 @@ create index if not exists horas_a_favor_prof on public.horas_a_favor (profesion
 create table if not exists public.asistente_solicitudes (
   id bigint generated always as identity primary key,
   chat_id bigint not null references public.asistente_chats (id) on delete cascade,
-  tipo text not null check (tipo in ('mover_reserva', 'mover_fijo', 'no_vengo', 'recuperar_horas', 'extender_sena')),
+  tipo text not null,
   motivo text not null check (motivo in ('sin_identificar', 'poca_anticipacion', 'pedido')),
   nombre_dicho text,                          -- cómo dijo llamarse (si no lo reconocimos)
   profesional_id bigint references public.profesionales (id),   -- quién creemos que es
@@ -190,6 +190,25 @@ create table if not exists public.asistente_solicitudes (
   creado_en timestamptz not null default now()
 );
 create index if not exists asistente_solicitudes_pend on public.asistente_solicitudes (estado, id);
+alter table public.asistente_solicitudes drop constraint if exists asistente_solicitudes_tipo_check;
+alter table public.asistente_solicitudes add constraint asistente_solicitudes_tipo_check
+  check (tipo in ('mover_reserva', 'mover_fijo', 'no_vengo', 'recuperar_horas', 'extender_sena', 'visita'));
+
+-- Visitas para conocer el espacio (las coordina y aprueba el equipo)
+create table if not exists public.asistente_visitas (
+  id bigint generated always as identity primary key,
+  chat_id bigint references public.asistente_chats (id) on delete set null,
+  solicitud_id bigint references public.asistente_solicitudes (id) on delete set null,
+  nombre text,
+  whatsapp text,
+  fecha date not null,
+  hora time not null,
+  estado text not null default 'confirmada' check (estado in ('confirmada', 'cancelada')),
+  nota text,
+  creado_por uuid,
+  creado_en timestamptz not null default now()
+);
+create index if not exists asistente_visitas_fecha on public.asistente_visitas (fecha);
 
 -- Cambios que hizo el asistente (mover, liberar, recuperar): quedan registrados para el equipo
 create table if not exists public.asistente_cambios (
@@ -210,7 +229,7 @@ declare t text;
 begin
   foreach t in array array['asistente_numeros', 'asistente_chats', 'asistente_mensajes', 'asistente_memoria',
                            'asistente_conocimiento', 'asistente_propuestas', 'asistente_pedidos', 'asistente_informes',
-                           'horas_a_favor', 'asistente_cambios', 'asistente_solicitudes'] loop
+                           'horas_a_favor', 'asistente_cambios', 'asistente_solicitudes', 'asistente_visitas'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "equipo lee" on public.%I', t);
     execute format('create policy "equipo lee" on public.%I for select to authenticated using (public.es_equipo())', t);
@@ -363,6 +382,8 @@ begin
         'cliente_desde', to_char(pr.creado_en, 'YYYY-MM'),
         'reservas_hechas', (select count(*) from public.reservas r where r.profesional_id = pr.id and r.estado = 'confirmada'),
         'tiene_fijo', exists (select 1 from public.fijos f where f.profesional_id = pr.id and f.estado = 'activo')) end,
+    'visitas', coalesce((select json_agg(json_build_object('fecha', v.fecha, 'hora', to_char(v.hora, 'HH24:MI')) order by v.fecha)
+                         from public.asistente_visitas v where v.chat_id = c.id and v.estado = 'confirmada' and v.fecha >= public.hoy_ar()), '[]'::json),
     'solicitudes', coalesce((select json_agg(json_build_object('id', x.id, 'resumen', x.resumen) order by x.id)
                              from public.asistente_solicitudes x where x.chat_id = c.id and x.estado = 'pendiente'), '[]'::json),
     'memoria', coalesce((select json_agg(m.dato order by m.id) from (
@@ -790,9 +811,9 @@ begin
     from candidatos k where c.id = k.id returning c.id
   ), notas as (
     insert into public.asistente_mensajes (chat_id, rol, texto)
-    select id, 'nota', 'SEGUIMIENTO AUTOMÁTICO: la persona consultó y no volvió a escribir. Si tiene sentido, mandale UN mensaje corto y útil '
-      || '(revisá que lo que buscaba siga libre y proponé algo concreto). Si no corresponde escribirle (ya dijo que no, se resolvió, '
-      || 'o sería insistente), respondé exactamente: NADA'
+    select id, 'nota', 'SEGUIMIENTO AUTOMÁTICO: la persona consultó y no volvió a escribir. Si quedó una duda abierta o algo pendiente, '
+      || 'mandale UN mensaje corto, cordial y sin presión (por ejemplo, si le sirve más información o coordinar una visita). '
+      || 'Nada de urgencia ni ofertas. Si no corresponde escribirle (ya dijo que no, se resolvió, o sería insistente), respondé exactamente: NADA'
     from marcados returning chat_id
   )
   select coalesce(json_agg(chat_id), '[]'::json) into v from notas;
@@ -1295,8 +1316,9 @@ begin
 end $$;
 
 -- Aprobar (se hace el cambio) o rechazar (se libera el lugar guardado)
+drop function if exists public.asistente_panel_resolver_solicitud(bigint, boolean, bigint, text);
 create or replace function public.asistente_panel_resolver_solicitud(
-  p_id bigint, p_aprobar boolean, p_profesional_id bigint default null, p_nota text default null
+  p_id bigint, p_aprobar boolean, p_profesional_id bigint default null, p_nota text default null, p_datos jsonb default null
 ) returns json
 language plpgsql security definer set search_path = public as $$
 declare
@@ -1317,7 +1339,17 @@ begin
   -- el lugar guardado se suelta antes de aplicar el cambio (o porque se rechaza)
   if s.bloqueo_id is not null then delete from public.bloqueos where id = s.bloqueo_id; end if;
 
-  if p_aprobar then
+  if p_aprobar and s.tipo = 'visita' then
+    d := d || coalesce(p_datos, '{}'::jsonb);
+    if nullif(d->>'fecha', '') is null or nullif(d->>'hora', '') is null then
+      raise exception 'FALTA_FECHA' using hint = 'Elegí el día y la hora de la visita';
+    end if;
+    if (d->>'fecha')::date < public.hoy_ar() then raise exception 'FECHA_PASADA' using hint = 'Esa fecha ya pasó'; end if;
+    insert into public.asistente_visitas (chat_id, solicitud_id, nombre, whatsapp, fecha, hora, nota, creado_por)
+    values (c.id, s.id, coalesce(s.nombre_dicho, (select nombre from public.profesionales where id = c.profesional_id), c.nombre_perfil),
+            c.whatsapp, (d->>'fecha')::date, (d->>'hora')::time, nullif(trim(p_nota), ''), auth.uid());
+    v_res := json_build_object('fecha', (d->>'fecha')::date, 'hora', to_char((d->>'hora')::time, 'HH24:MI'));
+  elsif p_aprobar then
     v_prof := coalesce(p_profesional_id, s.profesional_id, c.profesional_id);
     if v_prof is null then raise exception 'FALTA_PERSONA' using hint = 'Elegí de quién es el pedido'; end if;
     if c.profesional_id is distinct from v_prof then perform public.asistente_panel_vincular(c.id, v_prof); end if;
@@ -1356,8 +1388,25 @@ begin
   where id = p_id;
   return json_build_object('tipo', s.tipo, 'aprobada', p_aprobar, 'resultado', v_res, 'resumen', s.resumen, 'nota', nullif(trim(p_nota), ''),
     'chat_id', c.id, 'whatsapp', c.whatsapp, 'simulado', c.simulado,
-    'nombre', (select nombre from public.profesionales where id = coalesce(v_prof, c.profesional_id)),
+    'nombre', coalesce((select nombre from public.profesionales where id = coalesce(v_prof, c.profesional_id)), s.nombre_dicho, c.nombre_perfil),
     'ventana_abierta', c.ultimo_cliente_en > now() - interval '24 hours');
+end $$;
+
+-- Próximas visitas confirmadas
+create or replace function public.asistente_panel_visitas() returns json
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.exigir_equipo();
+  return coalesce((select json_agg(json_build_object('id', v.id, 'chat_id', v.chat_id, 'nombre', v.nombre, 'whatsapp', v.whatsapp,
+      'fecha', v.fecha, 'hora', to_char(v.hora, 'HH24:MI'), 'nota', v.nota) order by v.fecha, v.hora)
+    from public.asistente_visitas v where v.estado = 'confirmada' and v.fecha >= public.hoy_ar()), '[]'::json);
+end $$;
+
+create or replace function public.asistente_panel_cancelar_visita(p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.exigir_equipo();
+  update public.asistente_visitas set estado = 'cancelada' where id = p_id;
 end $$;
 
 -- El simulador del panel empieza una charla nueva
