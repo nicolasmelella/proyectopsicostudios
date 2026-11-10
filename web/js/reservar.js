@@ -494,11 +494,35 @@ const cerrarVentanas = () => {
   try { if (history.state?.ventana) history.replaceState(null, ''); } catch { /* sin historial */ }
 };
 window.addEventListener('popstate', () => { cerrar('#modal-datos'); cerrar('#modal-resultado'); cerrar('#modal-fotos'); clearInterval(reloj); });
-document.querySelectorAll('[data-cerrar]').forEach((b) => (b.onclick = cerrarVentanas));
-['#modal-datos', '#modal-fotos'].forEach((id) => $(id).addEventListener('click', (e) => { if (e.target === $(id)) cerrarVentanas(); }));
+// Minutos que queda guardado el horario (ej. "15 minutos")
+function minutosGuardado(iso) {
+  const m = Math.max(1, Math.ceil((new Date(iso) - new Date()) / 60000));
+  return m >= 60 && m % 60 === 0 ? (m === 60 ? '1 hora' : `${m / 60} horas`) : `${m} minutos`;
+}
+// Antes de cerrar una ventana con algo a medio hacer: "¿Seguro que querés cancelar?"
+function preguntarAntesDeCerrar(modal, texto, opciones) {
+  const caja = modal.querySelector('.modal') || modal.firstElementChild;
+  caja.querySelector('.confirmar-cierre')?.remove();
+  const d = document.createElement('div');
+  d.className = 'confirmar-cierre';
+  d.setAttribute('role', 'alertdialog');
+  d.setAttribute('aria-label', 'Confirmar');
+  d.innerHTML = `<p>${texto}</p><div class="cancelar-botones">${opciones.map(([t, clase], i) =>
+    `<button type="button" class="btn ${clase} btn-chico" data-op="${i}">${t}</button>`).join('')}</div>`;
+  caja.prepend(d);
+  caja.scrollTop = 0;
+  d.querySelectorAll('[data-op]').forEach((b) => (b.onclick = () => { d.remove(); opciones[b.dataset.op][2]?.(); }));
+  d.querySelector('[data-op="0"]').focus();
+}
+const cerrarDatos = () => preguntarAntesDeCerrar($('#modal-datos'), '¿Seguro que querés cancelar? Todavía no reservaste nada.',
+  [['No, seguir', 'btn-primario', null], ['Sí, cancelar', 'btn-peligro-lleno', cerrarVentanas]]);
+document.querySelectorAll('[data-cerrar]').forEach((b) => (b.onclick = b.closest('#modal-datos') ? cerrarDatos : cerrarVentanas));
+$('#modal-datos').addEventListener('click', (e) => { if (e.target === $('#modal-datos')) cerrarDatos(); });
+$('#modal-fotos').addEventListener('click', (e) => { if (e.target === $('#modal-fotos')) cerrarVentanas(); });
 document.addEventListener('keydown', (e) => {
   const fotos = !$('#modal-fotos').classList.contains('oculto');
-  if (e.key === 'Escape' && (fotos || !$('#modal-datos').classList.contains('oculto'))) cerrarVentanas();
+  if (e.key === 'Escape' && fotos) cerrarVentanas();
+  else if (e.key === 'Escape' && !$('#modal-datos').classList.contains('oculto')) cerrarDatos();
   if (fotos && e.key === 'ArrowLeft') $('#fotos-ant').click();
   if (fotos && e.key === 'ArrowRight') $('#fotos-sig').click();
 });
@@ -700,7 +724,7 @@ function pantallaPago(p, nombre = '') {
         </ol>
         <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
         <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong>${!esFijo && !pagado && p.expira_en
-          ? '<br>El horario queda guardado 1 hora: si en ese tiempo no llega la seña, se libera para otra persona.' : ''}</p>
+          ? `<br>El horario queda guardado ${minutosGuardado(p.expira_en)}: si en ese tiempo no llega la seña, se libera para otra persona.` : ''}</p>
         ${hayDatos ? `<p class="cuenta-titulo">Datos para transferir <span>(también te llegan en el chat)</span></p><div class="cuenta-datos">
             ${fila('Monto', pesos(monto), String(monto), false)}
             ${configurado(estado.cfg.alias_transferencia) ? fila('Alias', estado.cfg.alias_transferencia, estado.cfg.alias_transferencia, true) : ''}
@@ -726,7 +750,11 @@ function pantallaPago(p, nombre = '') {
   abrir('#modal-resultado');
   conectarCancelar(p.pedido, p.token);
   const volver = async () => { clearInterval(reloj); cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
-  $('#cerrar-resultado').onclick = volver;
+  $('#cerrar-resultado').onclick = pagado || !p.expira_en ? volver : () => preguntarAntesDeCerrar($('#modal-resultado'),
+    `¿Seguro que querés salir? Tu horario queda guardado ${minutosGuardado(p.expira_en)}: si no llega la seña, se libera para otra persona.`,
+    [['Seguir con el pago', 'btn-primario', null],
+     ['Cancelar la reserva', 'btn-peligro-lleno', () => { $('#cancelar-paso1')?.click(); $('#cancelar-pedido')?.scrollIntoView({ block: 'center' }); }],
+     ['Salir igual', 'btn-borde', volver]]);
   $('#nueva-reserva').onclick = volver;
   clearInterval(reloj);
   if (p.expira_en) reloj = setInterval(() => { const el = $('#cuenta'); if (el) el.textContent = faltan(p.expira_en); }, 15000);

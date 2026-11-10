@@ -15,7 +15,7 @@ export function crearClienteDemo() {
 
   const db = {
     config: [
-      ['hora_apertura', '8'], ['hora_cierre', '21'], ['retencion_suelta_minutos', '120'],
+      ['hora_apertura', '8'], ['hora_cierre', '21'], ['retencion_suelta_minutos', '15'],
       ['retencion_fijo_horas', '48'], ['semanas_fijo', '12'], ['dias_reserva_maximo', '60'],
       ['hora_fin_manana', '13'], ['porcentaje_sena', '50'], ['max_pendientes_por_whatsapp', '2'],
       ['max_horas_por_reserva', '6'], ['alias_transferencia', 'psicostudios.demo'], ['cvu_transferencia', '0000000000000000000000'],
