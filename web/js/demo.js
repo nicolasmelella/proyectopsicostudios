@@ -23,7 +23,7 @@ export function crearClienteDemo() {
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
       ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
       ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'no'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
-      ['asistente_seguimiento', 'no'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'], ['asistente_toma_reservas', 'no'], ['asistente_modelo', 'intermedio'],
+      ['asistente_seguimiento', 'no'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'], ['asistente_toma_reservas', 'no'], ['asistente_modelo', 'intermedio'], ['minutos_aviso_transferencia', '60'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -683,6 +683,30 @@ export function crearClienteDemo() {
       if (fechasFijo(f).some((d) => !libre(p_consultorio, d, p_horas))) return err('SIN_LUGAR', 'Alguna semana ya está ocupada en ese horario');
       db.fijos.push(f); ocuparFijo(f); return f.id;
     },
+    avisar_transferencia({ p_pedido_id }) {
+      const hasta = ahoraISO(Number(cfg('minutos_aviso_transferencia')) || 60);
+      for (const r of db.reservas) if (r.pedido_id === p_pedido_id && r.estado === 'pendiente' && r.expira_en) r.expira_en = hasta;
+      for (const f of db.fijos) if (f.pedido_id === p_pedido_id && f.estado === 'solicitud' && f.expira_en) f.expira_en = hasta;
+      return { ya_avisado: false, hasta };
+    },
+    panel_cuenta_fijo({ p_fijo_id, p_periodo }) {
+      const f = db.fijos.find((x) => x.id === p_fijo_id);
+      let semanas = 0;
+      for (let d = p_periodo + '-01'; d.slice(0, 7) === p_periodo; d = sumarDias(d, 1)) {
+        if (d < f.desde || (f.hasta && d > f.hasta) || diaSemana(d) !== f.dia_semana) continue;
+        if (db.fijo_excepciones.some((e) => e.fijo_id === f.id && e.fecha === d)) continue;
+        semanas++;
+      }
+      const pagado = db.pagos.filter((x) => x.fijo_id === f.id && x.periodo === p_periodo && !x.anulado).reduce((s, x) => s + x.monto, 0);
+      return { semanas, debe: f.precio_semanal * semanas, pagado, falta: Math.max(0, f.precio_semanal * semanas - pagado) };
+    },
+    fijos_del_mes({ p_periodo }) {
+      return db.fijos.filter((f) => f.estado === 'activo').map((f) => ({ fijo_id: f.id, ...rpcs.panel_cuenta_fijo({ p_fijo_id: f.id, p_periodo }) }));
+    },
+    recuperar_fijo({ p_fijo_id }) {
+      const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'solicitud'; f.expira_en = ahoraISO(60); ocuparFijo(f);
+    },
+    descartar_no_pago_fijo({ p_fijo_id }) { const f = db.fijos.find((x) => x.id === p_fijo_id); f.no_pago_visto = true; },
     aprobar_fijo({ p_fijo_id }) { const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'activo'; f.expira_en = null; },
     rechazar_fijo({ p_fijo_id }) {
       const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'rechazado';
