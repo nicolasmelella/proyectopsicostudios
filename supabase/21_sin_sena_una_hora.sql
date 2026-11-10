@@ -1,8 +1,9 @@
 -- =====================================================================
 -- PSICOSTUDIOS · 21_sin_sena_una_hora.sql
 -- Completar los datos NO alcanza para quedarse con el horario:
---   · La reserva por la web aparta el horario 1 HORA para mandar la seña.
---   · Si en esa hora el equipo no registra la seña, el horario se LIBERA
+--   · La reserva por la web aparta el horario 15 MINUTOS para mandar la seña
+--     (se cambia en el panel: Ajustes → Minutos para pagar).
+--   · Si en ese tiempo el equipo no registra la seña, el horario se LIBERA
 --     solo y la reserva queda en el panel marcada como "NO PAGÓ".
 --   · Desde el panel se puede recuperar (si el horario sigue libre),
 --     registrar el pago (la recupera sola) o descartar el aviso.
@@ -14,7 +15,7 @@
 -- Requiere 01 a 19. Se puede correr más de una vez.
 -- =====================================================================
 
-update public.config set valor = '60', descripcion = 'Minutos que queda apartado un horario pedido por la web esperando la seña (después se libera solo)'
+update public.config set valor = '15', descripcion = 'Minutos que queda apartado un horario pedido por la web esperando la seña (después se libera solo)'
 where clave = 'retencion_suelta_minutos';
 
 alter table public.reservas add column if not exists no_pago_visto boolean not null default false;
@@ -316,7 +317,7 @@ do $$ begin
   end if;
 end $$;
 
--- 7) Las que ya estaban esperando la seña: tienen una hora desde ahora (no se libera nada de golpe)
+-- 7) Las que ya estaban esperando la seña: tienen ese tiempo desde ahora (no se libera nada de golpe)
 update public.reservas set expira_en = now() + make_interval(mins => public.cfg('retencion_suelta_minutos'))
 where estado = 'pendiente' and origen <> 'excel' and expira_en is not null and public.monto_pagado_reserva(id) = 0;
 

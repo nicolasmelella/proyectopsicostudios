@@ -8,7 +8,7 @@
 -- Nada se cancela solo
 set role anon;
 create temp table al_p as select public.crear_pedido('Alba Alerta', '1188223344', 'Psicóloga', 'alba@prueba.com',
-  (select jsonb_build_array(jsonb_build_object('fecha', public.hoy_ar() + 12, 'horas', jsonb_build_array(19), 'consultorio', 3)))) as j;
+  (select jsonb_build_array(jsonb_build_object('fecha', (public.hoy_ar() + 12 + (extract(isodow from public.hoy_ar() + 12) = 7)::int), 'horas', jsonb_build_array(19), 'consultorio', 3)))) as j;
 grant select on al_p to service_role, authenticated;
 reset role;
 update public.reservas set expira_en = now() - interval '5 hours' where pedido_id = (select (j->>'pedido')::bigint from al_p);

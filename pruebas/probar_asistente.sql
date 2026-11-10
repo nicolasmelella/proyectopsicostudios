@@ -294,7 +294,7 @@ update public.config set valor = 'si' where clave = 'asistente_solo_prueba';
 -- ---------------------------------------------------------------------
 -- Quien ya alquila: mover, avisar que no viene, horas a favor, vincular
 -- ---------------------------------------------------------------------
-create temp table as_f as select (public.hoy_ar() + 42 + ((1 - extract(isodow from public.hoy_ar() + 42)::int + 7) % 7))::date as lunes;
+create temp table as_f as select (public.hoy_ar() + 30 + ((1 - extract(isodow from public.hoy_ar() + 30)::int + 7) % 7))::date as lunes;
 grant select on as_f to service_role;
 select (select id from public.profesionales where right(whatsapp, 10) = '1155556666') as laura \gset
 insert into public.fijos (profesional_id, consultorio_id, dia_semana, horas, precio_semanal, estado, desde)

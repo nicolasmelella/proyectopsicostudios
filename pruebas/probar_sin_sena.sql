@@ -13,7 +13,7 @@ create or replace function pg_temp.pedido(p_nombre text, p_wa text, n integer, h
 grant execute on function pg_temp.dia(integer), pg_temp.pedido(text, text, integer, integer, integer) to anon, authenticated;
 create or replace function pg_temp.res(p bigint) returns public.reservas language sql as $$ select * from public.reservas where pedido_id = p $$;
 
-select pg_temp.ok(public.cfg('retencion_suelta_minutos') = 60, 'el horario queda apartado 60 minutos');
+select pg_temp.ok(public.cfg('retencion_suelta_minutos') = 15, 'el horario queda apartado 15 minutos');
 
 set role anon;
 select pg_temp.pedido('Nora Nopago', '1179990001', 40, 13, 4) as p_a \gset
@@ -22,11 +22,11 @@ select pg_temp.pedido('Rita Recupera', '1179990003', 40, 16, 4) as p_c \gset
 select pg_temp.pedido('Ocho Ocupado', '1179990004', 40, 17, 4) as p_d \gset
 select pg_temp.pedido('Pedro Pedido', '1179990005', 40, 18, 4) as p_e \gset
 reset role;
-select pg_temp.ok((select expira_en between now() + interval '59 minutes' and now() + interval '61 minutes' from pg_temp.res(:p_a)),
-                  'al reservar por la web se aparta 1 hora');
+select pg_temp.ok((select expira_en between now() + interval '14 minutes' and now() + interval '16 minutes' from pg_temp.res(:p_a)),
+                  'al reservar por la web se aparta 15 minutos');
 
--- Dentro de la hora no se libera nada
-select pg_temp.ok(public.liberar_vencidas() = 0, 'dentro de la hora no se libera nada');
+-- Dentro del plazo no se libera nada
+select pg_temp.ok(public.liberar_vencidas() = 0, 'dentro del plazo no se libera nada');
 
 -- Pasa la hora
 update public.reservas set expira_en = now() - interval '1 minute' where pedido_id in (:p_a, :p_b, :p_c, :p_d, :p_e);
