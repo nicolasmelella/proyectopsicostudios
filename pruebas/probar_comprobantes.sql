@@ -29,7 +29,10 @@ select pg_temp.espera_error($$insert into storage.objects (bucket_id, name) sele
 select pg_temp.espera_error($$insert into storage.objects (bucket_id, name) select 'comprobantes', extension_mala from rutas$$, 'row-level security');
 select pg_temp.espera_error($$insert into storage.objects (bucket_id, name) select 'otro', buena from rutas$$, 'row-level security');
 select pg_temp.ok((select count(*) = 0 from storage.objects), 'nadie de afuera puede ver los comprobantes');
-select pg_temp.espera_error($$update storage.objects set name = 'x'$$, 'permission denied');
+update storage.objects set name = 'x';   -- sin regla que lo permita, no cambia nada (no da error)
+reset role;
+select pg_temp.ok(not exists (select 1 from storage.objects where name = 'x'), 'nadie de afuera puede cambiar los comprobantes');
+set role anon;
 
 -- Registrar el comprobante: guarda los horarios unas horas más
 select pg_temp.espera_error((select format('select public.registrar_comprobante(%s, %L, %L)', j->>'pedido', gen_random_uuid(), (select buena from rutas)) from pc), 'NO_ENCONTRADO');

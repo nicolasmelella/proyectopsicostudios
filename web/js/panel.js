@@ -4,6 +4,7 @@ import {
   faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, DIAS_CORTOS, preguntar,
 } from './comun.js';
 import { crearAsistente } from './asistente.js';
+import { crearInicio } from './inicio.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -21,6 +22,7 @@ const lunesDe = (f) => (diaSemana(f) === 7 ? sumarDias(f, 1) : sumarDias(f, 1 - 
 
 // Pestaña "Asistente" (asistente.js). Se crea al final, cuando ya están todas las funciones.
 let asistente = { pintar() {}, badge() {} };
+let inicio = { pintar() {} };
 
 const st = {
   fecha: hoyAR(),
@@ -31,7 +33,7 @@ const st = {
   equipo: [],
   precios: [],
   yo: null,
-  tab: 'semana',
+  tab: 'inicio',
 };
 
 // ================================================================ utilidades
@@ -291,7 +293,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
+  ({ inicio: () => inicio.pintar(), equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -1109,16 +1111,6 @@ function detalleBloqueo(f) {
   };
 }
 
-// Fechas en que cae un fijo dentro de un mes 'AAAA-MM'
-function vecesEnMes(fijo, periodo) {
-  let d = periodo + '-01', n = 0;
-  while (d.startsWith(periodo)) {
-    if (diaSemana(d) === fijo.dia_semana && d >= fijo.desde && (!fijo.hasta || d <= fijo.hasta)) n++;
-    d = sumarDias(d, 1);
-  }
-  return n;
-}
-
 async function detalleFijo(id, fecha, liberado) {
   const [{ data: fs, error }, { data: pagos }] = await Promise.all([
     sb.from('fijos').select('*, profesionales(nombre, whatsapp), consultorios(nombre)').eq('id', id),
@@ -1127,10 +1119,11 @@ async function detalleFijo(id, fecha, liberado) {
   if (error || !fs?.length) return errorEn(null, error || 'No se encontró el fijo');
   const f = fs[0];
   const periodo = (fecha || hoyAR()).slice(0, 7);
-  const veces = vecesEnMes(f, periodo);
-  const pagosMes = (pagos || []).filter((p) => p.periodo === periodo && !p.anulado);
-  const pagadoMes = pagosMes.reduce((s, p) => s + p.monto, 0);
-  const sugerido = Math.max(0, f.precio_semanal * veces - pagadoMes);
+  const { data: cuenta } = await sb.rpc('panel_cuenta_fijo', { p_fijo_id: f.id, p_periodo: periodo });
+  const veces = cuenta?.semanas ?? 0;
+  const pagadoMes = cuenta?.pagado ?? 0;
+  const debeMes = cuenta?.debe ?? 0;
+  const sugerido = Math.max(0, debeMes - pagadoMes);
   const esSolicitud = f.estado === 'solicitud';
 
   abrirModal(`
@@ -1144,7 +1137,8 @@ async function detalleFijo(id, fecha, liberado) {
       <li><span>Precio semanal</span><span>${pesos(f.precio_semanal)}</span></li>
 
       ${esSolicitud && f.pago_inicial ? `<li><span>Primer mes a pagar</span><span>${pesos(f.pago_inicial)} (al pagarlo se activa solo)</span></li>` : ''}
-      ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(f.precio_semanal * veces)} (${veces} semanas)</span></li>` : ''}
+      ${!esSolicitud ? `<li><span>Pagado ${periodo}</span><span>${pesos(pagadoMes)} de ${pesos(debeMes)} (${veces} ${veces === 1 ? 'semana' : 'semanas'})</span></li>` : ''}
+      ${f.hasta ? `<li><span>Viene hasta</span><span>${esc(fechaLarga(f.hasta))}</span></li>` : ''}
     </ul>
     ${bloqueComentario(f.comentario, 'Vale para todas las semanas de este fijo.')}
     <div id="compartir"></div>
@@ -1155,7 +1149,7 @@ async function detalleFijo(id, fecha, liberado) {
         <h3>Registrar pago del mes</h3>
         <div class="fila2">
           <div class="campo"><label for="pf-periodo">Mes</label><input id="pf-periodo" type="month" value="${periodo}" required></div>
-          <div class="campo"><label for="pf-monto">Monto</label><input id="pf-monto" type="number" min="1" value="${sugerido || f.precio_semanal * veces}" required></div>
+          <div class="campo"><label for="pf-monto">Monto</label><input id="pf-monto" type="number" min="1" value="${sugerido || ''}" required></div>
         </div>
         <div class="campo"><label for="pf-medio">Medio</label><select id="pf-medio">${medioOpts('transferencia')}</select></div>
         ${campoRecibio('pf-recibio')}
@@ -1440,7 +1434,7 @@ async function pintarComprobantes() {
 }
 
 // Alertas de pago: lo que falta cobrar y ya está en plazo o vencido. Nunca se cancela nada solo.
-const GRAVEDAD = { no_pago: ['pill-nopago', 'No pagó'], vencida: ['pill-error', 'Vencido'], hoy: ['pill-alerta', 'Vence hoy'], pendiente: ['pill-info', 'Pendiente'] };
+const GRAVEDAD = { transferencia: ['pill-transf', 'Avisó que transfirió'], no_pago: ['pill-nopago', 'No pagó'], vencida: ['pill-error', 'Vencido'], hoy: ['pill-alerta', 'Vence hoy'], pendiente: ['pill-info', 'Pendiente'] };
 const MOTIVO_NO_PAGO = 'No pagó la seña a tiempo';
 const horaAr = (iso) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
 function textoAlertaWa(x) {
@@ -1458,13 +1452,13 @@ function pintarAlertas(cont, lista) {
   const tieneWa = (w) => /^\d{8,}$/.test(String(w || ''));
   cont.innerHTML = lista.map((x, i) => {
     const [clase, etiqueta] = GRAVEDAD[x.gravedad] || GRAVEDAD.pendiente;
-    const esFijo = x.tipo.startsWith('fijo');
+    const esFijo = x.tipo.startsWith('fijo') || (x.tipo === 'no_pago' && !!x.fijo_id);
     const que = esFijo ? `Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${rangos(x.horas)} · ${x.consultorio}`
       : `${fechaLarga(x.fecha_turno)} · ${rangos(x.horas)} · ${x.consultorio}`;
     if (x.tipo === 'no_pago') return `<div class="item alerta-pago alerta-no_pago">
       <div class="alerta-cab"><span class="pill ${clase}">${etiqueta}</span><strong>Se liberó el horario${x.liberada_en ? ` a las ${horaAr(x.liberada_en)}` : ''}</strong></div>
       <h3>${esc(x.nombre)}</h3>
-      <div class="suave chico">${esc(que)} · seña ${pesos(x.falta)}</div>
+      <div class="suave chico">${esc(que)} · ${esFijo ? 'primer mes' : 'seña'} ${pesos(x.falta)}</div>
       <div class="chico" style="margin-top:.3em">${x.libre ? 'El horario <strong>sigue libre</strong>: si paga, se recupera.' : 'El horario <strong>ya lo tomó otra persona</strong>.'}</div>
       <div class="acciones">
         ${x.libre ? `<button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
@@ -1477,7 +1471,9 @@ function pintarAlertas(cont, lista) {
       <div class="alerta-cab"><span class="pill ${clase}">${etiqueta}</span><strong>${esc(x.texto)}: ${pesos(x.falta)}</strong></div>
       <h3>${esc(x.nombre)}</h3>
       <div class="suave chico">${esc(que)}</div>
-      <div class="chico" style="margin-top:.3em">${x.tipo === 'sena' && x.expira_en ? `Apartado hasta las <strong>${horaAr(x.expira_en)}</strong>: si no se registra la seña, se libera solo`
+      ${x.aviso_transferencia_en ? `<div class="aviso aviso-ok chico" style="margin:.4em 0 0">💸 Avisó que transfirió a las <strong>${horaAr(x.aviso_transferencia_en)}</strong>.
+        Revisá la cuenta y, si llegó, registrá el pago para confirmar.</div>` : ''}
+      <div class="chico" style="margin-top:.3em">${(x.tipo === 'sena' || x.tipo === 'fijo_inicial') && x.expira_en ? `Apartado hasta las <strong>${horaAr(x.expira_en)}</strong>: si no se registra el pago, se libera solo`
         : `Plazo: hasta el ${esc(fechaLarga(x.fecha_limite))}`}${x.tipo === 'sena' && x.total > x.falta ? ` · total ${pesos(x.total)}` : ''}</div>
       <div class="acciones">
         <button class="btn btn-acento btn-chico" data-cobrar="${i}">Registrar pago</button>
@@ -1492,12 +1488,22 @@ function pintarAlertas(cont, lista) {
   $$('[data-recordar]', cont).forEach((b) => (b.onclick = () => recordarConAsistente(lista[b.dataset.recordar])));
   $$('[data-apartar]', cont).forEach((b) => (b.onclick = async () => {
     b.disabled = true;
-    try { await llamar('recuperar_reserva', { p_reserva_id: lista[b.dataset.apartar].reserva_id, p_minutos: 60 }, 'Apartado otra hora'); refrescar(); }
+    const x = lista[b.dataset.apartar];
+    try {
+      if (x.reserva_id) await llamar('recuperar_reserva', { p_reserva_id: x.reserva_id, p_minutos: 60 }, 'Apartado otra hora');
+      else await llamar('recuperar_fijo', { p_fijo_id: x.fijo_id, p_minutos: 60 }, 'Apartado otra hora');
+      refrescar();
+    }
     catch (err) { b.disabled = false; errorEn(null, err); }
   }));
   $$('[data-descartar]', cont).forEach((b) => (b.onclick = async () => {
     b.disabled = true;
-    try { await llamar('descartar_no_pago', { p_reserva_id: lista[b.dataset.descartar].reserva_id }, 'Descartado'); refrescar(); }
+    const x = lista[b.dataset.descartar];
+    try {
+      if (x.reserva_id) await llamar('descartar_no_pago', { p_reserva_id: x.reserva_id }, 'Descartado');
+      else await llamar('descartar_no_pago_fijo', { p_fijo_id: x.fijo_id }, 'Descartado');
+      refrescar();
+    }
     catch (err) { b.disabled = false; errorEn(null, err); }
   }));
   $$('[data-alerta]', cont).forEach((b) => (b.onclick = () => {
@@ -1530,11 +1536,11 @@ function recordarConAsistente(x) {
 
 // Registrar el pago de una alerta (ej: el comprobante llegó por WhatsApp)
 function cobrarAlerta(x) {
-  const esFijo = x.tipo.startsWith('fijo');
+  const esFijo = x.tipo.startsWith('fijo') || (x.tipo === 'no_pago' && !!x.fijo_id);
   const que = esFijo ? `Todos los ${DIAS[x.dia_semana].toLowerCase()} · ${rangos(x.horas)} · ${x.consultorio}`
     : `${fechaLarga(x.fecha_turno)} · ${rangos(x.horas)} · ${x.consultorio}`;
   const opciones = x.tipo === 'sena' && x.total > x.falta ? [['La seña', x.falta], ['Todo', x.total]]
-    : [[{ sena: 'La seña', saldo: 'El saldo', fijo_inicial: 'El primer mes', fijo_mes: `El mes ${x.periodo || ''}` }[x.tipo], x.falta]];
+    : [[{ sena: 'La seña', saldo: 'El saldo', fijo_inicial: 'El primer mes', fijo_mes: `El mes ${x.periodo || ''}`, no_pago: esFijo ? 'El primer mes' : 'La seña' }[x.tipo], x.falta]];
   abrirModal(`<h2 id="modal-titulo">Registrar pago</h2>
     <p style="margin:0"><strong>${esc(x.nombre)}</strong></p>
     <p class="suave chico" style="margin-top:.2em">${esc(que)}</p>
@@ -1561,7 +1567,7 @@ function cobrarAlerta(x) {
       let pagoId = null;
       if (x.reserva_id) {
         pagoId = await llamar('registrar_pago', { p_monto: monto, p_medio: medio, p_reserva_id: x.reserva_id }, 'Pago registrado');
-      } else if (x.tipo === 'fijo_inicial' && x.pedido_id) {
+      } else if ((x.tipo === 'fijo_inicial' || (x.tipo === 'no_pago' && x.fijo_id)) && x.pedido_id) {
         await llamar('registrar_pago_pedido', { p_pedido_id: x.pedido_id, p_monto: monto, p_medio: medio }, 'Pago registrado: fijo activo');
         const { data } = await sb.from('pagos').select('id').eq('fijo_id', x.fijo_id).order('id', { ascending: false }).limit(1);
         pagoId = data?.[0]?.id || null;
@@ -1607,20 +1613,19 @@ async function pintarFijos() {
   cont.innerHTML = '<div class="cargando">Cargando…</div>';
   const periodo = hoyAR().slice(0, 7);
   $('#fijos-mes').textContent = 'Pagos de ' + periodo;
-  const [f, p] = await Promise.all([
+  const [f, c] = await Promise.all([
     sb.from('fijos').select('*, profesionales(nombre, whatsapp), consultorios(nombre)').eq('estado', 'activo').order('dia_semana'),
-    sb.from('pagos').select('fijo_id, monto, anulado, periodo').eq('periodo', periodo),
+    sb.rpc('fijos_del_mes', { p_periodo: periodo }),
   ]);
-  if (f.error) return errorEn(null, f.error);
+  if (f.error || c.error) return errorEn(null, f.error || c.error);
   if (!f.data.length) { cont.innerHTML = '<p class="suave">Todavía no hay horarios fijos.</p>'; return; }
-  const pagadoDe = (id) => (p.data || []).filter((x) => x.fijo_id === id && !x.anulado).reduce((s, x) => s + x.monto, 0);
+  const cuentaDe = (id) => (c.data || []).find((x) => x.fijo_id === id) || { debe: 0, pagado: 0 };
   cont.innerHTML = `<table class="tabla"><thead><tr><th>Profesional</th><th>Día y horario</th><th>Consultorio</th><th>Semanal</th><th>Este mes</th></tr></thead><tbody>
     ${f.data.map((x) => {
-      const debe = x.precio_semanal * vecesEnMes(x, periodo);
-      const pag = pagadoDe(x.id);
+      const { debe, pagado: pag } = cuentaDe(x.id);
       const pill = pag >= debe ? '<span class="pill pill-ok">Pagado</span>' : pag > 0 ? `<span class="pill pill-alerta">Falta ${pesos(debe - pag)}</span>` : `<span class="pill pill-error">Debe ${pesos(debe)}</span>`;
       return `<tr class="click" data-fijo="${x.id}"><td><strong>${esc(x.profesionales.nombre)}</strong></td>
-        <td>${DIAS[x.dia_semana]} · ${esc(rangos(x.horas))}</td><td>${esc(x.consultorios.nombre)}</td><td>${pesos(x.precio_semanal)}</td><td>${pill}</td></tr>`;
+        <td>${DIAS[x.dia_semana]} · ${esc(rangos(x.horas))}${x.hasta ? `<br><small class="suave">Hasta el ${esc(fechaCorta(x.hasta))}</small>` : ''}</td><td>${esc(x.consultorios.nombre)}</td><td>${pesos(x.precio_semanal)}</td><td>${pill}</td></tr>`;
     }).join('')}</tbody></table>`;
   $$('[data-fijo]', cont).forEach((tr) => (tr.onclick = () => detalleFijo(Number(tr.dataset.fijo), null, false)));
 }
@@ -1777,6 +1782,8 @@ const CONFIG_VISIBLE = [
   ['min_horas_fijo_tarde', 'Horario fijo: mínimo de horas seguidas por la tarde', 'number'],
   ['max_pendientes_por_whatsapp', 'Reservas sin pagar por persona (web)', 'number'],
   ['quienes_cobran', '¿A quién le pagan? (nombres separados por coma, ej: Silvia,Nico)', 'text'],
+  ['minutos_aviso_transferencia', 'Minutos que se guarda el horario cuando la persona toca "Ya transferí"', 'number'],
+  ['objetivo_mensual', 'Objetivo de cobros del mes, en pesos (para Inicio)', 'number'],
 ];
 
 async function pintarAjustes() {
@@ -1980,6 +1987,7 @@ $('#form-invitar').onsubmit = async (e) => {
 setInterval(() => { if (!$('#app').classList.contains('oculto') && $('#modal').classList.contains('oculto')) refrescar(); }, 60000);
 
 asistente = crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion, preguntar });
+inicio = crearInicio({ sb, $, $$, irA, errorEn });
 
 const { data: { session } } = await sb.auth.getSession();
 if (session && (tipoLink === 'invite' || tipoLink === 'recovery')) mostrarNuevaClave(tipoLink);

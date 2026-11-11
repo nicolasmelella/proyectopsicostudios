@@ -331,6 +331,73 @@
   .alerta-hoy { border-color: #f0d9a0; }
   .alerta-no_pago { border-color: #c9a6e0; background: #f8f2fc; }
   .pill-nopago { background: #6b3fa0; color: #fff; }
+  .pill-transf { background: #1f7a4d; color: #fff; }
+  .alerta-transferencia { border-color: #9fd4b6; background: #f1faf4; }
+  /* ---------- Inicio: vista ejecutiva (fondo oscuro) ---------- */
+  .ejecutiva { --ej-fondo: #0b1226; --ej-card: #141d38; --ej-borde: #26325a; --ej-txt: #e8ecf7; --ej-suave: #9aa6c4; --ej-acento: #3987e5;
+    background: radial-gradient(1200px 500px at 20% -10%, #1a2a5c 0%, var(--ej-fondo) 60%); color: var(--ej-txt);
+    border-radius: 18px; padding: 20px; margin: -4px 0 0; }
+  .ejecutiva h2 { margin: 0; font-size: 1.45rem; color: #fff; }
+  .ejecutiva h3 { margin: 0; font-size: 1rem; color: #fff; }
+  .ej-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+  .ej-s { color: var(--ej-suave); font-size: .85rem; margin: 2px 0 0; }
+  .ej-periodos { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ej-chip { background: transparent; color: var(--ej-txt); border: 1px solid var(--ej-borde); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: .88rem; cursor: pointer; min-height: 40px; }
+  .ej-chip[aria-pressed="true"] { background: var(--ej-acento); border-color: var(--ej-acento); color: #fff; font-weight: 600; }
+  .ej-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .ej-fila { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+  .ej-card { background: var(--ej-card); border: 1px solid var(--ej-borde); border-radius: 14px; padding: 16px; min-width: 0; }
+  .ej-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .ej-t { color: var(--ej-suave); font-size: .85rem; }
+  .ej-v { font-size: 1.7rem; font-weight: 700; margin: 4px 0 2px; color: #fff; font-variant-numeric: tabular-nums; }
+  .ej-v.ej-chico { font-size: 1.15rem; }
+  .ej-var { font-weight: 700; }
+  .ej-var.sube { color: #4cd07a; } .ej-var.baja { color: #ff8a80; }
+  .ej-meter { height: 8px; background: #22305c; border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+  .ej-meter span { display: block; height: 100%; background: var(--ej-acento); border-radius: 4px; }
+  .ej-link { background: none; border: 0; padding: 0; color: #8fb8f5; font: inherit; text-decoration: underline; cursor: pointer; }
+  .ej-graf { position: relative; }
+  .ej-graf svg { width: 100%; height: auto; display: block; }
+  .ej-grilla { stroke: #26325a; stroke-width: 1; }
+  .ej-eje { fill: var(--ej-suave); font-size: 11px; font-family: inherit; }
+  .ej-barra { cursor: pointer; } .ej-barra.activa path { fill: #6fa9f0; }
+  .ej-tip { position: absolute; top: 0; width: 170px; background: #0b1226; border: 1px solid var(--ej-borde); border-radius: 10px; padding: 8px 10px; font-size: .82rem; pointer-events: none; box-shadow: 0 8px 22px rgba(0,0,0,.4); }
+  .ej-tabla-ver { margin-top: 8px; font-size: .85rem; color: var(--ej-suave); }
+  .ej-tabla-ver summary { cursor: pointer; }
+  .ej-tabla-ver table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .ej-tabla-ver td, .ej-tabla-ver th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--ej-borde); }
+  .ej-total { font-size: 1.5rem; font-weight: 700; color: #fff; } .ej-total span { font-size: .85rem; font-weight: 400; color: var(--ej-suave); }
+  .ej-seg { display: flex; gap: 2px; height: 14px; margin: 10px 0 12px; }
+  .ej-seg span { border-radius: 4px; min-width: 6px; }
+  .ej-leyenda { list-style: none; margin: 0; padding: 0; font-size: .9rem; }
+  .ej-leyenda li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--ej-borde); }
+  .ej-leyenda i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .ej-leyenda b { margin-left: auto; color: #fff; } .ej-leyenda em { font-style: normal; color: var(--ej-suave); width: 40px; text-align: right; }
+  .ej-scroll { overflow-x: auto; }
+  .ej-tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .ej-tabla th { text-align: left; color: var(--ej-suave); font-weight: 500; font-size: .8rem; padding: 6px 8px; border-bottom: 1px solid var(--ej-borde); }
+  .ej-tabla td { padding: 8px; border-bottom: 1px solid var(--ej-borde); vertical-align: top; }
+  .ej-tabla small { color: var(--ej-suave); }
+  .ej-estado { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .ej-estado i { width: 8px; height: 8px; border-radius: 50%; }
+  .ej-tareas { list-style: none; margin: 0; padding: 0; }
+  .ej-tareas button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; background: transparent;
+    border: 0; border-bottom: 1px solid var(--ej-borde); color: var(--ej-txt); font: inherit; padding: 10px 2px; cursor: pointer; min-height: 48px; }
+  .ej-tareas button:hover { background: #1a2547; }
+  .ej-tareas small { display: block; color: var(--ej-suave); font-size: .8rem; }
+  .ej-tareas b { background: var(--ej-acento); color: #fff; border-radius: 999px; padding: 2px 10px; font-size: .85rem; }
+  .ej-vacio { color: var(--ej-suave); margin: 4px 0; }
+  .ejecutiva .cargando { color: var(--ej-suave); }
+  @media (max-width: 900px) { .ej-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ej-fila { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) {
+    .ej-tabla thead { display: none; }
+    .ej-tabla tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--ej-borde); }
+    .ej-tabla td { border: 0; padding: 0; }
+    .ej-tabla td:nth-child(1) { order: 1; } .ej-tabla td:nth-child(4) { order: 2; }
+    .ej-tabla td:nth-child(2) { order: 3; grid-column: 1 / -1; } .ej-tabla td:nth-child(3) { order: 4; grid-column: 1 / -1; color: var(--ej-suave); }
+    .ej-tabla td:nth-child(3) br { display: none; } .ej-tabla td:nth-child(3) small::before { content: ' · '; }
+  }
+  @media (max-width: 420px) { .ejecutiva { padding: 14px; border-radius: 0; margin: 0 -16px; } .ej-v { font-size: 1.35rem; } }
 </style>
 </head>
 <body>
@@ -389,7 +456,8 @@
         <button class="btn btn-borde btn-chico" id="btn-salir" style="color:#fff;border-color:rgba(255,255,255,.5)">Cerrar sesión</button>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="semana" aria-selected="true">Semana</button>
+        <button role="tab" data-tab="inicio" aria-selected="true">Inicio</button>
+        <button role="tab" data-tab="semana" aria-selected="false">Semana</button>
         <button role="tab" data-tab="agenda" aria-selected="false">Día</button>
         <button role="tab" data-tab="numeros" aria-selected="false">Números</button>
         <button role="tab" data-tab="pendientes" aria-selected="false">Pendientes <span class="badge oculto" id="badge-pend"></span></button>
@@ -402,8 +470,21 @@
     </header>
 
     <main>
+      <!-- INICIO: vista ejecutiva -->
+      <section data-vista="inicio" class="ejecutiva">
+        <div class="ej-top">
+          <div><h2>Vista ejecutiva</h2><p class="ej-s">Resumen de Psico Studios · <span id="ej-rango"></span></p></div>
+          <div class="ej-periodos" role="group" aria-label="Período">
+            <button type="button" class="ej-chip" data-ej-per="mes" aria-pressed="true">Este mes</button>
+            <button type="button" class="ej-chip" data-ej-per="pasado" aria-pressed="false">Mes pasado</button>
+            <button type="button" class="ej-chip" data-ej-per="30" aria-pressed="false">Últimos 30 días</button>
+          </div>
+        </div>
+        <div id="inicio-cont"></div>
+      </section>
+
       <!-- SEMANA (como la hoja del Excel) -->
-      <section data-vista="semana">
+      <section data-vista="semana" class="oculto">
         <div class="barra-herr">
           <button class="btn btn-borde btn-chico" id="se-ant" aria-label="Semana anterior">◀</button>
           <button class="btn btn-borde btn-chico" id="se-hoy">Esta semana</button>

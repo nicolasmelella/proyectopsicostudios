@@ -71,15 +71,16 @@ const ej = { pedido: 9, token: 't', nombre: 'Ana Pérez', total: 26000, pagado: 
   reservas: [{ fecha: dia, horas: [10, 11], consultorio: 'Consultorio 1', estado: 'confirmada' }],
   transferencia: { alias: 'psico.alias', cvu: '000', titular: 'Psico' }, profesional: { nombre: 'Ana', whatsapp: '11', email: 'a@b.c' } };
 const tipos = ['reserva_creada', 'reserva_confirmada', 'reserva_vencida', 'reserva_cancelada', 'comprobante_recibido', 'comprobante_rechazado',
-  'fijo_solicitado', 'fijo_aprobado', 'fijo_rechazado', 'equipo_reserva_creada', 'equipo_comprobante_recibido', 'equipo_fijo_solicitado'];
+  'fijo_solicitado', 'fijo_aprobado', 'fijo_rechazado', 'transferencia_avisada',
+  'equipo_reserva_creada', 'equipo_comprobante_recibido', 'equipo_fijo_solicitado', 'equipo_transferencia_avisada'];
 for (const t of tipos) {
   const m = mod.armarMail({ id: 1, tipo: t, canal: 'email', destino: 'x', datos: ej }, 'https://s');
   assert.ok(m.asunto && m.html.length > 500 && m.texto.length > 20, t);
   if (!t.startsWith('equipo_')) assert.ok(mod.armarWhatsApp({ id: 1, tipo: t, canal: 'whatsapp', destino: 'x', datos: ej }, 'https://s').plantilla, t);
 }
-ok(`los ${tipos.length} tipos de aviso tienen mail (y WhatsApp los 9 del profesional)`);
-// Regla nueva: ningún mail dice que el horario "se libera solo"; el saldo se paga hasta el día anterior; el fijo pide el primer mes
-for (const t of tipos.filter((x) => x !== 'reserva_vencida')) {
+ok(`los ${tipos.length} tipos de aviso tienen mail (y WhatsApp los del profesional)`);
+// El horario "se libera" solo lo dicen los mails de reservas que esperan el pago
+for (const t of tipos.filter((x) => !['reserva_vencida', 'reserva_creada', 'fijo_solicitado', 'transferencia_avisada', 'equipo_reserva_creada'].includes(x))) {
   const m = mod.armarMail({ id: 1, tipo: t, canal: 'email', destino: 'x', datos: ej }, 'https://s');
   assert.ok(!/se libera|liberan solos|día de cada turno|día del turno/i.test(m.texto), t + ': ' + m.texto);
 }
@@ -93,5 +94,25 @@ const conWa = { ...ej, total: 18000, sena: 9000, pagado: 0, pedido: 7, token: 'a
 const creadaWa = mod.armarMail({ id: 1, tipo: 'reserva_creada', canal: 'email', destino: 'x', datos: conWa }, 'https://s');
 assert.match(creadaWa.texto, /Enviar reserva por WhatsApp: https:\/\/wa\.me\/5491178224918\?text=/);
 assert.match(decodeURIComponent(creadaWa.texto), /Reservé por la web \(pedido #7\)/); assert.match(decodeURIComponent(creadaWa.texto), /Alias: psico\.alias/); assert.ok(!/Subilo|subir el comprobante/i.test(creadaWa.html));
-ok('textos con la regla nueva: transferencia, saldo hasta el día anterior, fijo paga el primer mes, nada "se libera"');
+ok('textos con la regla nueva: transferencia, saldo hasta el día anterior, fijo paga el primer mes');
+
+// Estado de la reserva en los mails (Reservada → Revisando el pago → Confirmada)
+const mailDe = (tipo, extra = {}) => mod.armarMail({ id: 1, tipo, canal: 'email', destino: 'x', datos: { ...ej, ...extra } }, 'https://s');
+const recien = mailDe('reserva_creada', { pagado: 0, expira_en: '2026-11-20T15:15:00Z' });
+assert.match(recien.texto, /Estado de tu reserva/); assert.match(recien.texto, /Esperando tu pago/);
+assert.match(recien.texto, /hasta las 12:15/); assert.match(recien.texto, /Ya transferí/);
+ok('mail "Recibimos tu reserva": muestra el estado, hasta qué hora se guarda y el botón "Ya transferí"');
+const avisada = mailDe('transferencia_avisada', { pagado: 0, expira_en: '2026-11-20T16:15:00Z' });
+assert.match(avisada.asunto, /Estamos revisando tu pago/); assert.match(avisada.texto, /Revisando tu pago/);
+assert.match(avisada.texto, /hasta las 13:15/); assert.match(avisada.texto, /Consultorio 1/);
+ok('mail nuevo "Estamos revisando tu pago" (cuando toca "Ya transferí")');
+const confirmada = mailDe('reserva_confirmada', { total: 18000, pagado: 9000 });
+assert.match(confirmada.texto, /Estado de tu reserva/); assert.match(confirmada.texto, /Confirmada/);
+assert.match(confirmada.html, /Día/); assert.match(confirmada.html, /Horario/); assert.match(confirmada.html, />Consultorio</);
+assert.match(confirmada.texto, /Martes|Lunes|Miércoles|Jueves|Viernes|Sábado/); assert.match(confirmada.texto, /10:00 a 12:00/);
+ok('mail "¡Reserva confirmada!": estado, día, horario y consultorio');
+const equipoAviso = mailDe('equipo_transferencia_avisada');
+assert.match(equipoAviso.asunto, /Avisó que transfirió/); assert.match(equipoAviso.texto, /registrá el pago/);
+ok('al equipo le llega "Avisó que transfirió" para revisar la cuenta');
+assert.ok(!/Nada se cancela solo/.test(mailDe('equipo_reserva_creada').texto)); ok('el mail al equipo ya no dice "nada se cancela solo"');
 console.log('PRUEBAS DE ENVÍO DE AVISOS PASARON');

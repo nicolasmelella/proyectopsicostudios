@@ -723,19 +723,21 @@ function pantallaPago(p, nombre = '') {
           <li><span>3</span><div>Mandá la captura de la transferencia <strong>en ese mismo chat</strong>. Te confirmamos por ahí.</div></li>
         </ol>
         <a class="btn btn-wa btn-bloque btn-subir" id="enviar-wa" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa(monto))}">${ICONO.wa}<span>Enviar reserva por WhatsApp</span></a>
-        <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong>${!esFijo && !pagado && p.expira_en
-          ? `<br>El horario queda guardado ${minutosGuardado(p.expira_en)}: si en ese tiempo no llega la seña, se libera para otra persona.` : ''}</p>
+        <p class="ayuda centro" style="margin-bottom:1em"><strong>La reserva se confirma cuando recibimos el comprobante.</strong>${!pagado && p.expira_en
+          ? `<br>El horario queda guardado ${minutosGuardado(p.expira_en)}: si en ese tiempo no llega ${esFijo ? 'el pago' : 'la seña'}, se libera para otra persona.` : ''}</p>
         ${hayDatos ? `<p class="cuenta-titulo">Datos para transferir <span>(también te llegan en el chat)</span></p><div class="cuenta-datos">
             ${fila('Monto', pesos(monto), String(monto), false)}
             ${configurado(estado.cfg.alias_transferencia) ? fila('Alias', estado.cfg.alias_transferencia, estado.cfg.alias_transferencia, true) : ''}
             ${configurado(estado.cfg.cvu_transferencia) ? fila('CVU', estado.cfg.cvu_transferencia, estado.cfg.cvu_transferencia, false) : ''}
             ${configurado(estado.cfg.titular_transferencia) ? fila('Titular', estado.cfg.titular_transferencia, null, false) : ''}
-          </div>` : `<p class="aviso aviso-info">Te pasamos los datos para transferir por WhatsApp.</p>`}`}`;
+          </div>` : `<p class="aviso aviso-info">Te pasamos los datos para transferir por WhatsApp.</p>`}
+        ${!pagado ? bloqueYaTransferi() : ''}`}`;
     document.querySelectorAll('[data-cuanto]').forEach((b) => (b.onclick = () => { elegido.cuanto = b.dataset.cuanto; pintar(); $(`[data-cuanto="${elegido.cuanto}"]`).focus(); }));
     document.querySelectorAll('[data-medio]').forEach((b) => (b.onclick = () => { elegido.medio = b.dataset.medio; pintar(); $(`[data-medio="${elegido.medio}"]`).focus(); }));
     $('#pagar-mp')?.addEventListener('click', (e) => pagarConMP(p.pedido, p.token, e.currentTarget, $('#aviso-mp'), esFijo ? 'total' : elegido.cuanto));
     $('#link-wa').href = linkWhatsApp(waEquipo(), textoWa(monto));
     $('#enviar-wa')?.addEventListener('click', () => setTimeout(() => pantallaFinal(p, nombre, monto, true, esFijo ? 'total' : elegido.cuanto), 300));
+    conectarYaTransferi(p);
     conectarComprobante(p.pedido, p.token, () => {
       const fin = document.createElement('button');
       fin.type = 'button';
@@ -877,14 +879,49 @@ function pantallaFinal(p, nombre, monto, porWa = false, cuanto = 'sena') {
       </ol>`
       : `<p>Recibimos tu comprobante de <strong>${pesos(monto)}</strong>. Lo revisamos y te confirmamos por WhatsApp.</p>`}
     <p style="margin-bottom:.4em">Pedido <strong>#${esc(p.pedido)}</strong></p>${listaReservas(p.reservas)}
-    <p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>
+    ${porWa && !(p.pagado > 0) && p.expira_en ? bloqueYaTransferi() : `<p class="suave chico">Mientras lo revisamos, ${p.tipo === 'fijo' || p.reservas.length === 1 ? 'el horario queda guardado' : 'los horarios quedan guardados'} a tu nombre.</p>`}
     <a class="btn btn-wa btn-bloque btn-subir" target="_blank" rel="noopener" href="${linkWhatsApp(waEquipo(), textoWa)}">${ICONO.wa}<span>${porWa ? 'Abrir WhatsApp de nuevo' : 'Avisar por WhatsApp'}</span></a>
     <p class="ayuda centro" style="margin:.4em 0 .8em">${porWa ? '¿No se abrió o no lo enviaste? Tocá el botón.' : 'Se abre el chat con el mensaje listo.'}</p>
     <button class="btn btn-borde btn-bloque" id="nueva-reserva">Volver al inicio</button>`;
   const volver = async () => { cerrarVentanas(); await cargarResumen(); if (estado.modo === 'suelta' && estado.fecha) elegirFecha(estado.fecha); };
   $('#cerrar-resultado').onclick = volver;
   $('#nueva-reserva').onclick = volver;
+  conectarYaTransferi(p);
   $('#titulo-resultado').focus?.();
+}
+
+// ================================================================ "YA TRANSFERÍ"
+// La persona avisa que transfirió: el horario queda guardado un rato más y al equipo le aparece para revisar.
+function minutosAviso() {
+  const m = Number(estado.cfg.minutos_aviso_transferencia) || 60;
+  return m % 60 === 0 ? (m === 60 ? '1 hora' : `${m / 60} horas`) : `${m} minutos`;
+}
+function bloqueYaTransferi() {
+  return `<div class="ya-transferi" id="ya-transferi-caja">
+    <button type="button" class="btn btn-primario btn-bloque" id="ya-transferi">Ya transferí</button>
+    <p class="ayuda centro" id="ya-transferi-msg">Tocalo cuando hayas transferido: te guardamos el horario ${minutosAviso()} más mientras lo revisamos.</p>
+  </div>`;
+}
+function conectarYaTransferi(p) {
+  const b = $('#ya-transferi');
+  if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true;
+    b.textContent = 'Avisando…';
+    const { data, error } = await sb.rpc('avisar_transferencia', { p_pedido_id: Number(p.pedido), p_token: p.token });
+    const msg = $('#ya-transferi-msg');
+    if (error) {
+      b.disabled = false;
+      b.textContent = 'Ya transferí';
+      msg.textContent = mensajeError(error);
+      msg.classList.add('error');
+      return;
+    }
+    if (data?.hasta) p.expira_en = data.hasta;
+    const hasta = data?.hasta ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(data.hasta)) : null;
+    $('#ya-transferi-caja').innerHTML = `<p class="aviso aviso-ok" role="status">✓ ¡Gracias! ${hasta ? `Te guardamos el horario hasta las <strong>${esc(hasta)}</strong>` : 'Te guardamos el horario'} mientras revisamos la transferencia.
+      Si todavía no mandaste la captura, mandala por WhatsApp. Te confirmamos por ahí.</p>`;
+  };
 }
 
 // Datos de estado_pago_pedido → pantalla de pago

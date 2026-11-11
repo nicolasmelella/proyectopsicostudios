@@ -5,12 +5,20 @@
 
 create or replace function pg_temp.espera_error(p_sql text, p_codigo text) returns void
 language plpgsql as $$
+declare
+  v_error text;
 begin
-  execute p_sql;
-  raise exception 'FALLO: se esperaba el error % y no hubo error en: %', p_codigo, p_sql;
-exception when others then
-  if sqlerrm not like '%' || p_codigo || '%' then
-    raise exception 'FALLO: se esperaba % pero salió: %', p_codigo, sqlerrm;
+  begin
+    execute p_sql;
+  exception when others then
+    v_error := sqlerrm;
+  end;
+  -- (el control va afuera del bloque: si no hubo error, la falla no la "atrapa" el mismo bloque)
+  if v_error is null then
+    raise exception 'FALLO: se esperaba el error % y no hubo error en: %', p_codigo, p_sql;
+  end if;
+  if v_error not like '%' || p_codigo || '%' then
+    raise exception 'FALLO: se esperaba % pero salió: %', p_codigo, v_error;
   end if;
   raise notice 'ok  · error esperado %', p_codigo;
 end $$;

@@ -84,6 +84,36 @@ Psico Studios · Consultorios en Microcentro<br>¿Dudas? Respondé este mail o e
 </table></td></tr></table></body></html>`;
 }
 
+// "12:15" (hora de Argentina)
+const horaCorta = (iso: string) => new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+
+// Estado de la reserva: 1 Reservada (esperando el pago) · 2 Revisando el pago · 3 Confirmada
+export function estadoReserva(paso: 1 | 2 | 3) {
+  const pasos = [['Reservada', 'Esperando tu pago'], ['Pago enviado', 'Revisando tu pago'], ['Confirmada', 'Confirmada']];
+  const VERDE = '#1f7a4d';
+  const celdas = pasos.map(([nombre, ahora], i) => {
+    const n = i + 1, hecho = n < paso || paso === 3, actual = n === paso;
+    const color = hecho ? VERDE : actual ? AZUL : '#b3bccd';
+    return `<td width="33%" style="text-align:center;padding:4px 2px;vertical-align:top">
+      <div style="display:inline-block;width:26px;height:26px;line-height:26px;border-radius:13px;background:${hecho || actual ? color : '#ffffff'};border:2px solid ${color};color:${hecho || actual ? '#ffffff' : color};font-weight:bold;font-size:13px">${hecho ? '✓' : n}</div>
+      <div style="font-size:12px;margin-top:4px;color:${actual || hecho ? AZUL : SUAVE};${actual ? 'font-weight:bold' : ''}">${actual && paso !== 3 ? ahora : nombre}</div></td>`;
+  }).join('');
+  return `<div style="background:${FONDO};border:1px solid ${LINEA};border-radius:12px;padding:12px 10px 10px;margin:0 0 16px">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:${SUAVE};margin:0 0 6px 4px">Estado de tu reserva</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${celdas}</tr></table></div>`;
+}
+
+// Turnos con títulos (Día · Horario · Consultorio), para el mail de confirmación
+function tablaConfirmada(reservas: any[] = []) {
+  const th = (t: string, alinear = 'left') => `<td style="padding:6px 0;font-size:12px;color:${SUAVE};text-transform:uppercase;letter-spacing:.5px;text-align:${alinear};border-bottom:2px solid ${LINEA}">${t}</td>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 14px;border-collapse:collapse">
+    <tr>${th('Día')}${th('Horario')}${th('Consultorio', 'right')}</tr>${reservas.map((r) =>
+    `<tr><td style="padding:9px 0;border-bottom:1px solid ${LINEA}"><strong>${esc(mayuscula(fechaLarga(r.fecha)))}</strong></td>
+     <td style="padding:9px 6px;border-bottom:1px solid ${LINEA}">${esc(rangos(r.horas))}</td>
+     <td style="padding:9px 0;border-bottom:1px solid ${LINEA};text-align:right"><strong>${esc(r.consultorio)}</strong></td></tr>`).join('')}</table>`;
+}
+
 function tablaTurnos(reservas: any[] = [], conEstado = false) {
   const etiqueta: Record<string, string> = { confirmada: 'Confirmada', pendiente: 'Sin seña', vencida: 'Vencida', cancelada: 'Cancelada' };
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 14px;border-collapse:collapse">${reservas.map((r) =>
@@ -131,10 +161,12 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       asunto = `Recibimos tu reserva · Pedido #${d.pedido}`;
       const primero = primerTurno(d.reservas);
       titulo = varios ? 'Recibimos tu reserva' : 'Recibimos tu reserva';
-      cuerpo = `${hola}<p style="margin:0">Estos son los turnos de tu pedido <strong>#${esc(d.pedido)}</strong>:</p>${tablaTurnos(d.reservas)}
+      cuerpo = `${estadoReserva(1)}${hola}<p style="margin:0">Estos son los turnos de tu pedido <strong>#${esc(d.pedido)}</strong>:</p>${tablaTurnos(d.reservas)}
         <p style="margin:0">Total: <strong>${pesos(d.total)}</strong> · Seña para confirmar: <strong>${pesos(falta)}</strong></p>
         <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}: enviá la reserva por WhatsApp (botón de abajo), transferí la seña (o el total, si preferís) y mandá la captura en ese chat.</strong>
         ${primero ? `El saldo se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : 'El saldo se paga hasta el día anterior al turno.'}</p>
+        ${d.expira_en ? `<p style="margin:10px 0 0">Te guardamos ${varios ? 'los horarios' : 'el horario'} <strong>hasta las ${esc(horaCorta(d.expira_en))}</strong> (hora de Argentina). Si no llega la seña, se libera para otra persona.
+          Cuando transfieras, entrá a <a href="${esc(linkPedido(sitio, d))}" style="color:${AZUL}">tu reserva</a> y tocá <strong>«Ya transferí»</strong>: te lo guardamos un rato más mientras lo revisamos.</p>` : ''}
         ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir la seña')}`;
       const wa = linkWhatsComprobante(d, falta, (d.reservas || []).map((r: any) => `${mayuscula(fechaLarga(r.fecha))}, ${rangos(r.horas)}, ${r.consultorio}`).join('; '),
         `Pago la seña: ${pesos(falta)} (total ${pesos(d.total)})`);
@@ -148,11 +180,19 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       {
         const saldo = Math.max(0, (d.total || 0) - (d.pagado || 0));
         const primero = primerTurno(d.reservas);
-        cuerpo = `${hola}<p style="margin:0">Recibimos tu pago. Estos son tus turnos:</p>${tablaTurnos(d.reservas)}
+        cuerpo = `${estadoReserva(3)}${hola}<p style="margin:0">Recibimos tu pago y ${varios ? 'tus reservas quedaron confirmadas' : 'tu reserva quedó confirmada'}:</p>${tablaConfirmada(d.reservas)}
           <p style="margin:0">Pagaste: <strong>${pesos(d.pagado)}</strong>${saldo ? ` · Saldo: <strong>${pesos(saldo)}</strong>, se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : ' · No tenés que pagar nada más.'}</p>
           ${saldo ? cajaTransferencia(d.transferencia, saldo, 'Datos para transferir el saldo') : ''}
           <p style="margin:10px 0 0">¡Te esperamos!</p>`;
       }
+      boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
+      break;
+    case 'transferencia_avisada':
+      asunto = `Estamos revisando tu pago · Pedido #${d.pedido}`;
+      titulo = 'Estamos revisando tu pago';
+      cuerpo = `${estadoReserva(2)}${hola}<p style="margin:0">Nos avisaste que transferiste. Lo estamos revisando.</p>${tablaTurnos(d.reservas)}
+        ${d.expira_en ? `<p style="margin:0">Mientras tanto te guardamos ${varios ? 'los horarios' : 'el horario'} <strong>hasta las ${esc(horaCorta(d.expira_en))}</strong> (hora de Argentina).</p>` : ''}
+        <p style="margin:10px 0 0">Si todavía no mandaste la captura de la transferencia, mandala por WhatsApp. Cuando confirmemos el pago te llega otro mail con el día, el horario y el consultorio.</p>`;
       boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       break;
     case 'reserva_vencida':
@@ -189,7 +229,7 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
       if (a.tipo === 'fijo_solicitado') {
         asunto = 'Recibimos tu pedido de horario fijo'; titulo = 'Recibimos tu pedido de horario fijo';
         const semanas = (d.reservas || []).length;
-        cuerpo = `${hola}<p style="margin:0">Reservaste ${desc} (${pesos(d.precio_semanal)} por semana).</p>
+        cuerpo = `${estadoReserva(1)}${hola}<p style="margin:0">Reservaste ${desc} (${pesos(d.precio_semanal)} por semana).</p>
           ${d.pago_inicial ? `<p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmarlo: enviá la reserva por WhatsApp (botón de abajo), transferí el primer mes (${pesos(d.pago_inicial)}${semanas ? `, ${semanas} ${semanas === 1 ? 'semana' : 'semanas'}` : ''}) y mandá la captura en ese chat.</strong>
             Después se paga cada mes por adelantado.</p>${cajaTransferencia(d.transferencia, d.pago_inicial, 'Datos para transferir el primer mes')}`
             : '<p style="margin:10px 0 0">Te escribimos para coordinar el pago.</p>'}`;
@@ -199,7 +239,7 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
         else if (d.pedido && d.token) boton = { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       } else if (a.tipo === 'fijo_aprobado') {
         asunto = '¡Tu horario fijo está confirmado!'; titulo = '¡Tu horario fijo está confirmado!';
-        cuerpo = `${hola}<p style="margin:0">Recibimos el pago. Desde ahora tenés reservado ${desc}.</p>
+        cuerpo = `${estadoReserva(3)}${hola}<p style="margin:0">Recibimos el pago. Desde ahora tenés reservado ${desc}.</p>
           <p style="margin:10px 0 0">Cada mes se paga por adelantado, hasta el día anterior a la primera semana del mes. ¡Te esperamos!</p>`;
       } else {
         asunto = 'No pudimos confirmar tu horario fijo'; titulo = 'No pudimos confirmar tu horario fijo';
@@ -209,13 +249,19 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
     }
     case 'equipo_reserva_creada':
     case 'equipo_comprobante_recibido':
-    case 'equipo_fijo_solicitado': {
+    case 'equipo_fijo_solicitado':
+    case 'equipo_transferencia_avisada': {
       const p = d.profesional || {};
       const quien = `<p style="margin:0"><strong>${esc(p.nombre)}</strong>${p.profesion ? ` (${esc(p.profesion)})` : ''}<br>WhatsApp: ${esc(p.whatsapp)} · Mail: ${esc(p.email)}</p>`;
       if (a.tipo === 'equipo_reserva_creada') {
         asunto = `Nueva reserva web · ${p.nombre} · Pedido #${d.pedido}`; titulo = 'Nueva reserva desde la web';
         cuerpo = `${quien}${tablaTurnos(d.reservas)}<p style="margin:0">Total ${pesos(d.total)} · Seña ${pesos(d.sena)}</p>
-          <p style="margin:10px 0 0">Si no paga, aparece en el panel → Pendientes → Alertas de pago. Nada se cancela solo.</p>`;
+          <p style="margin:10px 0 0">Si no paga a tiempo, el horario se libera solo y queda en el panel → Pendientes como "No pagó".</p>`;
+      } else if (a.tipo === 'equipo_transferencia_avisada') {
+        asunto = `Avisó que transfirió · ${p.nombre} · Pedido #${d.pedido}`; titulo = 'Avisó que transfirió';
+        cuerpo = `${quien}${d.es_fijo ? '' : tablaTurnos(d.reservas)}<p style="margin:0">A pagar: <strong>${pesos(Math.max(0, (d.sena || 0) - (d.pagado || 0)))}</strong>${d.es_fijo ? ' (primer mes del fijo)' : ' (seña)'}.</p>
+          <p style="margin:10px 0 0">Revisá la cuenta y, si llegó, registrá el pago en el panel → Pendientes para confirmar.
+          ${d.expira_en ? `El horario queda guardado hasta las <strong>${esc(horaCorta(d.expira_en))}</strong>.` : ''}</p>`;
       } else if (a.tipo === 'equipo_comprobante_recibido') {
         asunto = `Comprobante para revisar · ${p.nombre} · Pedido #${d.pedido}`; titulo = 'Subieron un comprobante para revisar';
         cuerpo = `${quien}${tablaTurnos(d.reservas)}<p style="margin:0">Revisalo en el panel → Pendientes.</p>`;
@@ -255,6 +301,7 @@ export function armarWhatsApp(a: Aviso, sitio: string): { plantilla: string; par
     case 'reserva_cancelada':
       return { plantilla: 'psico_reserva_cancelada', parametros: p(n, `${fechaCorta(d.fecha)} ${rangos(d.horas)}`, d.motivo || 'sin detalle') };
     case 'comprobante_recibido':
+    case 'transferencia_avisada':
       return { plantilla: 'psico_comprobante_recibido', parametros: p(n, d.pedido) };
     case 'comprobante_rechazado':
       return { plantilla: 'psico_comprobante_rechazado', parametros: p(n, d.pedido, d.motivo || 'sin detalle', linkPedido(sitio, d)) };

@@ -23,7 +23,7 @@ export function crearClienteDemo() {
       ['mercadopago_activo', 'si'], ['meses_reserva_maximo', '2'], ['max_dias_por_pedido', '8'], ['min_horas_fijo_manana', '1'], ['min_horas_fijo_tarde', '2'], ['horas_espera_comprobante', '12'], ['avisos_email_activo', 'si'], ['avisos_whatsapp_activo', 'no'], ['email_equipo', 'consultoriospsicostudios@gmail.com'], ['max_comprobantes_por_pedido', '5'], ['quienes_cobran', 'Silvia,Nico'], ['niveles_volumen', '[{"n":"Base","min":0,"pct":0},{"n":"Frecuente","min":8,"pct":5},{"n":"Destacado","min":20,"pct":10}]'],
       ['asistente_activo', 'si'], ['asistente_solo_prueba', 'si'], ['asistente_nombre', 'Sofía'], ['asistente_minutos_pausa', '60'],
       ['asistente_horas_charla', '24'], ['asistente_recordar_sena', 'no'], ['asistente_minutos_recordatorio', '60'], ['asistente_esfuerzo', 'medium'],
-      ['asistente_seguimiento', 'no'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'], ['asistente_toma_reservas', 'no'], ['asistente_modelo', 'intermedio'],
+      ['asistente_seguimiento', 'no'], ['asistente_horas_seguimiento', '3'], ['asistente_transcribir_audios', 'si'], ['asistente_toma_reservas', 'no'], ['asistente_modelo', 'intermedio'], ['minutos_aviso_transferencia', '60'], ['objetivo_mensual', '600000'],
     ].map(([clave, valor]) => ({ clave, valor, descripcion: '' })),
     consultorios: [1, 2, 3, 4, 5, 6].map((id) => ({
       id, nombre: id === 6 ? 'Salón' : `Consultorio ${id}`, orden: id, activo: true, online: true,
@@ -683,6 +683,74 @@ export function crearClienteDemo() {
       if (fechasFijo(f).some((d) => !libre(p_consultorio, d, p_horas))) return err('SIN_LUGAR', 'Alguna semana ya está ocupada en ese horario');
       db.fijos.push(f); ocuparFijo(f); return f.id;
     },
+    // Copia simplificada de 23_vista_ejecutiva.sql
+    vista_ejecutiva({ p_desde, p_hasta }) {
+      soloEquipo();
+      const n = (Date.parse(p_hasta) - Date.parse(p_desde)) / 864e5 + 1;
+      const antDesde = sumarDias(p_desde, -n), antHasta = sumarDias(p_desde, -1);
+      const enRango = (f, a, b) => f >= a && f <= b;
+      const ocupadas = (a, b) => [...db.ocupaciones].filter(([k, o]) => {
+        const f = k.split('|')[1];
+        if (!enRango(f, a, b) || o.bloqueo_id) return false;
+        if (o.reserva_id) return ['pendiente', 'confirmada'].includes(db.reservas.find((r) => r.id === o.reserva_id)?.estado);
+        return db.fijos.find((x) => x.id === o.fijo_id)?.estado === 'activo';
+      });
+      const cobrado = (a, b) => db.pagos.filter((x) => !x.anulado && enRango(x.pagado_en, a, b)).reduce((t, x) => t + x.monto, 0);
+      const dias = [];
+      for (let d = p_desde; d <= p_hasta; d = sumarDias(d, 1)) dias.push(d);
+      const bloq = [...db.ocupaciones].filter(([k, o]) => o.bloqueo_id && enRango(k.split('|')[1], p_desde, p_hasta)).length;
+      const origen = {};
+      for (const x of [...db.reservas.filter((r) => r.origen !== 'excel'), ...db.fijos.filter((f) => f.origen === 'web' || f.creado_por)]) {
+        if (!x.creado_en || !enRango(x.creado_en.slice(0, 10), p_desde, p_hasta)) continue;
+        origen[x.origen] = (origen[x.origen] || 0) + 1;
+      }
+      const nombre = (id) => db.profesionales.find((x) => x.id === id)?.nombre;
+      const cons = (id) => db.consultorios.find((c) => c.id === id)?.nombre;
+      const ultimas = [
+        ...db.reservas.filter((r) => r.origen !== 'excel').map((r) => ({ cuando: r.creado_en, nombre: nombre(r.profesional_id), tipo: 'reserva', id: r.id, fecha: r.fecha,
+          horas: r.horas, consultorio: cons(r.consultorio_id), total: r.precio_total, pagado: pagado(r.id), estado: r.estado })),
+        ...db.fijos.filter((f) => f.origen === 'web').map((f) => ({ cuando: f.creado_en || ahoraISO(-60), nombre: nombre(f.profesional_id), tipo: 'fijo', id: f.id, fecha: f.desde,
+          horas: f.horas, consultorio: cons(f.consultorio_id), total: f.pago_inicial || f.precio_semanal, pagado: 0, estado: f.estado, dia: f.dia_semana })),
+      ].sort((a, b) => (a.cuando < b.cuando ? 1 : -1)).slice(0, 8);
+      const al = rpcs.alertas_pago();
+      const cuenta = (g) => al.filter((x) => g.includes(x.gravedad)).length;
+      return {
+        desde: p_desde, hasta: p_hasta, cobrado: cobrado(p_desde, p_hasta), cobrado_anterior: cobrado(antDesde, antHasta),
+        horas: ocupadas(p_desde, p_hasta).length, horas_anterior: ocupadas(antDesde, antHasta).length,
+        capacidad: Math.max(0, dias.filter((d) => diaSemana(d) !== 7).length * (cfg('hora_cierre') - cfg('hora_apertura')) * db.consultorios.filter((c) => c.activo).length - bloq),
+        objetivo: Number(cfg('objetivo_mensual')) || 0,
+        por_dia: dias.map((d) => ({ fecha: d, cobrado: cobrado(d, d), horas: ocupadas(d, d).length })),
+        origen, ultimas,
+        tareas: { transferencia: cuenta(['transferencia']), no_pago: cuenta(['no_pago']), vencidos: cuenta(['vencida']), por_vencer: cuenta(['hoy', 'pendiente']),
+          comprobantes: (db.comprobantes || []).filter((c) => c.estado === 'pendiente').length,
+          pagos_a_revisar: db.pagos_a_revisar.filter((x) => !x.resuelto).length,
+          asistente: (db.asistente_solicitudes || []).filter((x) => x.estado === 'pendiente').length },
+      };
+    },
+    avisar_transferencia({ p_pedido_id }) {
+      const hasta = ahoraISO(Number(cfg('minutos_aviso_transferencia')) || 60);
+      for (const r of db.reservas) if (r.pedido_id === p_pedido_id && r.estado === 'pendiente' && r.expira_en) r.expira_en = hasta;
+      for (const f of db.fijos) if (f.pedido_id === p_pedido_id && f.estado === 'solicitud' && f.expira_en) f.expira_en = hasta;
+      return { ya_avisado: false, hasta };
+    },
+    panel_cuenta_fijo({ p_fijo_id, p_periodo }) {
+      const f = db.fijos.find((x) => x.id === p_fijo_id);
+      let semanas = 0;
+      for (let d = p_periodo + '-01'; d.slice(0, 7) === p_periodo; d = sumarDias(d, 1)) {
+        if (d < f.desde || (f.hasta && d > f.hasta) || diaSemana(d) !== f.dia_semana) continue;
+        if (db.fijo_excepciones.some((e) => e.fijo_id === f.id && e.fecha === d)) continue;
+        semanas++;
+      }
+      const pagado = db.pagos.filter((x) => x.fijo_id === f.id && x.periodo === p_periodo && !x.anulado).reduce((s, x) => s + x.monto, 0);
+      return { semanas, debe: f.precio_semanal * semanas, pagado, falta: Math.max(0, f.precio_semanal * semanas - pagado) };
+    },
+    fijos_del_mes({ p_periodo }) {
+      return db.fijos.filter((f) => f.estado === 'activo').map((f) => ({ fijo_id: f.id, ...rpcs.panel_cuenta_fijo({ p_fijo_id: f.id, p_periodo }) }));
+    },
+    recuperar_fijo({ p_fijo_id }) {
+      const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'solicitud'; f.expira_en = ahoraISO(60); ocuparFijo(f);
+    },
+    descartar_no_pago_fijo({ p_fijo_id }) { const f = db.fijos.find((x) => x.id === p_fijo_id); f.no_pago_visto = true; },
     aprobar_fijo({ p_fijo_id }) { const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'activo'; f.expira_en = null; },
     rechazar_fijo({ p_fijo_id }) {
       const f = db.fijos.find((x) => x.id === p_fijo_id); f.estado = 'rechazado';
