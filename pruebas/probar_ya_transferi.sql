@@ -36,6 +36,9 @@ grant select on yt_r1, yt_r2 to authenticated, service_role;
 reset role;
 select pg_temp.ok((select expira_en > now() + interval '55 minutes' from public.reservas where pedido_id = :p_a),
                   'Ya transferí: el horario queda guardado 1 hora más');
+select pg_temp.ok((select count(*) = 1 from public.avisos where pedido_id = :p_a and tipo = 'transferencia_avisada' and canal = 'email')
+                  and (select count(*) = 1 from public.avisos where pedido_id = :p_a and tipo = 'equipo_transferencia_avisada'),
+                  'Ya transferí: le llega el mail "Estamos revisando tu pago" y al equipo "Avisó que transfirió"');
 select pg_temp.ok((select not (r->>'ya_avisado')::boolean from yt_r1) and (select (r->>'ya_avisado')::boolean from yt_r2)
                   and (select expira_en < now() + interval '61 minutes' from public.reservas where pedido_id = :p_a),
                   'tocarlo de nuevo no vuelve a extender el plazo');

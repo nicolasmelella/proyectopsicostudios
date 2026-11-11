@@ -241,10 +241,43 @@ begin
   end if;
 
   update public.pedidos set aviso_transferencia_en = now() where id = pe.id;
+  perform public.encolar_aviso('transferencia_avisada', 'pedido:' || pe.id, pe.profesional_id, public.datos_pedido(pe.id), pe.id);
   return json_build_object('ya_avisado', false, 'hasta', v_hasta);
 end $$;
 revoke execute on function public.avisar_transferencia(bigint, uuid) from public;
 grant execute on function public.avisar_transferencia(bigint, uuid) to anon, authenticated;
+
+-- Copia al equipo por mail de lo que hay que atender (se suma "Avisó que transfirió")
+create or replace function public.encolar_aviso(p_tipo text, p_objeto text, p_profesional_id bigint, p_datos jsonb,
+  p_pedido_id bigint default null, p_reserva_id bigint default null, p_fijo_id bigint default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  p public.profesionales;
+  v_equipo text := public.cfg_texto('email_equipo');
+begin
+  select * into p from public.profesionales where id = p_profesional_id;
+  if public.cfg_texto('avisos_email_activo') = 'si' and p.email is not null then
+    insert into public.avisos (clave, tipo, canal, destino, pedido_id, reserva_id, fijo_id, datos)
+    values (p_tipo || ':email:' || p_objeto, p_tipo, 'email', p.email, p_pedido_id, p_reserva_id, p_fijo_id, p_datos)
+    on conflict (clave) do nothing;
+  end if;
+  if public.cfg_texto('avisos_whatsapp_activo') = 'si' and length(public.solo_numeros(p.whatsapp)) >= 8 then
+    insert into public.avisos (clave, tipo, canal, destino, pedido_id, reserva_id, fijo_id, datos)
+    values (p_tipo || ':whatsapp:' || p_objeto, p_tipo, 'whatsapp', public.whatsapp_internacional(p.whatsapp),
+            p_pedido_id, p_reserva_id, p_fijo_id, p_datos)
+    on conflict (clave) do nothing;
+  end if;
+  if p_tipo in ('reserva_creada', 'comprobante_recibido', 'fijo_solicitado', 'transferencia_avisada')
+     and public.cfg_texto('avisos_email_activo') = 'si' and v_equipo like '%@%' then
+    insert into public.avisos (clave, tipo, canal, destino, pedido_id, reserva_id, fijo_id, datos)
+    values ('equipo_' || p_tipo || ':email:' || p_objeto, 'equipo_' || p_tipo, 'email', v_equipo,
+            p_pedido_id, p_reserva_id, p_fijo_id,
+            p_datos || jsonb_build_object('profesional', jsonb_build_object('nombre', p.nombre, 'whatsapp', p.whatsapp,
+                                                                           'email', p.email, 'profesion', p.profesion)))
+    on conflict (clave) do nothing;
+  end if;
+end $$;
+revoke execute on function public.encolar_aviso(text, text, bigint, jsonb, bigint, bigint, bigint) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------
 -- 4) Baja de un fijo con fecha futura: sigue activo hasta esa fecha

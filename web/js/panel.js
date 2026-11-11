@@ -4,6 +4,7 @@ import {
   faltan, mensajeError, linkWhatsApp, waArgentina, DIAS, DIAS_CORTOS, preguntar,
 } from './comun.js';
 import { crearAsistente } from './asistente.js';
+import { crearInicio } from './inicio.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -21,6 +22,7 @@ const lunesDe = (f) => (diaSemana(f) === 7 ? sumarDias(f, 1) : sumarDias(f, 1 - 
 
 // Pestaña "Asistente" (asistente.js). Se crea al final, cuando ya están todas las funciones.
 let asistente = { pintar() {}, badge() {} };
+let inicio = { pintar() {} };
 
 const st = {
   fecha: hoyAR(),
@@ -31,7 +33,7 @@ const st = {
   equipo: [],
   precios: [],
   yo: null,
-  tab: 'semana',
+  tab: 'inicio',
 };
 
 // ================================================================ utilidades
@@ -291,7 +293,7 @@ function irA(tab) {
   st.tab = tab;
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
   $$('[data-vista]').forEach((s) => s.classList.toggle('oculto', s.dataset.vista !== tab));
-  ({ equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
+  ({ inicio: () => inicio.pintar(), equipo: pintarEquipo, semana: pintarSemana, numeros: pintarNumeros, agenda: pintarAgenda, pendientes: pintarPendientes, fijos: pintarFijos, profesionales: pintarProfesionales, ajustes: pintarAjustes, asistente: () => asistente.pintar() })[tab]();
 }
 $$('.tabs button').forEach((b) => (b.onclick = () => irA(b.dataset.tab)));
 
@@ -1781,6 +1783,7 @@ const CONFIG_VISIBLE = [
   ['max_pendientes_por_whatsapp', 'Reservas sin pagar por persona (web)', 'number'],
   ['quienes_cobran', '¿A quién le pagan? (nombres separados por coma, ej: Silvia,Nico)', 'text'],
   ['minutos_aviso_transferencia', 'Minutos que se guarda el horario cuando la persona toca "Ya transferí"', 'number'],
+  ['objetivo_mensual', 'Objetivo de cobros del mes, en pesos (para Inicio)', 'number'],
 ];
 
 async function pintarAjustes() {
@@ -1984,6 +1987,7 @@ $('#form-invitar').onsubmit = async (e) => {
 setInterval(() => { if (!$('#app').classList.contains('oculto') && $('#modal').classList.contains('oculto')) refrescar(); }, 60000);
 
 asistente = crearAsistente({ sb, st, llamar, toast, errorEn, errorDeFuncion, preguntar });
+inicio = crearInicio({ sb, $, $$, irA, errorEn });
 
 const { data: { session } } = await sb.auth.getSession();
 if (session && (tipoLink === 'invite' || tipoLink === 'recovery')) mostrarNuevaClave(tipoLink);
