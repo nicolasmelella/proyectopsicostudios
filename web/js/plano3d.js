@@ -36,7 +36,7 @@ const MUEBLES = {
   4: (x, y, w, d) => sillon(x + 24, y + d * 0.3) + sillon(x + w * 0.58, y + d * 0.58) + mesita(x + w * 0.38, y + d * 0.45),
   5: (x, y, w, d) => escritorio(x + 16, y + 18, 56, 26) + sillon(x + w * 0.6, y + d * 0.45) + silla(x + 30, y + d * 0.58),
   6: (x, y, w, d) => caja(x + w * 0.22, y + d * 0.32, w * 0.42, d * 0.3, 20, 0, MADERA)
-    + [[0.14, 0.34], [0.14, 0.5], [0.67, 0.34], [0.67, 0.5], [0.3, 0.16], [0.48, 0.16], [0.3, 0.66], [0.48, 0.66]].map(([a, b]) => silla(x + w * a, y + d * b)).join('')
+    + [[0.14, 0.42], [0.67, 0.42], [0.3, 0.16], [0.48, 0.16], [0.4, 0.66]].map(([a, b]) => silla(x + w * a, y + d * b)).join('')
     + escritorio(x + w * 0.74, y + 16, 60, 26),
   espera: (x, y, w) => sofa(x + 40, y + 70, 80, TELA2) + sofa(x + w - 130, y + 70, 80, TELA2) + planta(x + w / 2 - 9, y + 70) + caja(x + w / 2 - 40, y + 14, 80, 22, 26, 0, BLANCO),
   entrada: (x, y, w, d) => caja(x + w - 70, y + 20, 56, d - 40, 30, 0, ['#e9dcae', '#d3c38c', '#c4b37a']) + caja(x + 20, y + 20, 50, 44, 44, 0, ['#cfd5df', '#b4bcc9', '#a2abb9']),

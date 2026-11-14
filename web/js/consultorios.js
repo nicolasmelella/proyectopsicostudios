@@ -14,17 +14,17 @@ const reducido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 // como "a confirmar" se completan con el equipo.
 const CATALOGO = {
   1: { corto: 'Consultorio 1', lema: 'Amplio y con ventana a la calle: sobrio, para sesiones individuales y entrevistas.', fotos: ['c1-a', 'c1-b'],
-       ideal: ['individual'], muebles: ['Escritorio', 'Sillas', 'Ventana a la calle', 'Aire acondicionado'], capacidad: 3, metros: '3,75 × 4,07 m' },
+       ideal: ['individual'], muebles: ['Escritorio', 'Sillas', 'Ventana a la calle', 'Aire acondicionado'], capacidad: '3 a 4', metros: '3,75 × 4,07 m' },
   2: { corto: 'Consultorio 2', lema: 'Cálido, con sofá y sillones: pensado para la escucha.', fotos: ['c2-a', 'c2-b'],
-       ideal: ['individual', 'pareja'], muebles: ['Sofá', 'Sillones', 'Ventana a la calle', 'Aire acondicionado'], capacidad: 4, metros: '3,95 × 2,99 m' },
+       ideal: ['individual', 'pareja'], muebles: ['Sofá', 'Sillones', 'Ventana a la calle', 'Aire acondicionado'], capacidad: '3', metros: '3,95 × 2,99 m' },
   3: { corto: 'Consultorio 3', lema: 'El más amplio, en la esquina: ventanal redondeado al balcón y mucha luz natural.', fotos: ['c3-a', 'c3-b'],
-       ideal: ['individual', 'pareja', 'familia'], muebles: ['Sofá', 'Sillones', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: 4, metros: '4,80 × 4,05 m' },
+       ideal: ['individual', 'pareja', 'familia'], muebles: ['Sofá', 'Sillones', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: '4', metros: '4,80 × 4,05 m' },
   4: { corto: 'Consultorio 4', lema: 'Sillones enfrentados y ventanales: ideal para terapia de pareja.', fotos: ['c4-a', 'c4-b'],
-       ideal: ['individual', 'pareja'], muebles: ['Sillones enfrentados', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: 3, metros: '3,25 × 3,50 m' },
+       ideal: ['individual', 'pareja'], muebles: ['Sillones enfrentados', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: '2', metros: '3,25 × 3,50 m' },
   5: { corto: 'Consultorio 5', lema: 'Interno y silencioso, da al pulmón: ideal para evaluar o para sesiones que necesitan calma.', fotos: ['c5-a', 'c5-b'],
-       ideal: ['individual', 'evaluacion'], muebles: ['Escritorio', 'Sillones', 'Ventana al pulmón', 'Aire acondicionado'], capacidad: 3, metros: '3,49 × 2,40 m' },
-  6: { corto: 'Salón', lema: 'Mesa redonda y escritorio: grupos, talleres, supervisiones y talleres para padres.', fotos: ['c6-a', 'c6-b'],
-       ideal: ['grupo', 'familia'], muebles: ['Mesa redonda', 'Escritorio', 'Sillas para grupo', 'Balcón', 'Aire acondicionado'], capacidad: 10, metros: '5,50 × 3,50 m' },
+       ideal: ['individual', 'evaluacion'], muebles: ['Escritorio', 'Sillones', 'Ventana al pulmón', 'Aire acondicionado'], capacidad: '3', metros: '3,49 × 2,40 m' },
+  6: { corto: 'Salón', lema: 'Mesa y escritorio con balcón: grupos chicos, familias, supervisiones y talleres para padres.', fotos: ['c6-a', 'c6-b'],
+       ideal: ['grupo', 'familia'], muebles: ['Mesa', 'Escritorio', 'Sillas para 5', 'Balcón', 'Aire acondicionado'], capacidad: '5', metros: '5,50 × 3,50 m' },
 };
 const PARA = [['todos', 'Todos'], ['individual', 'Individual'], ['pareja', 'Pareja'], ['familia', 'Familia'], ['grupo', 'Grupos y talleres'], ['evaluacion', 'Evaluaciones']];
 const FRANJAS = [['dia', 'Todo el día'], ['manana', 'Mañana'], ['tarde', 'Tarde']];
@@ -51,6 +51,7 @@ const horasDelDia = () => {
 const todasLasHoras = () => { const ini = Number(st.cfg.hora_apertura || 8), fin = Number(st.cfg.hora_cierre || 21); return Array.from({ length: fin - ini }, (_, i) => ini + i); };
 const libre = (f, h, c) => !!st.libres.get(f)?.get(h)?.has(c);
 const libresDe = (f, c, horas = horasDelDia()) => horas.filter((h) => libre(f, h, c));
+const personas = (cap) => (/ a /.test(cap) ? `${cap} personas` : `hasta ${cap} ${cap === '1' ? 'persona' : 'personas'}`);
 const datos = (c) => CATALOGO[c.id] || { corto: c.nombre, lema: '', fotos: [], ideal: ['individual'], muebles: [], capacidad: null };
 const nombreDia = (f) => (f === hoyAR() ? 'Hoy' : f === sumarDias(hoyAR(), 1) ? 'Mañana' : DIAS_CORTOS[diaSemana(f)]);
 const precioDesde = () => Math.min(...[8, 14].map((h) => precioHora(st.precios, st.cfg, 'suelta', h, hoyAR())).filter(Boolean));
@@ -170,7 +171,7 @@ function pintarFichas() {
         ${d.fotos.length > 1 ? `<span class="n-fotos">📷 ${d.fotos.length}</span>` : ''}
       </button>
       <div class="card-cuerpo">
-        <div class="card-cab"><h3>${esc(d.corto)}</h3>${d.capacidad ? `<span class="cap" title="Personas">👥 hasta ${d.capacidad}</span>` : ''}</div>
+        <div class="card-cab"><h3>${esc(d.corto)}</h3>${d.capacidad ? `<span class="cap" title="Capacidad">👥 ${esc(personas(d.capacidad))}</span>` : ''}</div>
         <p class="lema">${esc(d.lema)}</p>
         <ul class="chips-m">${d.muebles.slice(0, 4).map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
         ${linea(st.fecha, c.id)}
@@ -208,7 +209,7 @@ function abrirComparar() {
       return `<div class="comp-col"><img src="${foto(d.fotos[0], true)}" alt="" width="640" height="427">
         <h3>${esc(d.corto)}</h3><p class="lema">${esc(d.lema)}</p>
         <dl><dt>Para</dt><dd>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(', '))}</dd>
-          <dt>Hasta</dt><dd>${d.capacidad ? `${d.capacidad} personas` : '—'}</dd>
+          <dt>Capacidad</dt><dd>${d.capacidad ? esc(personas(d.capacidad)) : '—'}</dd>
           <dt>Tiene</dt><dd>${esc(d.muebles.join(', '))}</dd>
           <dt>Libre</dt><dd>${libres.length ? esc(rangos(libres)) : 'Completo ese día'}</dd></dl>
         ${linea(st.fecha, c.id, true)}
@@ -245,7 +246,7 @@ function pintarFicha() {
       <p class="lema">${esc(d.lema)}</p>
       <div class="ficha-datos">
         <div><span>Ideal para</span><strong>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(' · '))}</strong></div>
-        ${d.capacidad ? `<div><span>Capacidad</span><strong>Hasta ${d.capacidad} personas</strong></div>` : ''}
+        ${d.capacidad ? `<div><span>Capacidad</span><strong>${esc(personas(d.capacidad).replace(/^h/, 'H'))}</strong></div>` : ''}
         ${d.metros ? `<div><span>Medidas</span><strong>${esc(d.metros)}</strong></div>` : ''}
         <div><span>Precio por hora</span><strong>${pesos(precioHora(st.precios, st.cfg, 'suelta', 8, hoyAR()))} mañana · ${pesos(precioHora(st.precios, st.cfg, 'suelta', 14, hoyAR()))} tarde</strong></div>
       </div>
