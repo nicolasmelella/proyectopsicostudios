@@ -47,8 +47,9 @@
     .chip-f[aria-pressed="true"] { background: var(--rosa); border-color: var(--rosa-borde); color: var(--azul); font-weight: 700; }
 
     /* cuerpo: plano + fichas */
-    .cuerpo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 22px; margin: 22px auto 90px; align-items: start; }
-    .col-plano { position: sticky; top: 14px; }
+    .cuerpo { display: grid; grid-template-columns: 1fr; gap: 22px; margin: 22px auto 90px; align-items: start; }
+    .col-plano { position: static; }
+    #plano > svg { max-width: 820px; margin: 8px auto 0; }
     .tarjeta-b { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 14px; }
     .tarjeta-b h2 { font-size: 1.05rem; margin: 0 0 4px; }
     #plano svg { width: 100%; height: auto; display: block; margin-top: 8px; }
@@ -94,11 +95,27 @@
     .p3-servicio-txt { font-size: 20px; }
     .pl-comun.entrada rect { fill: #f6e7a8; stroke: #c9a227; }
     .pl-balcon { fill: #dde6ee; } .p3-zona { fill: #7a8496; font-size: 22px; font-weight: 700; font-family: var(--f-texto); }
-    .controles-4d { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; padding: 10px 12px; background: var(--fondo-web); border-radius: 12px; }
-    .btn-4d { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--azul); color: #fff; font-size: 1rem; cursor: pointer; flex: none; }
-    .hora-4d { display: flex; flex-direction: column; flex: 1; min-width: 140px; font-size: .78rem; color: var(--gris); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-    .hora-4d input { width: 100%; accent-color: var(--azul); min-height: 28px; }
-    #hora-4d-txt { font-family: var(--f-titulos); color: var(--azul); min-width: 120px; }
+    .l4-lienzo { position: relative; height: clamp(380px, 52vw, 600px); margin-top: 8px; border-radius: 14px; overflow: hidden;
+      background: radial-gradient(120% 90% at 50% 0%, #ffffff 0%, #e9eef6 100%); touch-action: none; }
+    .l4-lienzo canvas { display: block; cursor: grab; }
+    .l4-lienzo canvas:active { cursor: grabbing; }
+    .l4-lienzo .cargando { position: absolute; inset: 0; display: grid; place-items: center; color: var(--gris); }
+    .l4-capa { position: absolute; inset: 0; pointer-events: none; }
+    .l4-cartel { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 0; border: 2px solid #d5dbe6; background: #fff;
+      border-radius: 12px; padding: 4px 10px; font: inherit; cursor: pointer; box-shadow: 0 4px 12px rgba(18,39,90,.18); transition: transform .15s; }
+    .l4-cartel strong { font-family: var(--f-titulos); color: var(--azul); font-size: .9rem; line-height: 1.2; }
+    .l4-cartel small { color: #3c4659; font-size: .76rem; white-space: nowrap; }
+    .l4-cartel.libre { border-color: var(--verde); } .l4-cartel.pocas { border-color: #d99a1e; } .l4-cartel.completo { border-color: #b8c0cd; }
+    .l4-cartel.comun { border-color: var(--rosa-borde); }
+    .l4-cartel.activa { transform: scale(1.12); border-color: var(--azul); }
+    .l4-cartel.apagada { opacity: .45; }
+    .l4-servicio { color: #7a8496; font-size: .74rem; font-weight: 600; pointer-events: none; }
+    @media (max-width: 640px) {
+      .l4-cartel { padding: 2px 7px; border-radius: 8px; border-width: 1.5px; }
+      .l4-cartel strong { font-size: .72rem; } .l4-cartel small { display: none; }
+      .l4-cartel.comun:not(.activa) { display: none; } .l4-servicio { display: none; }
+    }
+    .ayuda-4d { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; color: var(--gris); margin-top: 6px; }
     .lnk-4d { background: none; border: 0; color: var(--azul); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 6px 2px; min-height: 40px; }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
 
@@ -231,15 +248,12 @@
       <aside class="col-plano">
         <div class="tarjeta-b">
           <div class="plano-cab"><h2>Piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2>
-            <div class="vista-plano" role="group" aria-label="Vista del plano"><button type="button" data-vista-plano="3d" aria-pressed="true">3D</button><button type="button" data-vista-plano="2d" aria-pressed="false">Plano</button></div></div>
+            <div class="vista-plano" role="group" aria-label="Vista del plano"><button type="button" data-vista-plano="4d" aria-pressed="true">4D</button><button type="button" data-vista-plano="plano" aria-pressed="false">Plano</button></div></div>
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
-          <div class="controles-4d">
-            <button type="button" class="btn-4d" id="play-4d" aria-label="Ver el día hora por hora">▶</button>
-            <label class="hora-4d"><span>Hora por hora</span><input type="range" id="hora-4d" min="8" max="20" step="1" value="8" aria-describedby="hora-4d-txt"></label>
-            <strong id="hora-4d-txt" aria-live="polite">Todo el día</strong>
-            <button type="button" class="lnk-4d oculto" id="todo-4d">Todo el día</button>
-            <button type="button" class="lnk-4d" id="girar">⟳ Ver desde el balcón</button>
+          <div class="ayuda-4d" id="ayuda-4d">
+            <span>🖐 Arrastrá para girar · rueda o pellizcá para acercar · tocá un consultorio para entrar</span>
+            <button type="button" class="lnk-4d" id="vista-general">Vista general</button>
           </div>
           <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>
           <p class="nota-croquis">Según el plano del piso 7. Los muebles son ilustrativos.</p>
