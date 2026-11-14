@@ -38,6 +38,9 @@ const st = {
   dias: [],                   // fechas hábiles que se muestran
   fecha: null, franja: 'dia', para: 'todos', tipo: 'todos',
   hora: null,                 // horario elegido en la semana (null = todo el día)
+  modo: 'horas',              // 'horas' (flexible) | 'fijo' (todas las semanas)
+  libresFijo: null,           // 'fijo-1'…'fijo-6' → Map(hora → Set(consultorio)), libres todas las semanas
+  fechaHoras: null,           // el día elegido en "por horas", para volver
   semana: 0,                  // 0 = esta semana, 1 = la que viene
   vistaSemana: 'horario',     // 'horario' | 'consultorio'
   comparar: new Set(),
@@ -53,11 +56,18 @@ const horasDelDia = () => {
   return st.franja === 'manana' ? todas.filter((h) => h < corte) : st.franja === 'tarde' ? todas.filter((h) => h >= corte) : todas;
 };
 const todasLasHoras = () => { const ini = Number(st.cfg.hora_apertura || 8), fin = Number(st.cfg.hora_cierre || 21); return Array.from({ length: fin - ini }, (_, i) => ini + i); };
-const libre = (f, h, c) => !!st.libres.get(f)?.get(h)?.has(c);
+const esFijo = (f) => String(f).startsWith('fijo-');
+const diaFijo = (f) => Number(String(f).slice(5));
+const libre = (f, h, c) => !!(esFijo(f) ? st.libresFijo : st.libres)?.get(f)?.get(h)?.has(c);
+const PLURAL = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+// "Martes 17 de nov" o, en fijo, "Todos los martes"
+const fechaTxt = (f) => (esFijo(f) ? `Todos los ${PLURAL[diaFijo(f)]}` : fechaLarga(f));
+// Fechas en que arranca un fijo ese día de la semana (desde mañana, como en la web)
+const inicioFijo = (d) => { let f = sumarDias(hoyAR(), 1); while (diaSemana(f) !== d) f = sumarDias(f, 1); return f; };
 const libresDe = (f, c, horas = horasDelDia()) => horas.filter((h) => libre(f, h, c));
 const personas = (cap) => (/ a /.test(cap) ? `${cap} personas` : `hasta ${cap} ${cap === '1' ? 'persona' : 'personas'}`);
 const datos = (c) => CATALOGO[c.id] || { corto: c.nombre, lema: '', fotos: [], ideal: ['individual'], muebles: [], capacidad: null };
-const nombreDia = (f) => (f === hoyAR() ? 'Hoy' : f === sumarDias(hoyAR(), 1) ? 'Mañana' : DIAS_CORTOS[diaSemana(f)]);
+const nombreDia = (f) => (esFijo(f) ? DIAS_CORTOS[diaFijo(f)] : f === hoyAR() ? 'Hoy' : f === sumarDias(hoyAR(), 1) ? 'Mañana' : DIAS_CORTOS[diaSemana(f)]);
 const precioDesde = () => Math.min(...[8, 14].map((h) => precioHora(st.precios, st.cfg, 'suelta', h, hoyAR())).filter(Boolean));
 
 // ---------------------------------------------------------------- carga
@@ -92,8 +102,9 @@ function pintarFiltros() {
   $$('#franjas [data-franja]').forEach((b) => (b.onclick = () => { st.franja = b.dataset.franja; pintarTodo(); }));
   $('#tipos').innerHTML = TIPOS.map(([k, t]) => `<button type="button" class="chip-f chip-tipo" data-tipo="${k}" aria-pressed="${st.tipo === k}">${t}</button>`).join('');
   $$('#tipos [data-tipo]').forEach((b) => (b.onclick = () => { st.tipo = b.dataset.tipo; pintarTodo(); }));
-  $('#titulo-dia').textContent = st.hora !== null ? `${fechaLarga(st.fecha)} · ${horaTxt(st.hora)}`
-    : `${fechaLarga(st.fecha)}${st.franja === 'dia' ? '' : st.franja === 'manana' ? ' · a la mañana' : ' · a la tarde'}`;
+  $$('[data-modo]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.modo === st.modo));
+  $('#titulo-dia').textContent = st.hora !== null ? `${fechaTxt(st.fecha)} · ${horaTxt(st.hora)}`
+    : `${fechaTxt(st.fecha)}${st.franja === 'dia' ? '' : st.franja === 'manana' ? ' · a la mañana' : ' · a la tarde'}`;
 }
 
 // ---------------------------------------------------------------- plano del piso (croquis)
@@ -177,11 +188,58 @@ $('#vista-general').onclick = () => motor?.general();
 const filtrados = () => st.consultorios.filter((c) => st.tipo === 'todos' || (datos(c).tipos || []).includes(st.tipo));
 
 // ---------------------------------------------------------------- la semana (primer pantallazo)
-const diasSemana = () => st.dias.slice(st.semana * 6, st.semana * 6 + 6);
-const fechaCortaTxt = (f) => `${Number(f.slice(8))}/${Number(f.slice(5, 7))}`;
+const diasSemana = () => (st.modo === 'fijo' ? [1, 2, 3, 4, 5, 6].map((d) => `fijo-${d}`) : st.dias.slice(st.semana * 6, st.semana * 6 + 6));
+const fechaCortaTxt = (f) => (esFijo(f) ? 'c/semana' : `${Number(f.slice(8))}/${Number(f.slice(5, 7))}`);
+
+// Horario fijo: lo que está libre TODAS las semanas, para cada día (se pide a la base una sola vez)
+async function cargarFijo() {
+  if (st.libresFijo) return;
+  const res = await Promise.all([1, 2, 3, 4, 5, 6].map((d) => sb.rpc('disponibilidad_fijo', { p_dia: d, p_desde: inicioFijo(d) })));
+  const err = res.find((r) => r.error)?.error;
+  if (err) throw err;
+  st.libresFijo = new Map();
+  res.forEach(({ data }, i) => {
+    const m = new Map();
+    for (const r of data) { if (!m.has(r.hora)) m.set(r.hora, new Set()); m.get(r.hora).add(r.consultorio_id); }
+    st.libresFijo.set(`fijo-${i + 1}`, m);
+  });
+}
+async function cambiarModo(modo) {
+  if (modo === st.modo) return;
+  if (modo === 'fijo') {
+    try { await cargarFijo(); } catch (e) { return avisar(mensajeError(e)); }
+    st.fechaHoras = st.fecha;
+    st.fecha = `fijo-${diaSemana(st.fecha) === 7 ? 1 : diaSemana(st.fecha)}`;
+  } else st.fecha = st.fechaHoras || st.dias[0];
+  st.modo = modo; st.hora = null;
+  pintarTodo();
+}
+// En fijo, por la tarde se piden al menos 2 horas seguidas (misma regla que la web)
+function horasParaFijo(f, h, c) {
+  const corte = Number(st.cfg.hora_fin_manana || 13), minTarde = Number(st.cfg.min_horas_fijo_tarde || 2);
+  if (h < corte || minTarde < 2) return [h];
+  if (libre(f, h + 1, c)) return [h, h + 1];
+  if (h - 1 >= corte && libre(f, h - 1, c)) return [h - 1, h];
+  return null;
+}
+function bloquesFijoValidos(horas) {
+  const hs = [...horas].sort((a, b) => a - b), corte = Number(st.cfg.hora_fin_manana || 13);
+  const minM = Number(st.cfg.min_horas_fijo_manana || 1), minT = Number(st.cfg.min_horas_fijo_tarde || 2);
+  let ini = 0;
+  for (let i = 1; i <= hs.length; i++) {
+    if (i < hs.length && hs[i] === hs[i - 1] + 1) continue;
+    if (i - ini < (hs[i - 1] >= corte ? minT : minM)) return false;
+    ini = i;
+  }
+  return hs.length > 0;
+}
+const linkFijo = (f, horas, c) => `index.html?fijo=${diaFijo(f)}&h=${horas.join(',')}&c=${c}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
 function pintarSemana() {
   const dias = diasSemana(), hs = horasDelDia(), lista = filtrados();
-  $('#sem-rango').textContent = dias.length ? `${fechaCortaTxt(dias[0])} al ${fechaCortaTxt(dias[dias.length - 1])}` : '';
+  $('#sem-rango').textContent = st.modo === 'fijo' ? 'Libre todas las semanas, desde la próxima'
+    : dias.length ? `${fechaCortaTxt(dias[0])} al ${fechaCortaTxt(dias[dias.length - 1])}` : '';
+  $('#titulo-semana').textContent = st.modo === 'fijo' ? 'Horario fijo: qué hay libre todas las semanas' : 'Disponibilidad de la semana';
+  $('#sem-ant').classList.toggle('oculto', st.modo === 'fijo'); $('#sem-sig').classList.toggle('oculto', st.modo === 'fijo');
   $('#sem-ant').disabled = st.semana === 0;
   $('#sem-sig').disabled = (st.semana + 1) * 6 >= st.dias.length;
   $$('[data-vista-sem]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vistaSem === st.vistaSemana));
@@ -193,13 +251,14 @@ function pintarSemana() {
       const n = lista.filter((c) => libre(f, h, c.id)).length, nivel = n ? Math.min(4, Math.ceil((n / max) * 4)) : 0;
       const sel = st.fecha === f && st.hora === h;
       return `<td><button type="button" class="sem-celda n${nivel} ${sel ? 'sel' : ''}" data-f="${f}" data-h="${h}" ${n ? '' : 'disabled'}
-        aria-label="${esc(fechaLarga(f))} ${horaTxt(h)}: ${n ? `${n} ${n === 1 ? 'consultorio libre' : 'consultorios libres'}` : 'completo'}">${n || '–'}</button></td>`;
+        aria-label="${esc(fechaTxt(f))} ${horaTxt(h)}: ${n ? `${n} ${n === 1 ? 'consultorio libre' : 'consultorios libres'}` : 'completo'}">${n || '–'}</button></td>`;
     }).join('')}</tr>`).join('')}</tbody></table>`;
-    $('#sem-leyenda').innerHTML = 'Cada casilla dice cuántos consultorios hay libres. Tocá una para verlos.';
+    $('#sem-leyenda').innerHTML = st.modo === 'fijo' ? 'Cada casilla dice cuántos consultorios están libres ese día y hora todas las semanas. Tocá una para verlos.'
+      : 'Cada casilla dice cuántos consultorios hay libres. Tocá una para verlos.';
   } else {
     $('#semana').innerHTML = `<table class="sem-tabla por-cons" aria-label="Disponibilidad de cada consultorio">${cabeza}<tbody>${lista.map((c) => `<tr><th scope="row">${esc(datos(c).corto.replace('Consultorio ', 'Cons. '))}</th>${dias.map((f) => {
       const libres = libresDe(f, c.id, hs);
-      return `<td><button type="button" class="sem-cons" data-f="${f}" data-c="${c.id}" aria-label="${esc(datos(c).corto)}, ${esc(fechaLarga(f))}: ${libres.length ? 'libre ' + esc(rangos(libres)) : 'completo'}">
+      return `<td><button type="button" class="sem-cons" data-f="${f}" data-c="${c.id}" aria-label="${esc(datos(c).corto)}, ${esc(fechaTxt(f))}: ${libres.length ? 'libre ' + esc(rangos(libres)) : 'completo'}">
         <span class="mini">${hs.map((h) => `<i class="${libre(f, h, c.id) ? 'l' : 'o'}"></i>`).join('')}</span><small>${libres.length ? `${libres.length} h` : 'Completo'}</small></button></td>`;
     }).join('')}</tr>`).join('')}</tbody></table>`;
     $('#sem-leyenda').innerHTML = 'Verde: horas libres de cada consultorio. Tocá un día para elegir horarios.';
@@ -219,19 +278,24 @@ function pintarSlot() {
   if (st.hora === null) { caja.classList.add('oculto'); return; }
   const libres = filtrados().filter((c) => libre(st.fecha, st.hora, c.id));
   caja.classList.remove('oculto');
-  caja.innerHTML = `<div class="slot-cab"><h3>${esc(fechaLarga(st.fecha))} · ${horaTxt(st.hora)} a ${horaTxt(st.hora + 1)}</h3>
+  caja.innerHTML = `<div class="slot-cab"><h3>${esc(fechaTxt(st.fecha))} · ${horaTxt(st.hora)} a ${horaTxt(st.hora + 1)}</h3>
       <span class="suave">${libres.length} ${libres.length === 1 ? 'consultorio libre' : 'consultorios libres'}${st.tipo === 'todos' ? '' : ' ' + TIPOS.find((t) => t[0] === st.tipo)[1].replace(/^\S+ /, '').toLowerCase()}</span>
       <button type="button" class="lnk-4d" id="slot-quitar">Quitar horario</button></div>
     <div class="slot-lista">${libres.map((c) => {
       const d = datos(c);
       return `<div class="slot-item"><img src="${foto(d.fotos[0], true)}" alt="" width="640" height="427" loading="lazy">
         <div><strong>${esc(d.corto)}</strong><small>${esc((d.tipos || []).map((t) => TIPOS.find((x) => x[0] === t)?.[1].replace(/^\S+ /, '')).join(' · '))} · 👥 ${esc(personas(d.capacidad))}</small></div>
-        <button type="button" class="btn btn-primario btn-chico" data-reservar="${c.id}">Reservar ${horaTxt(st.hora)}</button></div>`;
+        ${st.modo === 'fijo' ? (() => {
+          const hs = horasParaFijo(st.fecha, st.hora, c.id);
+          return hs ? `<a class="btn btn-primario btn-chico" href="${linkFijo(st.fecha, hs, c.id)}">Pedir fijo ${esc(rangos(hs))}</a>`
+            : '<span class="suave chico">Por la tarde el fijo es de 2 horas seguidas y la de al lado está ocupada</span>';
+        })() : `<button type="button" class="btn btn-primario btn-chico" data-reservar="${c.id}">Reservar ${horaTxt(st.hora)}</button>`}</div>`;
     }).join('')}</div>
     <p class="suave chico">En el mapa de abajo los ves marcados en verde.</p>`;
   $('#slot-quitar').onclick = () => { st.hora = null; pintarTodo(); };
   $$('#slot [data-reservar]').forEach((b) => (b.onclick = () => abrirFicha(Number(b.dataset.reservar), { fecha: st.fecha, hora: st.hora })));
 }
+$$('[data-modo]').forEach((b) => (b.onclick = () => cambiarModo(b.dataset.modo)));
 $$('[data-vista-sem]').forEach((b) => (b.onclick = () => { st.vistaSemana = b.dataset.vistaSem; pintarSemana(); }));
 $('#sem-ant').onclick = () => { st.semana = Math.max(0, st.semana - 1); st.hora = null; st.fecha = diasSemana()[0]; pintarTodo(); };
 $('#sem-sig').onclick = () => { st.semana++; st.hora = null; st.fecha = diasSemana()[0]; pintarTodo(); };
@@ -244,6 +308,7 @@ function linea(f, c, chica = false) {
     <div class="linea-ejes ${chica ? 'chica' : ''}"><span>${horaTxt(hs[0])}</span><span>${horaTxt(Number(st.cfg.hora_fin_manana || 13))}</span><span>${horaTxt(hs[hs.length - 1] + 1)}</span></div>`;
 }
 function proximoLibre(c) {
+  if (st.modo === 'fijo') return null;
   for (const d of st.dias) if (d > st.fecha && libresDe(d, c).length) return d;
   return null;
 }
@@ -266,7 +331,7 @@ function pintarFichas() {
         <p class="lema">${esc(d.lema)}</p>
         <ul class="chips-m">${d.muebles.slice(0, 4).map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
         ${linea(st.fecha, c.id)}
-        <p class="libres-txt">${libres.length ? `<strong>Libre:</strong> ${esc(rangos(libres))}` : prox ? `Completo · próximo lugar el <strong>${esc(fechaLarga(prox))}</strong>` : 'Sin lugar en las próximas semanas'}</p>
+        <p class="libres-txt">${libres.length ? `<strong>Libre:</strong> ${esc(rangos(libres))}` : prox ? `Completo · próximo lugar el <strong>${esc(fechaTxt(prox))}</strong>` : 'Sin lugar en las próximas semanas'}</p>
         <div class="card-acc">
           <button type="button" class="btn btn-primario" data-abrir="${c.id}">Ver y reservar</button>
           <label class="comparar"><input type="checkbox" data-comp="${c.id}" ${st.comparar.has(c.id) ? 'checked' : ''}> Comparar</label>
@@ -294,7 +359,7 @@ function pintarBarraComparar() {
 }
 function abrirComparar() {
   const lista = st.consultorios.filter((c) => st.comparar.has(c.id));
-  $('#comp-cuerpo').innerHTML = `<p class="suave">Disponibilidad del <strong>${esc(fechaLarga(st.fecha))}</strong>. Cambiá el día arriba para comparar otro.</p>
+  $('#comp-cuerpo').innerHTML = `<p class="suave">Disponibilidad: <strong>${esc(fechaTxt(st.fecha))}</strong>. Cambiá el día arriba para comparar otro.</p>
     <div class="comp-grid" style="--n:${lista.length}">${lista.map((c) => {
       const d = datos(c), libres = libresDe(st.fecha, c.id, todasLasHoras());
       return `<div class="comp-col"><img src="${foto(d.fotos[0], true)}" alt="" width="640" height="427">
@@ -339,15 +404,16 @@ function pintarFicha() {
         <div><span>Ideal para</span><strong>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(' · '))}</strong></div>
         ${d.capacidad ? `<div><span>Capacidad</span><strong>${esc(personas(d.capacidad).replace(/^h/, 'H'))}</strong></div>` : ''}
         ${d.metros ? `<div><span>Medidas</span><strong>${esc(d.metros)}</strong></div>` : ''}
-        <div><span>Precio por hora</span><strong>${pesos(precioHora(st.precios, st.cfg, 'suelta', 8, hoyAR()))} mañana · ${pesos(precioHora(st.precios, st.cfg, 'suelta', 14, hoyAR()))} tarde</strong></div>
+        <div><span>${st.modo === 'fijo' ? 'Fijo, por hora' : 'Precio por hora'}</span><strong>${pesos(precioHora(st.precios, st.cfg, st.modo === 'fijo' ? 'fijo' : 'suelta', 8, hoyAR()))} mañana · ${pesos(precioHora(st.precios, st.cfg, st.modo === 'fijo' ? 'fijo' : 'suelta', 14, hoyAR()))} tarde</strong></div>
       </div>
       <ul class="chips-m">${d.muebles.map((m) => `<li>${esc(m)}</li>`).join('')}<li>Wifi</li><li>Sala de espera</li></ul>
-      <h3 class="agenda-tit">Elegí días y horas <small>Tocá las horas libres (podés elegir varios días)</small></h3>
+      <h3 class="agenda-tit">${st.modo === 'fijo' ? 'Elegí tu horario fijo <small>Un día de la semana y sus horas (por la tarde, 2 horas seguidas como mínimo)</small>'
+        : 'Elegí días y horas <small>Tocá las horas libres (podés elegir varios días)</small>'}</h3>
       <div class="agenda-scroll"><table class="agenda" aria-label="Agenda de ${esc(d.corto)}">
-        <thead><tr><th></th>${semana.map((f) => `<th scope="col" class="${f === st.fecha ? 'hoy-col' : ''}">${esc(nombreDia(f))}<br><small>${Number(f.slice(8))}/${Number(f.slice(5, 7))}</small></th>`).join('')}</tr></thead>
+        <thead><tr><th></th>${semana.map((f) => `<th scope="col" class="${f === st.fecha ? 'hoy-col' : ''}">${esc(nombreDia(f))}<br><small>${esc(fechaCortaTxt(f))}</small></th>`).join('')}</tr></thead>
         <tbody>${hs.map((h) => `<tr class="${h === corte ? 'corte' : ''}"><th scope="row">${horaTxt(h)}</th>${semana.map((f) => {
           const ok = libre(f, h, c.id), sel = st.seleccion.get(f)?.has(h);
-          return `<td>${ok ? `<button type="button" class="celda ${sel ? 'sel' : ''}" data-f="${f}" data-h="${h}" aria-pressed="${!!sel}" aria-label="${esc(fechaLarga(f))} ${horaTxt(h)}, libre">${sel ? '✓' : ''}</button>`
+          return `<td>${ok ? `<button type="button" class="celda ${sel ? 'sel' : ''}" data-f="${f}" data-h="${h}" aria-pressed="${!!sel}" aria-label="${esc(fechaTxt(f))} ${horaTxt(h)}, libre">${sel ? '✓' : ''}</button>`
             : '<span class="celda ocupada" aria-label="ocupado"></span>'}</td>`;
         }).join('')}</tr>`).join('')}</tbody></table></div>
       <p class="leyenda-ag"><span class="cl"></span> Libre <span class="cs"></span> Elegido <span class="co"></span> Ocupado</p>
@@ -362,6 +428,10 @@ function pintarFicha() {
   g.addEventListener('touchend', (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) mover(dx < 0 ? 1 : -1); x0 = null; });
   $$('#ficha-cuerpo .celda[data-f]').forEach((b) => (b.onclick = () => {
     const f = b.dataset.f, h = Number(b.dataset.h);
+    if (st.modo === 'fijo' && !st.seleccion.has(f) && st.seleccion.size) {   // el fijo es un solo día de la semana
+      st.seleccion = new Map();
+      $$('#ficha-cuerpo .celda.sel').forEach((x) => { x.classList.remove('sel'); x.setAttribute('aria-pressed', 'false'); x.textContent = ''; });
+    }
     if (!st.seleccion.has(f)) st.seleccion.set(f, new Set());
     const s = st.seleccion.get(f);
     if (s.has(h)) s.delete(h);
@@ -375,6 +445,17 @@ function pintarFicha() {
 }
 function pintarResumenFicha() {
   const dias = [...st.seleccion.entries()].filter(([, s]) => s.size).sort(([a], [b]) => (a < b ? -1 : 1));
+  if (st.modo === 'fijo') {
+    const [f, s] = dias[0] || [];
+    const horas = s ? [...s].sort((a, b) => a - b) : [];
+    const semanal = horas.reduce((t, h) => t + precioHora(st.precios, st.cfg, 'fijo', h, hoyAR()), 0);
+    const ok = horas.length && bloquesFijoValidos(horas);
+    $('#ficha-pie').innerHTML = horas.length ? `<div><strong>${esc(fechaTxt(f))} · ${esc(rangos(horas))}</strong>
+        <br><span class="suave">${pesos(semanal)} por semana · se paga por mes${ok ? '' : ' · <strong style="color:var(--error)">por la tarde, 2 horas seguidas como mínimo</strong>'}</span></div>
+        ${ok ? `<a class="btn btn-primario" href="${linkFijo(f, horas, st.abierto)}">Pedir horario fijo</a>` : ''}`
+      : '<span class="suave">Elegí un día y sus horas en la agenda.</span>';
+    return;
+  }
   const total = dias.reduce((t, [f, s]) => t + [...s].reduce((x, h) => x + precioHora(st.precios, st.cfg, 'suelta', h, f), 0), 0);
   const horas = dias.reduce((t, [, s]) => t + s.size, 0);
   const pct = Number(st.cfg.porcentaje_sena || 50);

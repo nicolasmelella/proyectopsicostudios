@@ -149,10 +149,16 @@
     .slot-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
     .slot-cab h3 { margin: 0; font-size: 1.05rem; }
     .slot-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
-    .slot-item { display: grid; grid-template-columns: 74px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--linea); border-radius: 12px; padding: 8px; }
+    .slot-item { display: grid; grid-template-columns: 74px 1fr; gap: 8px 10px; align-items: center; border: 1px solid var(--linea); border-radius: 12px; padding: 8px; }
     .slot-item img { width: 74px; height: 54px; object-fit: cover; border-radius: 8px; }
     .slot-item strong { display: block; color: var(--azul); font-family: var(--f-titulos); }
     .slot-item small { color: var(--gris); font-size: .8rem; }
+    .slot-item .btn, .slot-item > .suave { grid-column: 1 / -1; text-align: center; }
+    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+    .modo { text-align: left; border: 2px solid var(--linea); background: #fff; border-radius: 14px; padding: 12px 14px; font: inherit; cursor: pointer; color: #1b2333; min-height: 64px; }
+    .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1.05rem; }
+    .modo small { color: var(--gris); }
+    .modo[aria-pressed="true"] { border-color: var(--azul); background: #eef2fa; box-shadow: 0 0 0 1px var(--azul) inset; }
     .chip-tipo { font-size: 1rem; padding: 9px 16px; }
     @media (max-width: 640px) {
       .sem-tabla { border-spacing: 2px; } .sem-celda { height: 32px; font-size: .85rem; } .sem-dia { font-size: .8rem; }
@@ -280,7 +286,11 @@
 
   <div class="ancho">
     <div class="panel-filtros" role="region" aria-label="Filtros">
-      <div class="fila-f" style="margin-top:0"><span>Busco</span><div id="tipos" role="group" aria-label="Tipo de consultorio" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+      <div class="modos" role="group" aria-label="Cómo querés alquilar">
+        <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>⏱ Por horas</strong><small>Flexible: los días que necesites</small></button>
+        <button type="button" class="modo" data-modo="fijo" aria-pressed="false"><strong>📅 Horario fijo</strong><small>El mismo día y hora todas las semanas</small></button>
+      </div>
+      <div class="fila-f"><span>Busco</span><div id="tipos" role="group" aria-label="Tipo de consultorio" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
       <div class="fila-f"><span>Horario</span><div id="franjas" role="group" aria-label="Horario" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
     </div>
 
@@ -303,7 +313,7 @@
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
           <div class="ayuda-4d" id="ayuda-4d">
-            <span class="solo-compu">Tocá un consultorio para ver fotos y reservar · arrastrá para inclinar la vista</span><span class="solo-cel">Tocá un consultorio para ver fotos y reservar · con dos dedos girás y acercás</span>
+            <span class="solo-compu">Tocá un consultorio para ver fotos y reservar · arrastrá para girar · rueda para acercar</span><span class="solo-cel">Tocá un consultorio para ver fotos y reservar · deslizá de costado para girar, con dos dedos acercás</span>
             <button type="button" class="lnk-4d" id="vista-general">Vista general</button>
           </div>
           <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>

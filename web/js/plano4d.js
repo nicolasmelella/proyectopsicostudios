@@ -141,16 +141,16 @@ export async function crear4d(cont, { onTocar, onComun }) {
     if (!movido) { camara.position.copy(INICIO.pos); }
     // Movimiento acotado: el piso siempre queda a la vista y se entiende
     const esf = new THREE.Spherical().setFromVector3(INICIO.pos.clone().sub(INICIO.mira));
-    controles.minAzimuthAngle = esf.theta - 0.45; controles.maxAzimuthAngle = esf.theta + 0.45;   // ±25° hacia los costados
-    controles.minPolarAngle = Math.max(0.35, esf.phi - 0.35); controles.maxPolarAngle = Math.min(1.15, esf.phi + 0.2);
+    controles.minAzimuthAngle = esf.theta - 1.05; controles.maxAzimuthAngle = esf.theta + 1.05;   // ±60° hacia los costados
+    controles.minPolarAngle = Math.max(0.3, esf.phi - 0.45); controles.maxPolarAngle = Math.min(1.2, esf.phi + 0.25);
     controles.minDistance = dist * 0.65; controles.maxDistance = dist * 1.1;
   };
   const controles = new OrbitControls(camara, renderer.domElement);
   controles.target.copy(INICIO.mira);
   controles.enableDamping = true; controles.dampingFactor = 0.12;
-  controles.enablePan = false; controles.rotateSpeed = 0.45; controles.zoomSpeed = 0.6;
-  // en el celular, un dedo hace scroll de la página; con dos dedos se gira y se acerca
-  controles.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_ROTATE };
+  controles.enablePan = false; controles.rotateSpeed = 0.7; controles.zoomSpeed = 0.7;
+  // en el celular: un dedo de costado gira el piso (arriba/abajo sigue haciendo scroll de la página); dos dedos acercan
+  controles.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
   renderer.domElement.style.touchAction = 'pan-y';
   controles.addEventListener('start', () => { movido = true; });
 
