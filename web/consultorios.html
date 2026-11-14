@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nuestros consultorios | Psico Studios</title>
+  <meta name="description" content="Conocé cada consultorio de Psico Studios en el Microcentro: fotos, para qué sirve, disponibilidad en vivo y reserva en minutos.">
+  <meta name="theme-color" content="#12275a">
+  <link rel="icon" type="image/png" href="img/logo-azul.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilos.css">
+  <style>
+    :root {
+      --rosa: #eed2e2; --rosa-borde: #d9a9c1; --fondo-web: #f5f7fb; --linea: #dfe3ea; --gris: #5b6474;
+      --verde: #1f7a4d; --verde-fondo: #e3f3ea; --ambar: #9a6200; --ambar-fondo: #fdf1d6; --rojo-suave: #b8c0cd;
+      --f-titulos: 'Montserrat', system-ui, sans-serif; --f-texto: 'Source Sans 3', system-ui, sans-serif;
+    }
+    body { background: var(--fondo-web); font-family: var(--f-texto); font-size: 17px; color: #1b2333; margin: 0; }
+    h1, h2, h3 { font-family: var(--f-titulos); color: var(--azul); }
+    .ancho { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .suave { color: var(--gris); }
+
+    /* encabezado */
+    .cab { background: var(--azul); color: #fff; }
+    .cab .ancho { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; }
+    .cab img { height: 34px; display: block; }
+    .cab nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    .cab nav a { color: #fff; text-decoration: none; font-weight: 600; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); font-size: .92rem; }
+    .cab nav a.prim { background: var(--rosa); color: var(--azul); border-color: var(--rosa); }
+
+    /* portada */
+    .portada { background: linear-gradient(180deg, var(--azul) 0%, #1c3576 100%); color: #fff; padding: 26px 0 70px; }
+    .portada h1 { color: #fff; font-size: clamp(1.7rem, 4vw, 2.6rem); margin: 0 0 6px; }
+    .portada p { margin: 0; opacity: .9; font-size: 1.05rem; }
+    .panel-filtros { background: #fff; color: #1b2333; border-radius: 18px; box-shadow: 0 12px 34px rgba(18,39,90,.18); padding: 16px; margin-top: -48px; position: relative; }
+    .fila-f { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 10px; }
+    .fila-f > span { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gris); }
+    .dias { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
+    .dia { flex: none; display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 74px; padding: 8px 6px; border-radius: 12px;
+      border: 1.5px solid var(--linea); background: #fff; font: inherit; cursor: pointer; color: #1b2333; }
+    .dia span { font-size: .8rem; color: var(--gris); } .dia strong { font-family: var(--f-titulos); font-size: 1.35rem; color: var(--azul); } .dia small { font-size: .74rem; color: var(--verde); font-weight: 600; }
+    .dia[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); }
+    .dia[aria-pressed="true"] span, .dia[aria-pressed="true"] strong, .dia[aria-pressed="true"] small { color: #fff; }
+    .chip-f { border: 1.5px solid var(--linea); background: #fff; border-radius: 999px; padding: 7px 14px; font: inherit; font-size: .93rem; cursor: pointer; color: #1b2333; min-height: 40px; }
+    .chip-f[aria-pressed="true"] { background: var(--rosa); border-color: var(--rosa-borde); color: var(--azul); font-weight: 700; }
+
+    /* cuerpo: plano + fichas */
+    .cuerpo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 22px; margin: 22px auto 90px; align-items: start; }
+    .col-plano { position: sticky; top: 14px; }
+    .tarjeta-b { background: #fff; border: 1px solid var(--linea); border-radius: 16px; padding: 14px; }
+    .tarjeta-b h2 { font-size: 1.05rem; margin: 0 0 4px; }
+    #plano svg { width: 100%; height: auto; display: block; margin-top: 8px; }
+    .pl-piso { fill: #eef1f7; } .pl-pasillo { fill: #e2e7f0; } .pl-zona { fill: #7a8496; font-size: 18px; font-family: var(--f-texto); }
+    .pl-puerta { fill: none; stroke: #7a8496; stroke-width: 2; }
+    .pl-sala rect, .pl-comun rect { stroke: #fff; stroke-width: 3; cursor: pointer; transition: transform .15s, filter .15s; }
+    .pl-sala.libre rect { fill: var(--verde-fondo); stroke: var(--verde); stroke-width: 2; }
+    .pl-sala.pocas rect { fill: var(--ambar-fondo); stroke: #d99a1e; stroke-width: 2; }
+    .pl-sala.completo rect { fill: #e9ecf2; stroke: var(--rojo-suave); stroke-width: 2; stroke-dasharray: 6 4; }
+    .pl-sala.apagada { opacity: .35; }
+    .pl-sala.hover rect, .pl-sala:hover rect, .pl-sala:focus rect, .pl-sala.activa rect { filter: drop-shadow(0 4px 10px rgba(18,39,90,.25)); stroke: var(--azul); stroke-width: 3; }
+    .pl-sala:focus, .pl-comun:focus { outline: none; }
+    .pl-comun rect { fill: #f7eef3; stroke: var(--rosa-borde); stroke-width: 2; }
+    .pl-ventana { stroke: #6fb3e8; stroke-width: 5; stroke-linecap: round; }
+    .pl-nombre { font-family: var(--f-titulos); font-weight: 700; font-size: 25px; fill: var(--azul); pointer-events: none; }
+    .pl-estado { font-size: 21px; fill: #3c4659; pointer-events: none; font-family: var(--f-texto); }
+    .leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: .85rem; color: var(--gris); margin-top: 10px; }
+    .leyenda i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; }
+    .leyenda .l { background: var(--verde-fondo); border: 2px solid var(--verde); } .leyenda .p { background: var(--ambar-fondo); border: 2px solid #d99a1e; }
+    .leyenda .c { background: #e9ecf2; border: 2px dashed var(--rojo-suave); } .leyenda .v { background: #6fb3e8; height: 5px; border-radius: 3px; }
+    .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
+
+    .lista-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+    .lista-cab h2 { margin: 0; font-size: 1.15rem; }
+    .fichas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .card { background: #fff; border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .15s, transform .15s; }
+    .card.resaltada, .card:hover { box-shadow: 0 10px 26px rgba(18,39,90,.14); }
+    .card-foto { position: relative; padding: 0; border: 0; background: #dfe3ea; cursor: pointer; aspect-ratio: 3 / 2; overflow: hidden; display: block; width: 100%; }
+    .card-foto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s; }
+    .card:hover .card-foto img { transform: scale(1.04); }
+    .estado-pill, .ya-pill, .n-fotos { position: absolute; font-size: .8rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; }
+    .estado-pill { top: 10px; left: 10px; }
+    .estado-pill.libre { background: var(--verde); color: #fff; } .estado-pill.pocas { background: #fbe3a6; color: #6b4300; } .estado-pill.completo { background: #fff; color: #3c4659; }
+    .ya-pill { top: 10px; right: 10px; background: #fff; color: var(--verde); }
+    .n-fotos { bottom: 10px; right: 10px; background: rgba(18,39,90,.75); color: #fff; }
+    .card-cuerpo { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .card-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .card-cab h3 { margin: 0; font-size: 1.15rem; }
+    .cap { font-size: .85rem; color: var(--gris); white-space: nowrap; }
+    .lema { margin: 0; color: #3c4659; }
+    .chips-m { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
+    .chips-m li { background: #eef1f7; color: var(--azul); border-radius: 8px; padding: 3px 9px; font-size: .82rem; }
+    .linea { display: flex; gap: 2px; height: 16px; margin-top: 4px; }
+    .linea span { flex: 1; border-radius: 3px; }
+    .linea .l { background: var(--verde); } .linea .o { background: #d3d9e3; } .linea .fuera { opacity: .3; }
+    .linea.chica { height: 12px; }
+    .linea-ejes { display: flex; justify-content: space-between; font-size: .72rem; color: var(--gris); }
+    .libres-txt { margin: 0; font-size: .95rem; }
+    .card-acc { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 4px; }
+    .comparar { font-size: .9rem; color: var(--gris); display: flex; gap: 6px; align-items: center; cursor: pointer; min-height: 44px; }
+    .comparar input { width: 18px; height: 18px; }
+    .vacio { color: var(--gris); }
+
+    /* barra comparar */
+    .barra-comp { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--azul); color: #fff; border-radius: 999px; padding: 8px 8px 8px 18px;
+      display: flex; gap: 10px; align-items: center; box-shadow: 0 10px 30px rgba(18,39,90,.35); z-index: 30; max-width: calc(100% - 32px); }
+    .barra-comp button { border-radius: 999px; }
+    .barra-comp .lnk { background: none; border: 0; color: #fff; text-decoration: underline; font: inherit; cursor: pointer; }
+
+    /* capas (ficha, comparar, espacios comunes) */
+    .capa { position: fixed; inset: 0; background: rgba(12,22,48,.55); z-index: 50; display: flex; justify-content: flex-end; }
+    .capa.oculto { display: none; }
+    .hoja { background: #fff; width: min(760px, 100%); height: 100%; overflow-y: auto; display: flex; flex-direction: column; animation: entra .22s ease-out; }
+    @keyframes entra { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .hoja { animation: none; } .card-foto img, .g-pista { transition: none !important; } }
+    .hoja-cab { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 10px; pointer-events: none; }
+    .hoja-cab button { pointer-events: auto; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); font-size: 22px; cursor: pointer; color: var(--azul); }
+    .galeria-f { position: relative; overflow: hidden; margin-top: -64px; background: #dfe3ea; aspect-ratio: 3 / 2; }
+    .g-pista { display: flex; height: 100%; transition: transform .35s ease; }
+    .g-pista img { flex: none; width: 100%; height: 100%; object-fit: cover; }
+    .g-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.9); font-size: 26px; cursor: pointer; color: var(--azul); }
+    .g-nav.ant { left: 12px; } .g-nav.sig { right: 12px; }
+    .g-puntos { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; gap: 6px; justify-content: center; }
+    .g-puntos span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.55); } .g-puntos span.on { background: #fff; }
+    .ficha-info { padding: 18px 20px 20px; }
+    .ficha-info h2 { margin: 0 0 4px; font-size: 1.6rem; }
+    .ficha-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 14px 0; }
+    .ficha-datos div { background: var(--fondo-web); border-radius: 12px; padding: 10px 12px; }
+    .ficha-datos span { display: block; font-size: .8rem; color: var(--gris); }
+    .agenda-tit { margin: 20px 0 8px; font-size: 1.05rem; } .agenda-tit small { display: block; font-family: var(--f-texto); font-weight: 400; color: var(--gris); font-size: .88rem; }
+    .agenda-scroll { overflow-x: auto; }
+    .agenda { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 330px; }
+    .agenda tbody th { position: sticky; left: 0; background: #fff; z-index: 1; }
+    .agenda th { font-size: .8rem; font-weight: 600; color: var(--gris); padding: 2px; }
+    .agenda thead th { font-family: var(--f-titulos); color: var(--azul); } .agenda thead th.hoy-col { color: #fff; background: var(--azul); border-radius: 8px; }
+    .agenda tbody th { text-align: right; padding-right: 6px; white-space: nowrap; }
+    .agenda tr.corte td, .agenda tr.corte th { border-top: 2px dashed var(--linea); }
+    .celda { display: block; width: 100%; height: 30px; border-radius: 7px; border: 0; font: inherit; font-weight: 700; color: #fff; }
+    button.celda { background: var(--verde-fondo); border: 1.5px solid #9fd4b6; cursor: pointer; }
+    button.celda:hover { background: #c8ead6; }
+    button.celda.sel { background: var(--azul); border-color: var(--azul); }
+    .celda.ocupada { background: repeating-linear-gradient(45deg, #e6e9ef 0 4px, #f2f4f8 4px 8px); }
+    .leyenda-ag { font-size: .85rem; color: var(--gris); display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; }
+    .leyenda-ag span { display: inline-block; width: 16px; height: 12px; border-radius: 4px; margin-right: -8px; }
+    .leyenda-ag .cl { background: var(--verde-fondo); border: 1.5px solid #9fd4b6; } .leyenda-ag .cs { background: var(--azul); } .leyenda-ag .co { background: repeating-linear-gradient(45deg, #e6e9ef 0 4px, #f2f4f8 4px 8px); }
+    .ficha-pie { position: sticky; bottom: 0; z-index: 3; margin-top: auto; background: #fff; border-top: 1px solid var(--linea); padding: 12px 20px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    .modal-c { background: #fff; margin: auto; width: min(1000px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto; border-radius: 18px; padding: 18px; position: relative; }
+    .modal-c > .cerrar-c { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--fondo-web); font-size: 22px; cursor: pointer; color: var(--azul); }
+    .capa-centro { justify-content: center; align-items: center; }
+    .comp-grid { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 14px; }
+    .comp-col img { width: 100%; border-radius: 12px; aspect-ratio: 3/2; object-fit: cover; }
+    .comp-col h3 { margin: 8px 0 2px; }
+    .comp-col dl { margin: 10px 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: .92rem; }
+    .comp-col dt { color: var(--gris); }
+    .comp-col dd { margin: 0; }
+    .comunes-fotos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 6px 0 12px; }
+    .comunes-fotos img { width: 100%; border-radius: 12px; aspect-ratio: 3/2; object-fit: cover; }
+    .aviso-flot { position: fixed; top: 16px; left: 50%; transform: translate(-50%, -80px); background: var(--azul); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 80; transition: transform .25s; }
+    .aviso-flot.ver { transform: translate(-50%, 0); }
+    .ayuda-wa { position: fixed; right: 16px; bottom: 16px; z-index: 20; background: #1f9d55; color: #fff; text-decoration: none; font-weight: 700; padding: 12px 16px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+
+    @media (max-width: 960px) {
+      .cuerpo { grid-template-columns: 1fr; }
+      .col-plano { position: static; }
+    }
+    @media (max-width: 640px) {
+      .cab nav a:not(.prim) { display: none; }
+      .comp-grid { grid-template-columns: 1fr; }
+      .hoja { width: 100%; }
+      .ficha-pie { flex-direction: column; align-items: stretch; } .ficha-pie .btn { width: 100%; }
+      .barra-comp { bottom: 80px; }
+      .fichas { grid-template-columns: 1fr; }
+      .ayuda-wa { padding: 10px 14px; font-size: .9rem; bottom: 12px; right: 12px; }
+      .col-plano .tarjeta-b { padding-bottom: 54px; }
+      .ficha-info { padding: 16px 12px; }
+      .agenda th { font-size: .74rem; } .agenda tbody th { padding-right: 3px; } .celda { height: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="cab"><div class="ancho">
+    <a href="index.html" aria-label="Psico Studios, inicio"><img src="img/logo-crema.png" alt="Psico Studios" width="120" height="34"></a>
+    <nav><a href="index.html#reservar">Reservar por día y hora</a><a href="index.html" class="prim">Volver a la web</a></nav>
+  </div></header>
+
+  <section class="portada"><div class="ancho">
+    <h1>Elegí tu consultorio</h1>
+    <p>6 espacios en pleno Microcentro, desde <strong id="desde-precio">—</strong> la hora. Mirá cuál está libre, recorrelo en fotos y reservalo.</p>
+  </div></section>
+
+  <div class="ancho">
+    <div class="panel-filtros" role="region" aria-label="Filtros">
+      <div class="dias" id="dias" role="group" aria-label="Día"></div>
+      <div class="fila-f"><span>Horario</span><div id="franjas" role="group" aria-label="Horario" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+      <div class="fila-f"><span>Para</span><div id="para" role="group" aria-label="Tipo de sesión" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+    </div>
+
+    <div class="cuerpo">
+      <aside class="col-plano">
+        <div class="tarjeta-b">
+          <h2>Piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2>
+          <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
+          <div id="plano"></div>
+          <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span></div>
+          <p class="nota-croquis">Croquis ilustrativo: la ubicación real de cada consultorio se ajusta con el plano del piso.</p>
+        </div>
+      </aside>
+      <main>
+        <div class="lista-cab"><h2>Consultorios</h2><span class="suave" id="cantidad"></span></div>
+        <div class="fichas" id="fichas"><div class="cargando">Cargando consultorios…</div></div>
+      </main>
+    </div>
+  </div>
+
+  <div class="barra-comp oculto" id="barra-comp" role="region" aria-label="Comparar">
+    <span id="barra-comp-txt"></span>
+    <button type="button" class="lnk" id="limpiar-comp">Limpiar</button>
+    <button type="button" class="btn btn-primario" id="btn-comparar">Comparar</button>
+  </div>
+
+  <!-- Ficha del consultorio -->
+  <div class="capa oculto" id="ficha" role="dialog" aria-modal="true" aria-labelledby="ficha-titulo">
+    <div class="hoja">
+      <div class="hoja-cab"><button type="button" data-cerrar aria-label="Cerrar">×</button></div>
+      <div id="ficha-cuerpo"></div>
+      <div class="ficha-pie" id="ficha-pie"></div>
+    </div>
+  </div>
+  <!-- Comparar -->
+  <div class="capa capa-centro oculto" id="modal-comp" role="dialog" aria-modal="true" aria-labelledby="comp-titulo">
+    <div class="modal-c"><button type="button" class="cerrar-c" data-cerrar aria-label="Cerrar">×</button>
+      <h2 id="comp-titulo" style="margin-top:0">Comparar consultorios</h2><div id="comp-cuerpo"></div></div>
+  </div>
+  <!-- Espacios comunes -->
+  <div class="capa capa-centro oculto" id="modal-comunes" role="dialog" aria-modal="true" aria-labelledby="comunes-titulo">
+    <div class="modal-c"><button type="button" class="cerrar-c" data-cerrar aria-label="Cerrar">×</button>
+      <h2 id="comunes-titulo" style="margin-top:0">Recepción y sala de espera</h2><div id="comunes-cuerpo"></div></div>
+  </div>
+
+  <a class="ayuda-wa" id="wa-ayuda" target="_blank" rel="noopener">¿Dudas? WhatsApp</a>
+  <div class="aviso-flot" id="aviso-flot" role="status"></div>
+  <script type="module" src="js/consultorios.js"></script>
+</body>
+</html>

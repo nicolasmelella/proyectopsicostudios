@@ -1,0 +1,333 @@
+// Vista "Elegí tu consultorio": plano del piso, fichas con fotos, disponibilidad en vivo,
+// agenda semanal por consultorio, comparador y paso directo al formulario de reserva.
+import { crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos, precioHora, mensajeError, DIAS_CORTOS } from './comun.js';
+import { WHATSAPP_AYUDA } from './config.js';
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const foto = (f, chica) => `img/consultorios/${f}${chica ? '-chica' : ''}.jpg`;
+const reducido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- catálogo
+// Lo que se cuenta de cada consultorio (el id es el de la base). Los datos marcados
+// como "a confirmar" se completan con el equipo.
+const CATALOGO = {
+  1: { corto: 'Consultorio 1', lema: 'Sobrio y práctico, para sesiones individuales y entrevistas.', fotos: ['c1-a', 'c1-b'],
+       ideal: ['individual'], muebles: ['Escritorio', 'Sillas', 'Aire acondicionado'], capacidad: 3 },
+  2: { corto: 'Consultorio 2', lema: 'Cálido, con sofá y sillones: pensado para la escucha.', fotos: ['c2-a', 'c2-b'],
+       ideal: ['individual', 'pareja'], muebles: ['Sofá', 'Sillones', 'Aire acondicionado'], capacidad: 4 },
+  3: { corto: 'Consultorio 3', lema: 'Luz natural todo el día: sofá, sillones y ventanales.', fotos: ['c3-a', 'c3-b'],
+       ideal: ['individual', 'pareja', 'familia'], muebles: ['Sofá', 'Sillones', 'Ventanales', 'Aire acondicionado'], capacidad: 4, ventana: true },
+  4: { corto: 'Consultorio 4', lema: 'Sillones enfrentados y ventanales: ideal para terapia de pareja.', fotos: ['c4-a', 'c4-b'],
+       ideal: ['individual', 'pareja'], muebles: ['Sillones enfrentados', 'Ventanales', 'Aire acondicionado'], capacidad: 3, ventana: true },
+  5: { corto: 'Consultorio 5', lema: 'Escritorio y sillones: sirve tanto para evaluar como para la sesión.', fotos: ['c5-a', 'c5-b'],
+       ideal: ['individual', 'evaluacion'], muebles: ['Escritorio', 'Sillones', 'Aire acondicionado'], capacidad: 3 },
+  6: { corto: 'Salón', lema: 'Mesa redonda y escritorio: grupos, talleres, supervisiones y talleres para padres.', fotos: ['c6-a', 'c6-b'],
+       ideal: ['grupo', 'familia'], muebles: ['Mesa redonda', 'Escritorio', 'Sillas para grupo', 'Aire acondicionado'], capacidad: 10 },
+};
+const PARA = [['todos', 'Todos'], ['individual', 'Individual'], ['pareja', 'Pareja'], ['familia', 'Familia'], ['grupo', 'Grupos y talleres'], ['evaluacion', 'Evaluaciones']];
+const FRANJAS = [['dia', 'Todo el día'], ['manana', 'Mañana'], ['tarde', 'Tarde']];
+
+// ---------------------------------------------------------------- estado
+const sb = await crearCliente();
+const st = {
+  cfg: {}, precios: [], consultorios: [],
+  libres: new Map(),          // fecha → Map(hora → Set(consultorio))
+  dias: [],                   // fechas hábiles que se muestran
+  fecha: null, franja: 'dia', para: 'todos',
+  comparar: new Set(),
+  seleccion: new Map(),       // ficha abierta: fecha → Set(horas)
+  abierto: null,
+};
+
+const horasDelDia = () => {
+  const ini = Number(st.cfg.hora_apertura || 8), fin = Number(st.cfg.hora_cierre || 21), corte = Number(st.cfg.hora_fin_manana || 13);
+  const todas = Array.from({ length: fin - ini }, (_, i) => ini + i);
+  return st.franja === 'manana' ? todas.filter((h) => h < corte) : st.franja === 'tarde' ? todas.filter((h) => h >= corte) : todas;
+};
+const todasLasHoras = () => { const ini = Number(st.cfg.hora_apertura || 8), fin = Number(st.cfg.hora_cierre || 21); return Array.from({ length: fin - ini }, (_, i) => ini + i); };
+const libre = (f, h, c) => !!st.libres.get(f)?.get(h)?.has(c);
+const libresDe = (f, c, horas = horasDelDia()) => horas.filter((h) => libre(f, h, c));
+const datos = (c) => CATALOGO[c.id] || { corto: c.nombre, lema: '', fotos: [], ideal: ['individual'], muebles: [], capacidad: null };
+const nombreDia = (f) => (f === hoyAR() ? 'Hoy' : f === sumarDias(hoyAR(), 1) ? 'Mañana' : DIAS_CORTOS[diaSemana(f)]);
+const precioDesde = () => Math.min(...[8, 14].map((h) => precioHora(st.precios, st.cfg, 'suelta', h, hoyAR())).filter(Boolean));
+
+// ---------------------------------------------------------------- carga
+async function cargar() {
+  const [c, p, k] = await Promise.all([
+    sb.from('config').select('clave, valor'),
+    sb.from('precios').select('modalidad, franja, valor, vigente_desde'),
+    sb.from('consultorios').select('id, nombre, orden, activo, online').order('orden'),
+  ]);
+  const error = c.error || p.error || k.error;
+  if (error) throw error;
+  st.cfg = Object.fromEntries(c.data.map((r) => [r.clave, r.valor]));
+  st.precios = p.data;
+  st.consultorios = k.data.filter((x) => x.activo && x.online);
+  const hoy = hoyAR(), hasta = sumarDias(hoy, 20);
+  const { data, error: e2 } = await sb.rpc('disponibilidad', { p_desde: hoy, p_hasta: hasta });
+  if (e2) throw e2;
+  for (const r of data) {
+    if (!st.libres.has(r.fecha)) st.libres.set(r.fecha, new Map());
+    const m = st.libres.get(r.fecha);
+    if (!m.has(r.hora)) m.set(r.hora, new Set());
+    m.get(r.hora).add(r.consultorio_id);
+  }
+  for (let d = hoy; st.dias.length < 14 && d <= hasta; d = sumarDias(d, 1)) if (diaSemana(d) !== 7) st.dias.push(d);
+  // arranca en el primer día con lugar
+  st.fecha = st.dias.find((d) => st.libres.has(d)) || st.dias[0];
+}
+
+// ---------------------------------------------------------------- filtros
+function pintarFiltros() {
+  $('#dias').innerHTML = st.dias.map((d) => {
+    const n = st.consultorios.reduce((s, c) => s + libresDe(d, c.id).length, 0);
+    return `<button type="button" class="dia" data-dia="${d}" aria-pressed="${d === st.fecha}">
+      <span>${esc(nombreDia(d))}</span><strong>${Number(d.slice(8))}</strong><small>${n ? `${n} h libres` : 'Completo'}</small></button>`;
+  }).join('');
+  $$('#dias [data-dia]').forEach((b) => (b.onclick = () => { st.fecha = b.dataset.dia; pintarTodo(); }));
+  $('#franjas').innerHTML = FRANJAS.map(([k, t]) => `<button type="button" class="chip-f" data-franja="${k}" aria-pressed="${st.franja === k}">${t}</button>`).join('');
+  $$('#franjas [data-franja]').forEach((b) => (b.onclick = () => { st.franja = b.dataset.franja; pintarTodo(); }));
+  $('#para').innerHTML = PARA.map(([k, t]) => `<button type="button" class="chip-f" data-para="${k}" aria-pressed="${st.para === k}">${t}</button>`).join('');
+  $$('#para [data-para]').forEach((b) => (b.onclick = () => { st.para = b.dataset.para; pintarTodo(); }));
+  $('#titulo-dia').textContent = `${fechaLarga(st.fecha)}${st.franja === 'dia' ? '' : st.franja === 'manana' ? ' · a la mañana' : ' · a la tarde'}`;
+}
+
+// ---------------------------------------------------------------- plano del piso (croquis)
+// Estado de cada consultorio en el día y la franja elegidos: libre / pocas horas / completo
+function estadoDe(c) {
+  const hs = horasDelDia(), n = libresDe(st.fecha, c.id, hs).length;
+  if (!n) return ['completo', 'Completo'];
+  if (n <= Math.max(2, Math.round(hs.length / 4))) return ['pocas', `${n} h libres`];
+  return ['libre', `${n} h libres`];
+}
+const SALAS = { // x, y, ancho, alto en el croquis (720 × 420)
+  1: [20, 20, 150, 150], 2: [180, 20, 150, 150], 3: [340, 20, 160, 150], 4: [510, 20, 190, 150],
+  5: [20, 250, 150, 150], 6: [380, 250, 320, 150],
+};
+function pintarPlano() {
+  const visibles = new Set(filtrados().map((c) => c.id));
+  const salas = st.consultorios.filter((c) => SALAS[c.id]).map((c) => {
+    const [x, y, w, h] = SALAS[c.id], [clase, texto] = estadoDe(c), d = datos(c);
+    const ventana = d.ventana ? `<line x1="${x + 18}" y1="${y + 3}" x2="${x + w - 18}" y2="${y + 3}" class="pl-ventana"/>` : '';
+    return `<g class="pl-sala ${clase} ${visibles.has(c.id) ? '' : 'apagada'} ${st.abierto === c.id ? 'activa' : ''}" data-cons="${c.id}" tabindex="0" role="button"
+        aria-label="${esc(d.corto)}: ${esc(texto)}">
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>${ventana}
+      <text x="${x + w / 2}" y="${y + h / 2 - 4}" text-anchor="middle" class="pl-nombre">${esc(d.corto.replace('Consultorio ', 'Cons. '))}</text>
+      <text x="${x + w / 2}" y="${y + h / 2 + 24}" text-anchor="middle" class="pl-estado">${esc(texto)}</text></g>`;
+  }).join('');
+  $('#plano').innerHTML = `<svg viewBox="0 0 720 420" role="group" aria-label="Croquis del piso 7">
+    <rect x="0" y="0" width="720" height="420" rx="16" class="pl-piso"/>
+    <rect x="20" y="182" width="680" height="56" rx="8" class="pl-pasillo"/><text x="360" y="217" text-anchor="middle" class="pl-zona">Pasillo</text>
+    <g class="pl-comun" data-comun="1" tabindex="0" role="button" aria-label="Recepción y sala de espera: ver fotos">
+      <rect x="180" y="250" width="190" height="150" rx="10"/>
+      <text x="275" y="316" text-anchor="middle" class="pl-nombre">Recepción</text><text x="275" y="344" text-anchor="middle" class="pl-estado">y sala de espera</text></g>
+    <path d="M250 400 v-14 a14 14 0 0 1 14 14" class="pl-puerta"/><text x="300" y="414" class="pl-zona">Entrada</text>
+    ${salas}</svg>`;
+  $$('#plano [data-cons]').forEach((g) => {
+    const abrir = () => abrirFicha(Number(g.dataset.cons));
+    g.onclick = abrir;
+    g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
+    g.onmouseenter = () => $(`.card[data-card="${g.dataset.cons}"]`)?.classList.add('resaltada');
+    g.onmouseleave = () => $(`.card[data-card="${g.dataset.cons}"]`)?.classList.remove('resaltada');
+  });
+  const comun = $('#plano [data-comun]');
+  comun.onclick = () => abrirComunes();
+  comun.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirComunes(); } };
+}
+
+// ---------------------------------------------------------------- fichas
+const filtrados = () => st.consultorios.filter((c) => st.para === 'todos' || datos(c).ideal.includes(st.para));
+
+// Línea de tiempo del día: una celda por hora (libre / ocupada), con las horas escritas
+function linea(f, c, chica = false) {
+  const hs = todasLasHoras(), corte = horasDelDia();
+  return `<div class="linea ${chica ? 'chica' : ''}" role="img" aria-label="Libre: ${esc(rangos(libresDe(f, c, hs)) || 'nada')}">
+    ${hs.map((h) => `<span class="${libre(f, h, c) ? 'l' : 'o'} ${corte.includes(h) ? '' : 'fuera'}" title="${horaTxt(h)} · ${libre(f, h, c) ? 'libre' : 'ocupado'}"></span>`).join('')}</div>
+    <div class="linea-ejes ${chica ? 'chica' : ''}"><span>${horaTxt(hs[0])}</span><span>${horaTxt(Number(st.cfg.hora_fin_manana || 13))}</span><span>${horaTxt(hs[hs.length - 1] + 1)}</span></div>`;
+}
+function proximoLibre(c) {
+  for (const d of st.dias) if (d > st.fecha && libresDe(d, c).length) return d;
+  return null;
+}
+function pintarFichas() {
+  const lista = filtrados().map((c) => [c, estadoDe(c)]).sort((a, b) => ({ libre: 0, pocas: 1, completo: 2 }[a[1][0]] - { libre: 0, pocas: 1, completo: 2 }[b[1][0]]));
+  const ahora = horaAR();
+  $('#cantidad').textContent = `${lista.length} ${lista.length === 1 ? 'espacio' : 'espacios'}`;
+  $('#fichas').innerHTML = lista.map(([c, [clase, texto]]) => {
+    const d = datos(c), libres = libresDe(st.fecha, c.id), prox = !libres.length && proximoLibre(c.id);
+    const ahoraLibre = st.fecha === hoyAR() && libre(st.fecha, ahora + 1, c.id);
+    return `<article class="card" data-card="${c.id}">
+      <button type="button" class="card-foto" data-abrir="${c.id}" aria-label="Ver ${esc(d.corto)}">
+        ${d.fotos[0] ? `<img src="${foto(d.fotos[0], true)}" alt="" loading="lazy" width="640" height="427">` : ''}
+        <span class="estado-pill ${clase}">${clase === 'completo' ? 'Completo' : clase === 'pocas' ? 'Pocas horas' : 'Disponible'}</span>
+        ${ahoraLibre ? `<span class="ya-pill">Libre a las ${horaTxt(ahora + 1)}</span>` : ''}
+        ${d.fotos.length > 1 ? `<span class="n-fotos">📷 ${d.fotos.length}</span>` : ''}
+      </button>
+      <div class="card-cuerpo">
+        <div class="card-cab"><h3>${esc(d.corto)}</h3>${d.capacidad ? `<span class="cap" title="Personas">👥 hasta ${d.capacidad}</span>` : ''}</div>
+        <p class="lema">${esc(d.lema)}</p>
+        <ul class="chips-m">${d.muebles.slice(0, 4).map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
+        ${linea(st.fecha, c.id)}
+        <p class="libres-txt">${libres.length ? `<strong>Libre:</strong> ${esc(rangos(libres))}` : prox ? `Completo · próximo lugar el <strong>${esc(fechaLarga(prox))}</strong>` : 'Sin lugar en las próximas semanas'}</p>
+        <div class="card-acc">
+          <button type="button" class="btn btn-primario" data-abrir="${c.id}">Ver y reservar</button>
+          <label class="comparar"><input type="checkbox" data-comp="${c.id}" ${st.comparar.has(c.id) ? 'checked' : ''}> Comparar</label>
+        </div>
+      </div></article>`;
+  }).join('') || '<p class="vacio">Ningún consultorio coincide con ese filtro.</p>';
+  $$('#fichas [data-abrir]').forEach((b) => (b.onclick = () => abrirFicha(Number(b.dataset.abrir))));
+  $$('#fichas [data-comp]').forEach((x) => (x.onchange = () => {
+    const id = Number(x.dataset.comp);
+    if (x.checked && st.comparar.size >= 3) { x.checked = false; avisar('Se pueden comparar hasta 3 consultorios.'); return; }
+    x.checked ? st.comparar.add(id) : st.comparar.delete(id);
+    pintarBarraComparar();
+  }));
+  $$('#fichas .card').forEach((card) => {
+    card.onmouseenter = () => $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.add('hover');
+    card.onmouseleave = () => $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.remove('hover');
+  });
+}
+
+// ---------------------------------------------------------------- comparador
+function pintarBarraComparar() {
+  const b = $('#barra-comp');
+  b.classList.toggle('oculto', st.comparar.size < 2);
+  $('#barra-comp-txt').textContent = `${st.comparar.size} consultorios elegidos`;
+}
+function abrirComparar() {
+  const lista = st.consultorios.filter((c) => st.comparar.has(c.id));
+  $('#comp-cuerpo').innerHTML = `<p class="suave">Disponibilidad del <strong>${esc(fechaLarga(st.fecha))}</strong>. Cambiá el día arriba para comparar otro.</p>
+    <div class="comp-grid" style="--n:${lista.length}">${lista.map((c) => {
+      const d = datos(c), libres = libresDe(st.fecha, c.id, todasLasHoras());
+      return `<div class="comp-col"><img src="${foto(d.fotos[0], true)}" alt="" width="640" height="427">
+        <h3>${esc(d.corto)}</h3><p class="lema">${esc(d.lema)}</p>
+        <dl><dt>Para</dt><dd>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(', '))}</dd>
+          <dt>Hasta</dt><dd>${d.capacidad ? `${d.capacidad} personas` : '—'}</dd>
+          <dt>Tiene</dt><dd>${esc(d.muebles.join(', '))}</dd>
+          <dt>Libre</dt><dd>${libres.length ? esc(rangos(libres)) : 'Completo ese día'}</dd></dl>
+        ${linea(st.fecha, c.id, true)}
+        <button type="button" class="btn btn-primario btn-bloque" data-comp-abrir="${c.id}">Ver y reservar</button></div>`;
+    }).join('')}</div>`;
+  $$('#comp-cuerpo [data-comp-abrir]').forEach((b) => (b.onclick = () => { cerrar('#modal-comp'); abrirFicha(Number(b.dataset.compAbrir)); }));
+  abrir('#modal-comp');
+}
+
+// ---------------------------------------------------------------- ficha del consultorio (agenda de la semana)
+let fotoActual = 0;
+function abrirFicha(id) {
+  const c = st.consultorios.find((x) => x.id === id);
+  if (!c) return;
+  st.abierto = id;
+  st.seleccion = new Map();
+  fotoActual = 0;
+  pintarFicha();
+  abrir('#ficha');
+  pintarPlano();
+}
+function pintarFicha() {
+  const c = st.consultorios.find((x) => x.id === st.abierto), d = datos(c);
+  const semana = st.dias.slice(0, 6), hs = todasLasHoras(), corte = Number(st.cfg.hora_fin_manana || 13);
+  $('#ficha-cuerpo').innerHTML = `
+    <div class="galeria-f" id="galeria-f">
+      <div class="g-pista" style="transform:translateX(-${fotoActual * 100}%)">${d.fotos.map((f, i) =>
+        `<img src="${foto(f)}" alt="${esc(d.corto)}, foto ${i + 1} de ${d.fotos.length}" width="1280" height="853" ${i ? 'loading="lazy"' : ''}>`).join('')}</div>
+      ${d.fotos.length > 1 ? `<button type="button" class="g-nav ant" aria-label="Foto anterior">‹</button><button type="button" class="g-nav sig" aria-label="Foto siguiente">›</button>
+        <div class="g-puntos">${d.fotos.map((_, i) => `<span class="${i === fotoActual ? 'on' : ''}"></span>`).join('')}</div>` : ''}
+    </div>
+    <div class="ficha-info">
+      <h2 id="ficha-titulo">${esc(d.corto)}</h2>
+      <p class="lema">${esc(d.lema)}</p>
+      <div class="ficha-datos">
+        <div><span>Ideal para</span><strong>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(' · '))}</strong></div>
+        ${d.capacidad ? `<div><span>Capacidad</span><strong>Hasta ${d.capacidad} personas</strong></div>` : ''}
+        <div><span>Precio por hora</span><strong>${pesos(precioHora(st.precios, st.cfg, 'suelta', 8, hoyAR()))} mañana · ${pesos(precioHora(st.precios, st.cfg, 'suelta', 14, hoyAR()))} tarde</strong></div>
+      </div>
+      <ul class="chips-m">${d.muebles.map((m) => `<li>${esc(m)}</li>`).join('')}<li>Wifi</li><li>Sala de espera</li></ul>
+      <h3 class="agenda-tit">Elegí días y horas <small>Tocá las horas libres (podés elegir varios días)</small></h3>
+      <div class="agenda-scroll"><table class="agenda" aria-label="Agenda de ${esc(d.corto)}">
+        <thead><tr><th></th>${semana.map((f) => `<th scope="col" class="${f === st.fecha ? 'hoy-col' : ''}">${esc(nombreDia(f))}<br><small>${Number(f.slice(8))}/${Number(f.slice(5, 7))}</small></th>`).join('')}</tr></thead>
+        <tbody>${hs.map((h) => `<tr class="${h === corte ? 'corte' : ''}"><th scope="row">${horaTxt(h)}</th>${semana.map((f) => {
+          const ok = libre(f, h, c.id), sel = st.seleccion.get(f)?.has(h);
+          return `<td>${ok ? `<button type="button" class="celda ${sel ? 'sel' : ''}" data-f="${f}" data-h="${h}" aria-pressed="${!!sel}" aria-label="${esc(fechaLarga(f))} ${horaTxt(h)}, libre">${sel ? '✓' : ''}</button>`
+            : '<span class="celda ocupada" aria-label="ocupado"></span>'}</td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="leyenda-ag"><span class="cl"></span> Libre <span class="cs"></span> Elegido <span class="co"></span> Ocupado</p>
+    </div>`;
+  const g = $('#galeria-f');
+  const mover = (n) => { fotoActual = (fotoActual + n + d.fotos.length) % d.fotos.length; $('.g-pista', g).style.transform = `translateX(-${fotoActual * 100}%)`;
+    $$('.g-puntos span', g).forEach((s, i) => s.classList.toggle('on', i === fotoActual)); };
+  $('.g-nav.ant', g)?.addEventListener('click', () => mover(-1));
+  $('.g-nav.sig', g)?.addEventListener('click', () => mover(1));
+  let x0 = null;
+  g.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  g.addEventListener('touchend', (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) mover(dx < 0 ? 1 : -1); x0 = null; });
+  $$('#ficha-cuerpo .celda[data-f]').forEach((b) => (b.onclick = () => {
+    const f = b.dataset.f, h = Number(b.dataset.h);
+    if (!st.seleccion.has(f)) st.seleccion.set(f, new Set());
+    const s = st.seleccion.get(f);
+    if (s.has(h)) s.delete(h);
+    else if (s.size >= Number(st.cfg.max_horas_por_reserva || 6)) return avisar(`Hasta ${st.cfg.max_horas_por_reserva || 6} horas por día.`);
+    else s.add(h);
+    if (!s.size) st.seleccion.delete(f);
+    b.classList.toggle('sel', s.has(h)); b.setAttribute('aria-pressed', s.has(h)); b.textContent = s.has(h) ? '✓' : '';
+    pintarResumenFicha();
+  }));
+  pintarResumenFicha();
+}
+function pintarResumenFicha() {
+  const dias = [...st.seleccion.entries()].filter(([, s]) => s.size).sort(([a], [b]) => (a < b ? -1 : 1));
+  const total = dias.reduce((t, [f, s]) => t + [...s].reduce((x, h) => x + precioHora(st.precios, st.cfg, 'suelta', h, f), 0), 0);
+  const horas = dias.reduce((t, [, s]) => t + s.size, 0);
+  const pct = Number(st.cfg.porcentaje_sena || 50);
+  const sena = dias.reduce((t, [f, s]) => t + Math.ceil([...s].reduce((x, h) => x + precioHora(st.precios, st.cfg, 'suelta', h, f), 0) * pct / 100), 0);
+  $('#ficha-pie').innerHTML = horas ? `<div><strong>${horas} ${horas === 1 ? 'hora' : 'horas'}</strong> · ${dias.map(([f, s]) => `${esc(nombreDia(f))} ${esc(rangos([...s]))}`).join(' · ')}
+      <br><span class="suave">Total ${pesos(total)} · seña para confirmar ${pesos(sena)}</span></div>
+      <button type="button" class="btn btn-primario" id="ir-reservar">Reservar</button>`
+    : `<span class="suave">Elegí una o más horas libres en la agenda.</span>`;
+  $('#ir-reservar')?.addEventListener('click', () => {
+    const p = dias.map(([f, s]) => `${f}.${st.abierto}.${[...s].sort((a, b) => a - b).join(',')}`).join('|');
+    const demo = new URLSearchParams(location.search).has('demo') ? '&demo' : '';
+    location.href = `index.html?p=${encodeURIComponent(p)}${demo}#reservar`;
+  });
+}
+
+// ---------------------------------------------------------------- espacios comunes
+function abrirComunes() {
+  const fotos = ['espacio-a', 'espacio-c', 'espacio-b'];
+  $('#comunes-cuerpo').innerHTML = `<div class="comunes-fotos">${fotos.map((f) => `<img src="${foto(f)}" alt="Espacios comunes" loading="lazy" width="1280" height="853">`).join('')}</div>
+    <p>Recepción y sala de espera, en un edificio de pleno Microcentro. Tus pacientes esperan cómodos mientras terminás la sesión anterior.</p>`;
+  abrir('#modal-comunes');
+}
+
+// ---------------------------------------------------------------- ventanas
+function abrir(sel) {
+  const m = $(sel); m.classList.remove('oculto'); document.body.style.overflow = 'hidden';
+  setTimeout(() => $('[data-cerrar]', m)?.focus(), 30);
+}
+function cerrar(sel) {
+  $(sel).classList.add('oculto');
+  if (!$$('.capa:not(.oculto)').length) document.body.style.overflow = '';
+  if (sel === '#ficha') { st.abierto = null; pintarPlano(); }
+}
+$$('[data-cerrar]').forEach((b) => (b.onclick = () => cerrar('#' + b.closest('.capa').id)));
+$$('.capa').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) cerrar('#' + m.id); }));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = $$('.capa:not(.oculto)').pop(); if (m) cerrar('#' + m.id); } });
+$('#btn-comparar').onclick = abrirComparar;
+$('#limpiar-comp').onclick = () => { st.comparar.clear(); pintarBarraComparar(); pintarFichas(); };
+let tAviso;
+function avisar(t) { const a = $('#aviso-flot'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(() => a.classList.remove('ver'), 2600); }
+
+function pintarTodo() { pintarFiltros(); pintarPlano(); pintarFichas(); pintarBarraComparar(); }
+
+// ---------------------------------------------------------------- arranque
+$('#wa-ayuda').href = `https://wa.me/${WHATSAPP_AYUDA}?text=${encodeURIComponent('Hola! Quería consultar por los consultorios.')}`;
+try {
+  await cargar();
+  $('#desde-precio').textContent = pesos(precioDesde());
+  pintarTodo();
+  const q = new URLSearchParams(location.search);
+  if (/^\d$/.test(q.get('c') || '')) abrirFicha(Number(q.get('c')));
+} catch (err) {
+  $('#fichas').innerHTML = `<p class="aviso aviso-error">${esc(mensajeError(err))}</p>`;
+}
