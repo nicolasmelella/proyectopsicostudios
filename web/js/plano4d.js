@@ -136,7 +136,7 @@ export async function crear4d(cont, { onTocar, onComun }) {
   const encuadrar = () => {
     const vertical = THREE.MathUtils.degToRad(camara.fov) / 2;
     const horizontal = Math.atan(Math.tan(vertical) * camara.aspect);
-    const dist = RADIO / Math.sin(Math.min(vertical, horizontal)) * 0.72;
+    const dist = RADIO / Math.sin(Math.min(vertical, horizontal)) * (camara.aspect < 1 ? 0.86 : 0.72);
     INICIO.pos.copy(DIR).multiplyScalar(dist).add(INICIO.mira);
     if (!movido) { camara.position.copy(INICIO.pos); }
     // Movimiento acotado: el piso siempre queda a la vista y se entiende
@@ -216,7 +216,7 @@ export async function crear4d(cont, { onTocar, onComun }) {
   const medir = () => {
     const { clientWidth: w, clientHeight: h } = cont;
     if (!w || !h) return;
-    renderer.setSize(w, h); etiquetas.setSize(w, h);
+    renderer.setSize(w, h, false); etiquetas.setSize(w, h);   // el tamaño en pantalla lo maneja el CSS (no empuja el ancho de la página)
     camara.aspect = w / h; camara.updateProjectionMatrix();
     encuadrar();
   };

@@ -97,7 +97,9 @@
     .pl-balcon { fill: #dde6ee; } .p3-zona { fill: #7a8496; font-size: 22px; font-weight: 700; font-family: var(--f-texto); }
     .l4-lienzo { position: relative; height: clamp(380px, 52vw, 600px); margin-top: 8px; border-radius: 14px; overflow: hidden;
       background: radial-gradient(120% 90% at 50% 0%, #ffffff 0%, #e9eef6 100%); touch-action: none; }
-    .l4-lienzo canvas { display: block; cursor: grab; }
+    .l4-lienzo canvas { display: block; cursor: grab; width: 100% !important; height: 100% !important; }
+    .cuerpo > *, .col-plano, .tarjeta-b, #plano { min-width: 0; max-width: 100%; }
+    .l4-lienzo { width: 100%; }
     .l4-lienzo canvas:active { cursor: grabbing; }
     .l4-lienzo .cargando { position: absolute; inset: 0; display: grid; place-items: center; color: var(--gris); }
     .l4-capa { position: absolute; inset: 0; pointer-events: none; }
