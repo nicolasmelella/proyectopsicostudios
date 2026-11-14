@@ -1,0 +1,2 @@
+three.js 0.160.0 (MIT, ver LICENSE). Copiado del paquete oficial de npm.
+OrbitControls.js y CSS2DRenderer.js importan ./three.module.min.js en lugar de "three".

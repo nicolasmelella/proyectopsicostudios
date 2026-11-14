@@ -25,7 +25,7 @@ with p as (select id from public.profesionales where whatsapp = '1188556677'),
 ins as (
   insert into public.reservas (profesional_id, consultorio_id, fecha, horas, precio_total, estado, origen)
   select p.id, 5, f, array[20]::smallint[], 9000, 'confirmada', 'panel' from p, (values (public.hoy_ar() + 1), (public.hoy_ar() + 2)) v(f)
-  where extract(isodow from f) <> 7
+  -- (carga directa: puede caer domingo sin problema, así la prueba no depende del día)
   returning id, fecha)
 select * from ins;
 insert into public.pagos (reserva_id, monto, medio) select id, 4500, 'transferencia' from al_r;
