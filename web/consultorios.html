@@ -94,6 +94,12 @@
     .p3-servicio-txt { font-size: 20px; }
     .pl-comun.entrada rect { fill: #f6e7a8; stroke: #c9a227; }
     .pl-balcon { fill: #dde6ee; } .p3-zona { fill: #7a8496; font-size: 22px; font-weight: 700; font-family: var(--f-texto); }
+    .controles-4d { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; padding: 10px 12px; background: var(--fondo-web); border-radius: 12px; }
+    .btn-4d { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--azul); color: #fff; font-size: 1rem; cursor: pointer; flex: none; }
+    .hora-4d { display: flex; flex-direction: column; flex: 1; min-width: 140px; font-size: .78rem; color: var(--gris); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+    .hora-4d input { width: 100%; accent-color: var(--azul); min-height: 28px; }
+    #hora-4d-txt { font-family: var(--f-titulos); color: var(--azul); min-width: 120px; }
+    .lnk-4d { background: none; border: 0; color: var(--azul); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 6px 2px; min-height: 40px; }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
 
     .lista-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 10px; }
@@ -228,6 +234,13 @@
             <div class="vista-plano" role="group" aria-label="Vista del plano"><button type="button" data-vista-plano="3d" aria-pressed="true">3D</button><button type="button" data-vista-plano="2d" aria-pressed="false">Plano</button></div></div>
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
+          <div class="controles-4d">
+            <button type="button" class="btn-4d" id="play-4d" aria-label="Ver el día hora por hora">▶</button>
+            <label class="hora-4d"><span>Hora por hora</span><input type="range" id="hora-4d" min="8" max="20" step="1" value="8" aria-describedby="hora-4d-txt"></label>
+            <strong id="hora-4d-txt" aria-live="polite">Todo el día</strong>
+            <button type="button" class="lnk-4d oculto" id="todo-4d">Todo el día</button>
+            <button type="button" class="lnk-4d" id="girar">⟳ Ver desde el balcón</button>
+          </div>
           <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>
           <p class="nota-croquis">Según el plano del piso 7. Los muebles son ilustrativos.</p>
         </div>

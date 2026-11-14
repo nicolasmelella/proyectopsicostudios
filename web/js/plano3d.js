@@ -45,20 +45,42 @@ const MUEBLES = {
   deposito: (x, y, w) => caja(x + 10, y + 10, w - 20, 18, 40, 0, ['#d9d4c8', '#c4bfb2', '#b3ad9f']),
 };
 
+// Gira el piso 90° (sentido horario) las veces que haga falta: así la vista puede quedar "desde la entrada"
+const GIRA_VENTANA = { izq: 'atras', atras: 'der', der: 'frente', frente: 'izq' };
+function girar(L, veces) {
+  for (let i = 0; i < veces; i++) {
+    const H = L.alto;
+    const r = ([x, y, w, d]) => [H - y - d, x, d, w];
+    const p = ([x, y]) => [H - y, x];
+    L = {
+      ...L, ancho: L.alto, alto: L.ancho,
+      salas: Object.fromEntries(Object.entries(L.salas).map(([k, v]) => [k, r(v)])),
+      ventanas: Object.fromEntries(Object.entries(L.ventanas).map(([k, v]) => [k, GIRA_VENTANA[v]])),
+      comunes: L.comunes.map((c) => ({ ...c, rect: r(c.rect) })),
+      servicio: L.servicio.map((c) => ({ ...c, rect: r(c.rect) })),
+      pasillos: L.pasillos.map(r), balcon: r(L.balcon),
+      desdeEntrada: L.desdeEntrada.map(p),
+      hastaSala: Object.fromEntries(Object.entries(L.hastaSala).map(([k, v]) => [k, v.map(p)])),
+    };
+  }
+  return L;
+}
+
 // Paredes: las de atrás altas, las de adelante bajas (corte). Ventana: franja de vidrio en ese lado.
 function paredes(x, y, w, d, ventana) {
   let atras = caja(x - GROSOR, y - GROSOR, w + GROSOR, GROSOR, ALTO, 0, PARED) + caja(x - GROSOR, y, GROSOR, d, ALTO, 0, PARED);
   if (ventana === 'atras') atras += `<polygon points="${pts([[x + 18, y, 14], [x + w - 18, y, 14], [x + w - 18, y, ALTO - 6], [x + 18, y, ALTO - 6]])}" fill="${VIDRIO}" opacity=".85"/>`;
   if (ventana === 'izq') atras += `<polygon points="${pts([[x, y + 18, 14], [x, y + d - 18, 14], [x, y + d - 18, ALTO - 6], [x, y + 18, ALTO - 6]])}" fill="${VIDRIO}" opacity=".85"/>`;
   let frente = caja(x, y + d, w, GROSOR, BAJO, 0, PARED) + caja(x + w, y, GROSOR, d + GROSOR, BAJO, 0, PARED);
+  if (ventana === 'der') frente += `<polygon points="${pts([[x + w + GROSOR, y + 14, 2], [x + w + GROSOR, y + d - 14, 2], [x + w + GROSOR, y + d - 14, BAJO], [x + w + GROSOR, y + 14, BAJO]])}" fill="${VIDRIO}"/>`;
   if (ventana === 'frente') frente += `<polygon points="${pts([[x + 14, y + d + GROSOR, 2], [x + w - 14, y + d + GROSOR, 2], [x + w - 14, y + d + GROSOR, BAJO], [x + 14, y + d + GROSOR, BAJO]])}" fill="${VIDRIO}"/>`;
   return { atras, frente };
 }
 
-function recorrido(id) {
-  const tramo = PISO.hastaSala[id];
+function recorrido(L, id) {
+  const tramo = L.hastaSala[id];
   if (!tramo) return '';
-  const camino = [...PISO.desdeEntrada, ...tramo];
+  const camino = [...L.desdeEntrada, ...tramo];
   const p = camino.map(([a, b]) => iso(a, b, 1).map((n) => n.toFixed(1)).join(',')).join(' ');
   const [fx, fy] = iso(...camino[camino.length - 1], 1);
   return `<polyline points="${p}" class="p3-camino"/><circle cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" r="8" class="p3-destino"/>`;
@@ -70,16 +92,18 @@ const atributos = (s) => (s.tipo === 'consultorio' ? `data-cons="${s.id}"` : s.t
  * salas: [{ id, nombre, texto, estado: 'libre'|'pocas'|'completo', apagada, activa }]
  * Devuelve el SVG del piso en 3D.
  */
-export function plano3d(salas, { destino } = {}) {
-  const { ancho: W, alto: H } = PISO;
+export function plano3d(salas, { destino, giro = 0 } = {}) {
+  const L = girar(PISO, giro);
+  const { ancho: W, alto: H } = L;
+  const [bx0, by0, bw, bd] = L.balcon;
+  const baranda = bw > bd ? caja(bx0, by0 + bd - 3, bw, 3, 16, 0, ['#c9d6e2', '#aebfcf', '#9fb2c4']) : caja(bx0, by0, 3, bd, 16, 0, ['#c9d6e2', '#aebfcf', '#9fb2c4']);
   const base = caja(0, 0, W, H, 4, -4, ['#eef1f6', '#d9dee8', '#ccd3df'])
-    + PISO.pasillos.map(([x, y, w, d]) => suelo(x, y, w, d, PISO_COLOR.pasillo)).join('')
-    + suelo(...PISO.balcon, '#dde6ee', '#b9c6d3')
-    + caja(PISO.balcon[0], PISO.balcon[1] + PISO.balcon[3] - 3, PISO.balcon[2], 3, 16, 0, ['#c9d6e2', '#aebfcf', '#9fb2c4']);
+    + L.pasillos.map(([x, y, w, d]) => suelo(x, y, w, d, PISO_COLOR.pasillo)).join('')
+    + suelo(...L.balcon, '#dde6ee', '#b9c6d3') + baranda;
   const lista = [
-    ...salas.filter((s) => PISO.salas[s.id]).map((s) => ({ ...s, tipo: 'consultorio', rect: PISO.salas[s.id], ventana: PISO.ventanas[s.id] })),
-    ...PISO.comunes.map((c) => ({ ...c, tipo: 'comun', estado: c.id === 'entrada' ? 'entrada' : 'comun' })),
-    ...PISO.servicio.map((c) => ({ ...c, tipo: 'servicio', estado: c.aire ? 'aire' : 'servicio', texto: '' })),
+    ...salas.filter((s) => L.salas[s.id]).map((s) => ({ ...s, tipo: 'consultorio', rect: L.salas[s.id], ventana: L.ventanas[s.id] })),
+    ...L.comunes.map((c) => ({ ...c, tipo: 'comun', estado: c.id === 'entrada' ? 'entrada' : 'comun' })),
+    ...L.servicio.map((c) => ({ ...c, tipo: 'servicio', estado: c.aire ? 'aire' : 'servicio', texto: '' })),
   ].sort((a, b) => (a.rect[0] + a.rect[1]) - (b.rect[0] + b.rect[1]));
   const ambientes = lista.map((s) => {
     const [x, y, w, d] = s.rect;
@@ -102,10 +126,10 @@ export function plano3d(salas, { destino } = {}) {
       <rect x="${-ancho / 2}" y="-34" width="${ancho}" height="66" rx="14"/>
       <text y="-6" text-anchor="middle" class="p3-nombre">${s.nombre}</text><text y="22" text-anchor="middle" class="p3-estado">${s.texto || ''}</text></g>`;
   }).join('');
-  const [bx, by] = iso(W / 2 - 60, H, 0);
+  const [bx, by] = bw > bd ? iso(bx0 + bw / 2 - 60, by0 + bd, 0) : iso(bx0 - 40, by0 + bd * 0.86, 0);
   const x0 = -H * C30 - 30, x1 = W * C30 + 30;
   return `<svg viewBox="${x0.toFixed(0)} -70 ${(x1 - x0).toFixed(0)} ${((W + H) * S30 + 120).toFixed(0)}" role="group" aria-label="Piso 7 en 3D">
-    ${base}${ambientes}${recorrido(destino)}
+    ${base}${ambientes}${recorrido(L, destino)}
     <text x="${bx.toFixed(1)}" y="${(by + 34).toFixed(1)}" text-anchor="middle" class="p3-zona">Balcón · calle</text>
     ${carteles}</svg>`;
 }

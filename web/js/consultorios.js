@@ -41,6 +41,9 @@ const st = {
   abierto: null,
   vista: (() => { try { return localStorage.getItem('psicostudios-plano') || '3d'; } catch { return '3d'; } })(),
   apuntado: null,             // consultorio con el mouse encima (para el recorrido en 3D)
+  giro: (() => { try { return Number(localStorage.getItem('psicostudios-giro') ?? 1); } catch { return 1; } })(),   // 1 = desde la entrada
+  hora: null,                 // 4D: hora que se mira (null = todo el día / franja)
+  reproduciendo: null,
 };
 
 const horasDelDia = () => {
@@ -100,6 +103,8 @@ function pintarFiltros() {
 // ---------------------------------------------------------------- plano del piso (croquis)
 // Estado de cada consultorio en el día y la franja elegidos: libre / pocas horas / completo
 function estadoDe(c) {
+  if (st.hora !== null && st.fecha === hoyAR() && st.hora <= horaAR()) return ['completo', 'Ya pasó'];
+  if (st.hora !== null) return libre(st.fecha, st.hora, c.id) ? ['libre', `Libre ${horaTxt(st.hora)}`] : ['completo', `Ocupado ${horaTxt(st.hora)}`];
   const hs = horasDelDia(), n = libresDe(st.fecha, c.id, hs).length;
   if (!n) return ['completo', 'Completo'];
   if (n <= Math.max(2, Math.round(hs.length / 4))) return ['pocas', `${n} h libres`];
@@ -113,13 +118,67 @@ function pintarPlano() {
     return { id: c.id, nombre: esc(d.corto.replace('Consultorio ', 'Cons. ')), texto: esc(texto), estado: clase,
              apagada: !visibles.has(c.id), activa: st.abierto === c.id || st.apuntado === c.id };
   });
-  $('#plano').innerHTML = st.vista === '3d' ? plano3d(salas, { destino: st.abierto || st.apuntado }) : plano2d(salas);
+  $('#plano').innerHTML = st.vista === '3d' ? plano3d(salas, { destino: st.abierto || st.apuntado, giro: st.giro }) : plano2d(salas);
+  $('#girar').classList.toggle('oculto', st.vista !== '3d');
+  $('#girar').textContent = st.giro === 1 ? '⟳ Ver desde el balcón' : '⟳ Ver desde la entrada';
+  pintarHora4d();
   conectarPlano();
+}
+
+// 4D: la disponibilidad del día, hora por hora
+function pintarHora4d() {
+  const hs = todasLasHoras();
+  const r = $('#hora-4d');
+  r.min = hs[0]; r.max = hs[hs.length - 1];
+  if (st.hora !== null) r.value = st.hora;
+  $('#hora-4d-txt').textContent = st.hora === null ? 'Todo el día' : `${horaTxt(st.hora)} a ${horaTxt(st.hora + 1)}`;
+  $('#play-4d').textContent = st.reproduciendo ? '❚❚' : '▶';
+  $('#play-4d').setAttribute('aria-label', st.reproduciendo ? 'Pausar' : 'Ver el día hora por hora');
+  $('#todo-4d').classList.toggle('oculto', st.hora === null);
+}
+$('#hora-4d').oninput = (e) => { pararDia(); st.hora = Number(e.target.value); pintarPlano(); };
+$('#todo-4d').onclick = () => { pararDia(); st.hora = null; pintarPlano(); };
+function pararDia() { clearInterval(st.reproduciendo); st.reproduciendo = null; }
+$('#play-4d').onclick = () => {
+  if (st.reproduciendo) { pararDia(); pintarHora4d(); return; }
+  const hs = todasLasHoras();
+  st.hora = st.hora === null || st.hora >= hs[hs.length - 1] ? hs[0] : st.hora;
+  pintarPlano();
+  st.reproduciendo = setInterval(() => {
+    if (st.hora >= hs[hs.length - 1]) { pararDia(); pintarHora4d(); return; }
+    st.hora++; pintarPlano();
+  }, reducido() ? 1600 : 900);
+  pintarHora4d();
+};
+$('#girar').onclick = () => {
+  st.giro = st.giro === 1 ? 0 : 1;
+  try { localStorage.setItem('psicostudios-giro', String(st.giro)); } catch { /* sin almacenamiento */ }
+  pintarPlano();
+};
+
+// Al tocar un consultorio en 3D: la vista "camina" hasta su puerta y después se abre la ficha
+function entrarA(id) {
+  const svg = $('#plano svg'), sala = $(`#plano .p3-sala[data-cons="${id}"]`);
+  if (st.vista !== '3d' || !svg || !sala || reducido()) return abrirFicha(id);
+  st.apuntado = id; pintarPlano();
+  const svg2 = $('#plano svg'), sala2 = $(`#plano .p3-sala[data-cons="${id}"]`);
+  const desde = svg2.getAttribute('viewBox').split(' ').map(Number);
+  const b = sala2.getBBox(), aspecto = desde[2] / desde[3];
+  let w = b.width + 140, h = b.height + 160;
+  if (w / h > aspecto) h = w / aspecto; else w = h * aspecto;
+  const hasta = [b.x + b.width / 2 - w / 2, b.y + b.height / 2 - h / 2, w, h];
+  const t0 = performance.now(), dur = 850;
+  const paso = (t) => {
+    const k = Math.min(1, (t - t0) / dur), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    svg2.setAttribute('viewBox', desde.map((v, i) => (v + (hasta[i] - v) * e).toFixed(1)).join(' '));
+    if (k < 1) requestAnimationFrame(paso); else setTimeout(() => abrirFicha(id), 120);
+  };
+  requestAnimationFrame(paso);
 }
 
 function conectarPlano() {
   $$('#plano [data-cons]').forEach((g) => {
-    const abrir = () => abrirFicha(Number(g.dataset.cons));
+    const abrir = () => entrarA(Number(g.dataset.cons));
     g.onclick = abrir;
     g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
     g.onmouseenter = () => $(`.card[data-card="${g.dataset.cons}"]`)?.classList.add('resaltada');
