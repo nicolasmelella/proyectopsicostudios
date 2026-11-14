@@ -89,6 +89,11 @@
     @keyframes camina { to { stroke-dashoffset: -22; } }
     @media (prefers-reduced-motion: reduce) { .p3-camino { animation: none; } .p3-sala { transition: none; } }
     .p3-entrada { font-size: 22px; font-weight: 700; fill: #7a8496; font-family: var(--f-texto); }
+    .pl-servicio { fill: #eceae4; stroke: #fff; stroke-width: 3; } .pl-aire { fill: #d6ebf8; stroke: #fff; stroke-width: 3; }
+    .pl-servicio-txt, .p3-servicio-txt { fill: #7a8496; font-size: 17px; font-family: var(--f-texto); font-weight: 600; pointer-events: none; }
+    .p3-servicio-txt { font-size: 20px; }
+    .pl-comun.entrada rect { fill: #f6e7a8; stroke: #c9a227; }
+    .pl-balcon { fill: #dde6ee; } .p3-zona { fill: #7a8496; font-size: 22px; font-weight: 700; font-family: var(--f-texto); }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
 
     .lista-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 10px; }
@@ -224,7 +229,7 @@
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
           <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>
-          <p class="nota-croquis">Croquis ilustrativo: la ubicación real de cada consultorio se ajusta con el plano del piso.</p>
+          <p class="nota-croquis">Según el plano del piso 7. Los muebles son ilustrativos.</p>
         </div>
       </aside>
       <main>

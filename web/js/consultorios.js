@@ -2,7 +2,7 @@
 // agenda semanal por consultorio, comparador y paso directo al formulario de reserva.
 import { crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos, precioHora, mensajeError, DIAS_CORTOS } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
-import { plano3d } from './plano3d.js';
+import { plano3d, plano2d } from './plano3d.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -13,18 +13,18 @@ const reducido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Lo que se cuenta de cada consultorio (el id es el de la base). Los datos marcados
 // como "a confirmar" se completan con el equipo.
 const CATALOGO = {
-  1: { corto: 'Consultorio 1', lema: 'Sobrio y práctico, para sesiones individuales y entrevistas.', fotos: ['c1-a', 'c1-b'],
-       ideal: ['individual'], muebles: ['Escritorio', 'Sillas', 'Aire acondicionado'], capacidad: 3 },
+  1: { corto: 'Consultorio 1', lema: 'Amplio y con ventana a la calle: sobrio, para sesiones individuales y entrevistas.', fotos: ['c1-a', 'c1-b'],
+       ideal: ['individual'], muebles: ['Escritorio', 'Sillas', 'Ventana a la calle', 'Aire acondicionado'], capacidad: 3, metros: '3,75 × 4,07 m' },
   2: { corto: 'Consultorio 2', lema: 'Cálido, con sofá y sillones: pensado para la escucha.', fotos: ['c2-a', 'c2-b'],
-       ideal: ['individual', 'pareja'], muebles: ['Sofá', 'Sillones', 'Aire acondicionado'], capacidad: 4 },
-  3: { corto: 'Consultorio 3', lema: 'Luz natural todo el día: sofá, sillones y ventanales.', fotos: ['c3-a', 'c3-b'],
-       ideal: ['individual', 'pareja', 'familia'], muebles: ['Sofá', 'Sillones', 'Ventanales', 'Aire acondicionado'], capacidad: 4, ventana: true },
+       ideal: ['individual', 'pareja'], muebles: ['Sofá', 'Sillones', 'Ventana a la calle', 'Aire acondicionado'], capacidad: 4, metros: '3,95 × 2,99 m' },
+  3: { corto: 'Consultorio 3', lema: 'El más amplio, en la esquina: ventanal redondeado al balcón y mucha luz natural.', fotos: ['c3-a', 'c3-b'],
+       ideal: ['individual', 'pareja', 'familia'], muebles: ['Sofá', 'Sillones', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: 4, metros: '4,80 × 4,05 m' },
   4: { corto: 'Consultorio 4', lema: 'Sillones enfrentados y ventanales: ideal para terapia de pareja.', fotos: ['c4-a', 'c4-b'],
-       ideal: ['individual', 'pareja'], muebles: ['Sillones enfrentados', 'Ventanales', 'Aire acondicionado'], capacidad: 3, ventana: true },
-  5: { corto: 'Consultorio 5', lema: 'Escritorio y sillones: sirve tanto para evaluar como para la sesión.', fotos: ['c5-a', 'c5-b'],
-       ideal: ['individual', 'evaluacion'], muebles: ['Escritorio', 'Sillones', 'Aire acondicionado'], capacidad: 3 },
+       ideal: ['individual', 'pareja'], muebles: ['Sillones enfrentados', 'Ventanal al balcón', 'Aire acondicionado'], capacidad: 3, metros: '3,25 × 3,50 m' },
+  5: { corto: 'Consultorio 5', lema: 'Interno y silencioso, da al pulmón: ideal para evaluar o para sesiones que necesitan calma.', fotos: ['c5-a', 'c5-b'],
+       ideal: ['individual', 'evaluacion'], muebles: ['Escritorio', 'Sillones', 'Ventana al pulmón', 'Aire acondicionado'], capacidad: 3, metros: '3,49 × 2,40 m' },
   6: { corto: 'Salón', lema: 'Mesa redonda y escritorio: grupos, talleres, supervisiones y talleres para padres.', fotos: ['c6-a', 'c6-b'],
-       ideal: ['grupo', 'familia'], muebles: ['Mesa redonda', 'Escritorio', 'Sillas para grupo', 'Aire acondicionado'], capacidad: 10 },
+       ideal: ['grupo', 'familia'], muebles: ['Mesa redonda', 'Escritorio', 'Sillas para grupo', 'Balcón', 'Aire acondicionado'], capacidad: 10, metros: '5,50 × 3,50 m' },
 };
 const PARA = [['todos', 'Todos'], ['individual', 'Individual'], ['pareja', 'Pareja'], ['familia', 'Familia'], ['grupo', 'Grupos y talleres'], ['evaluacion', 'Evaluaciones']];
 const FRANJAS = [['dia', 'Todo el día'], ['manana', 'Mañana'], ['tarde', 'Tarde']];
@@ -104,41 +104,18 @@ function estadoDe(c) {
   if (n <= Math.max(2, Math.round(hs.length / 4))) return ['pocas', `${n} h libres`];
   return ['libre', `${n} h libres`];
 }
-const SALAS = { // x, y, ancho, alto en el croquis (720 × 420)
-  1: [20, 20, 150, 150], 2: [180, 20, 150, 150], 3: [340, 20, 160, 150], 4: [510, 20, 190, 150],
-  5: [20, 250, 150, 150], 6: [380, 250, 320, 150],
-};
 function pintarPlano() {
   const visibles = new Set(filtrados().map((c) => c.id));
   $$('[data-vista-plano]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vistaPlano === st.vista));
-  if (st.vista === '3d') {
-    $('#plano').innerHTML = plano3d(st.consultorios.filter((c) => SALAS[c.id]).map((c) => {
-      const [clase, texto] = estadoDe(c), d = datos(c);
-      return { id: c.id, rect: SALAS[c.id], nombre: esc(d.corto.replace('Consultorio ', 'Cons. ')), texto: esc(texto), estado: clase,
-               ventana: !!d.ventana, apagada: !visibles.has(c.id), activa: st.abierto === c.id || st.apuntado === c.id };
-    }), { destino: st.abierto || st.apuntado });
-    conectarPlano();
-    return;
-  }
-  const salas = st.consultorios.filter((c) => SALAS[c.id]).map((c) => {
-    const [x, y, w, h] = SALAS[c.id], [clase, texto] = estadoDe(c), d = datos(c);
-    const ventana = d.ventana ? `<line x1="${x + 18}" y1="${y + 3}" x2="${x + w - 18}" y2="${y + 3}" class="pl-ventana"/>` : '';
-    return `<g class="pl-sala ${clase} ${visibles.has(c.id) ? '' : 'apagada'} ${st.abierto === c.id ? 'activa' : ''}" data-cons="${c.id}" tabindex="0" role="button"
-        aria-label="${esc(d.corto)}: ${esc(texto)}">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>${ventana}
-      <text x="${x + w / 2}" y="${y + h / 2 - 4}" text-anchor="middle" class="pl-nombre">${esc(d.corto.replace('Consultorio ', 'Cons. '))}</text>
-      <text x="${x + w / 2}" y="${y + h / 2 + 24}" text-anchor="middle" class="pl-estado">${esc(texto)}</text></g>`;
-  }).join('');
-  $('#plano').innerHTML = `<svg viewBox="0 0 720 420" role="group" aria-label="Croquis del piso 7">
-    <rect x="0" y="0" width="720" height="420" rx="16" class="pl-piso"/>
-    <rect x="20" y="182" width="680" height="56" rx="8" class="pl-pasillo"/><text x="360" y="217" text-anchor="middle" class="pl-zona">Pasillo</text>
-    <g class="pl-comun" data-comun="1" tabindex="0" role="button" aria-label="Recepción y sala de espera: ver fotos">
-      <rect x="180" y="250" width="190" height="150" rx="10"/>
-      <text x="275" y="316" text-anchor="middle" class="pl-nombre">Recepción</text><text x="275" y="344" text-anchor="middle" class="pl-estado">y sala de espera</text></g>
-    <path d="M250 400 v-14 a14 14 0 0 1 14 14" class="pl-puerta"/><text x="300" y="414" class="pl-zona">Entrada</text>
-    ${salas}</svg>`;
+  const salas = st.consultorios.map((c) => {
+    const [clase, texto] = estadoDe(c), d = datos(c);
+    return { id: c.id, nombre: esc(d.corto.replace('Consultorio ', 'Cons. ')), texto: esc(texto), estado: clase,
+             apagada: !visibles.has(c.id), activa: st.abierto === c.id || st.apuntado === c.id };
+  });
+  $('#plano').innerHTML = st.vista === '3d' ? plano3d(salas, { destino: st.abierto || st.apuntado }) : plano2d(salas);
   conectarPlano();
 }
+
 function conectarPlano() {
   $$('#plano [data-cons]').forEach((g) => {
     const abrir = () => abrirFicha(Number(g.dataset.cons));
@@ -269,6 +246,7 @@ function pintarFicha() {
       <div class="ficha-datos">
         <div><span>Ideal para</span><strong>${esc(d.ideal.map((k) => PARA.find((p) => p[0] === k)?.[1]).join(' · '))}</strong></div>
         ${d.capacidad ? `<div><span>Capacidad</span><strong>Hasta ${d.capacidad} personas</strong></div>` : ''}
+        ${d.metros ? `<div><span>Medidas</span><strong>${esc(d.metros)}</strong></div>` : ''}
         <div><span>Precio por hora</span><strong>${pesos(precioHora(st.precios, st.cfg, 'suelta', 8, hoyAR()))} mañana · ${pesos(precioHora(st.precios, st.cfg, 'suelta', 14, hoyAR()))} tarde</strong></div>
       </div>
       <ul class="chips-m">${d.muebles.map((m) => `<li>${esc(m)}</li>`).join('')}<li>Wifi</li><li>Sala de espera</li></ul>
