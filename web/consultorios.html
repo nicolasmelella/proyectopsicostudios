@@ -115,6 +115,8 @@
       .l4-cartel strong { font-size: .72rem; } .l4-cartel small { display: none; }
       .l4-cartel.comun:not(.activa) { display: none; } .l4-servicio { display: none; }
     }
+    .solo-cel { display: none; }
+    @media (hover: none), (max-width: 640px) { .solo-cel { display: inline; } .solo-compu { display: none; } }
     .ayuda-4d { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; color: var(--gris); margin-top: 6px; }
     .lnk-4d { background: none; border: 0; color: var(--azul); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 6px 2px; min-height: 40px; }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
@@ -252,7 +254,7 @@
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
           <div class="ayuda-4d" id="ayuda-4d">
-            <span>🖐 Arrastrá para girar · rueda o pellizcá para acercar · tocá un consultorio para entrar</span>
+            <span class="solo-compu">Tocá un consultorio para ver fotos y reservar · arrastrá para inclinar la vista</span><span class="solo-cel">Tocá un consultorio para ver fotos y reservar · con dos dedos girás y acercás</span>
             <button type="button" class="lnk-4d" id="vista-general">Vista general</button>
           </div>
           <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>

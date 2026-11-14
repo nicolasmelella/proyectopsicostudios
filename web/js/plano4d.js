@@ -136,14 +136,23 @@ export async function crear4d(cont, { onTocar, onComun }) {
   const encuadrar = () => {
     const vertical = THREE.MathUtils.degToRad(camara.fov) / 2;
     const horizontal = Math.atan(Math.tan(vertical) * camara.aspect);
-    INICIO.pos.copy(DIR).multiplyScalar(RADIO / Math.sin(Math.min(vertical, horizontal)) * 0.72).add(INICIO.mira);
+    const dist = RADIO / Math.sin(Math.min(vertical, horizontal)) * 0.72;
+    INICIO.pos.copy(DIR).multiplyScalar(dist).add(INICIO.mira);
     if (!movido) { camara.position.copy(INICIO.pos); }
+    // Movimiento acotado: el piso siempre queda a la vista y se entiende
+    const esf = new THREE.Spherical().setFromVector3(INICIO.pos.clone().sub(INICIO.mira));
+    controles.minAzimuthAngle = esf.theta - 0.45; controles.maxAzimuthAngle = esf.theta + 0.45;   // ±25° hacia los costados
+    controles.minPolarAngle = Math.max(0.35, esf.phi - 0.35); controles.maxPolarAngle = Math.min(1.15, esf.phi + 0.2);
+    controles.minDistance = dist * 0.65; controles.maxDistance = dist * 1.1;
   };
   const controles = new OrbitControls(camara, renderer.domElement);
   controles.target.copy(INICIO.mira);
-  controles.enableDamping = true; controles.minDistance = 4; controles.maxDistance = 48;
+  controles.enableDamping = true; controles.dampingFactor = 0.12;
+  controles.enablePan = false; controles.rotateSpeed = 0.45; controles.zoomSpeed = 0.6;
+  // en el celular, un dedo hace scroll de la página; con dos dedos se gira y se acerca
+  controles.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_ROTATE };
+  renderer.domElement.style.touchAction = 'pan-y';
   controles.addEventListener('start', () => { movido = true; });
-  controles.maxPolarAngle = 1.32; controles.screenSpacePanning = false;
 
   escena.add(new THREE.HemisphereLight(0xffffff, 0xd8dde8, 1.6));
   const sol = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -296,12 +305,9 @@ export async function crear4d(cont, { onTocar, onComun }) {
     entrar(id, luego) {
       const s = salasGrupo.get(String(id));
       if (!s) return luego?.();
+      // la cámara no se mueve: se marca el consultorio y el camino desde la entrada, y se abre la ficha
       fijo = id; resaltar(id);
-      const [x, y, w, d] = s.rect, cx = X(x) + w / M / 2, cz = Z(y) + d / M / 2;
-      // se acerca desde el lado de la entrada, a la altura de una persona parada mirando hacia abajo
-      const dir = new THREE.Vector3(camara.position.x - cx, 0, camara.position.z - cz).normalize();
-      movido = true;
-      volarA(new THREE.Vector3(cx + dir.x * 3.6, 5.2, cz + dir.z * 3.6), new THREE.Vector3(cx, 0.5, cz), () => setTimeout(() => luego?.(), 150));
+      setTimeout(() => luego?.(), reducido ? 0 : 450);
     },
     general() { fijo = null; resaltar(apuntado); volarA(INICIO.pos.clone(), INICIO.mira.clone(), () => { movido = false; }); },
     destruir() { vivo = false; ro.disconnect(); renderer.dispose(); cont.innerHTML = ''; },

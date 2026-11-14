@@ -346,7 +346,7 @@ function abrir(sel) {
 function cerrar(sel) {
   $(sel).classList.add('oculto');
   if (!$$('.capa:not(.oculto)').length) document.body.style.overflow = '';
-  if (sel === '#ficha') { st.abierto = null; motor?.general(); pintarPlano(); }
+  if (sel === '#ficha') { st.abierto = null; pintarPlano(); }
 }
 $$('[data-cerrar]').forEach((b) => (b.onclick = () => cerrar('#' + b.closest('.capa').id)));
 $$('.capa').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) cerrar('#' + m.id); }));
