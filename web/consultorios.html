@@ -154,12 +154,27 @@
     .slot-item strong { display: block; color: var(--azul); font-family: var(--f-titulos); }
     .slot-item small { color: var(--gris); font-size: .8rem; }
     .slot-item .btn, .slot-item > .suave { grid-column: 1 / -1; text-align: center; }
-    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
-    .modo { text-align: left; border: 2px solid var(--linea); background: #fff; border-radius: 14px; padding: 12px 14px; font: inherit; cursor: pointer; color: #1b2333; min-height: 64px; }
-    .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1.05rem; }
-    .modo small { color: var(--gris); }
-    .modo[aria-pressed="true"] { border-color: var(--azul); background: #eef2fa; box-shadow: 0 0 0 1px var(--azul) inset; }
-    .chip-tipo { font-size: 1rem; padding: 9px 16px; }
+    .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--fondo-web); border-radius: 14px; padding: 4px; }
+    .modo { text-align: center; border: 0; background: transparent; border-radius: 11px; padding: 8px 6px; font: inherit; cursor: pointer; color: #1b2333; min-height: 52px; line-height: 1.2; }
+    .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1rem; }
+    .modo small { color: var(--gris); font-size: .82rem; }
+    .modo em { font-style: normal; font-family: var(--f-texto); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; background: var(--verde); color: #fff; border-radius: 999px; padding: 2px 7px; vertical-align: 2px; margin-left: 2px; }
+    .modo[aria-pressed="true"] { background: var(--azul); } .modo[aria-pressed="true"] strong, .modo[aria-pressed="true"] small { color: #fff; }
+    .modo.fijo[aria-pressed="true"] { background: var(--verde); } .modo.fijo[aria-pressed="true"] em { background: #fff; color: var(--verde); }
+    .tipos-fila { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; padding-bottom: 2px; scrollbar-width: none; }
+    .tipos-fila::-webkit-scrollbar { display: none; }
+    .chip-tipo { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: .95rem; padding: 8px 14px; white-space: nowrap; }
+    .franjas { display: flex; gap: 6px; justify-content: center; margin: 10px 0 0; }
+    .franjas .chip-f { min-height: 36px; padding: 5px 14px; }
+    .franja-fijo { background: var(--verde-fondo); border: 1.5px solid #9fd4b6; border-radius: 12px; padding: 10px 12px; margin-top: 10px; color: #14361f; }
+    .franja-fijo strong { display: block; } .franja-fijo span { font-size: .88rem; }
+    .modo-fijo .sem-celda.sel, .modo-fijo .sem-celda:not(:disabled):hover { border-color: var(--verde); box-shadow: 0 0 0 2px var(--verde) inset; }
+    .modo-fijo .slot .btn-primario, .modo-fijo .ficha-pie .btn-primario { background: var(--verde); border-color: var(--verde); }
+    .sem-celda i { display: block; font-style: normal; font-size: .58rem; font-weight: 700; text-transform: uppercase; line-height: 1; color: #8a4b00; }
+    .sem-celda b { line-height: 1; display: block; }
+    .precio-slot { display: block; color: #1b2333 !important; } .precio-slot b { color: var(--verde); }
+    .pasar-fijo { color: var(--verde); text-align: left; padding: 2px 0; min-height: 0; font-size: .9rem; }
+    .ayuda-wa { display: inline-flex; align-items: center; gap: 8px; }
     @media (max-width: 640px) {
       .sem-tabla { border-spacing: 2px; } .sem-celda { height: 32px; font-size: .85rem; } .sem-dia { font-size: .8rem; }
       .slot-item { grid-template-columns: 60px 1fr; } .slot-item img { width: 60px; height: 46px; } .slot-item .btn { grid-column: 1 / -1; }
@@ -182,7 +197,7 @@
     .card-cuerpo { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
     .card-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
     .card-cab h3 { margin: 0; font-size: 1.15rem; }
-    .cap { font-size: .85rem; color: var(--gris); white-space: nowrap; }
+    .cap { font-size: .85rem; color: var(--gris); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
     .lema { margin: 0; color: #3c4659; }
     .chips-m { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; }
     .chips-m li { background: #eef1f7; color: var(--azul); border-radius: 8px; padding: 3px 9px; font-size: .82rem; }
@@ -266,8 +281,10 @@
       .ficha-pie { flex-direction: column; align-items: stretch; } .ficha-pie .btn { width: 100%; }
       .barra-comp { bottom: 80px; }
       .fichas { grid-template-columns: 1fr; }
-      .ayuda-wa { padding: 10px 14px; font-size: .9rem; bottom: 12px; right: 12px; }
-      .col-plano .tarjeta-b { padding-bottom: 54px; }
+      .ayuda-wa { padding: 0; width: 48px; height: 48px; justify-content: center; bottom: 12px; right: 12px; } .ayuda-wa span { display: none; }
+      .portada { padding: 14px 0 58px; } .portada h1 { font-size: 1.45rem; margin: 0; } .portada p { display: none; }
+      .cab .ancho { min-height: 52px; } .panel-filtros { padding: 10px; } .semana-caja { margin-top: 10px; padding: 12px 10px; }
+      .sem-cab h2 { font-size: 1rem; } .sem-nav { margin: 6px 0 2px; } .sem-flecha { width: 34px; height: 34px; }
       .ficha-info { padding: 16px 12px; }
       .agenda th { font-size: .74rem; } .agenda tbody th { padding-right: 3px; } .celda { height: 28px; }
     }
@@ -287,11 +304,10 @@
   <div class="ancho">
     <div class="panel-filtros" role="region" aria-label="Filtros">
       <div class="modos" role="group" aria-label="Cómo querés alquilar">
-        <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>⏱ Por horas</strong><small>Flexible: los días que necesites</small></button>
-        <button type="button" class="modo" data-modo="fijo" aria-pressed="false"><strong>📅 Horario fijo</strong><small>El mismo día y hora todas las semanas</small></button>
+        <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>Por horas</strong><small id="precio-horas"></small></button>
+        <button type="button" class="modo fijo" data-modo="fijo" aria-pressed="false"><strong>Horario fijo <em>Ahorrás</em></strong><small id="precio-fijo"></small></button>
       </div>
-      <div class="fila-f"><span>Busco</span><div id="tipos" role="group" aria-label="Tipo de consultorio" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
-      <div class="fila-f"><span>Horario</span><div id="franjas" role="group" aria-label="Horario" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+      <div class="tipos-fila" id="tipos" role="group" aria-label="Tipo de consultorio"></div>
     </div>
 
     <section class="tarjeta-b semana-caja" aria-labelledby="titulo-semana">
@@ -299,6 +315,8 @@
         <h2 id="titulo-semana">Disponibilidad de la semana</h2>
         <div class="vista-plano" role="group" aria-label="Ver la semana"><button type="button" data-vista-sem="horario" aria-pressed="true">Por horario</button><button type="button" data-vista-sem="consultorio" aria-pressed="false">Por consultorio</button></div>
       </div>
+      <div class="franja-fijo oculto" id="franja-fijo"></div>
+      <div class="franjas" id="franjas" role="group" aria-label="Horario"></div>
       <div class="sem-nav"><button type="button" class="sem-flecha" id="sem-ant" aria-label="Semana anterior">‹</button><strong id="sem-rango"></strong><button type="button" class="sem-flecha" id="sem-sig" aria-label="Semana siguiente">›</button></div>
       <div class="sem-scroll" id="semana"></div>
       <p class="suave chico" id="sem-leyenda" style="margin:8px 0 0"></p>
@@ -352,7 +370,7 @@
       <h2 id="comunes-titulo" style="margin-top:0">Recepción y sala de espera</h2><div id="comunes-cuerpo"></div></div>
   </div>
 
-  <a class="ayuda-wa" id="wa-ayuda" target="_blank" rel="noopener">¿Dudas? WhatsApp</a>
+  <a class="ayuda-wa" id="wa-ayuda" target="_blank" rel="noopener" aria-label="¿Dudas? Escribinos por WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 01-13.5 7.8L3 21l1.2-4.5A9 9 0 1121 12z"/></svg><span>¿Dudas? WhatsApp</span></a>
   <div class="aviso-flot" id="aviso-flot" role="status"></div>
   <script type="module" src="js/consultorios.js"></script>
 </body>
