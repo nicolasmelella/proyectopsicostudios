@@ -121,6 +121,43 @@
     @media (hover: none), (max-width: 640px) { .solo-cel { display: inline; } .solo-compu { display: none; } }
     .ayuda-4d { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; color: var(--gris); margin-top: 6px; }
     .lnk-4d { background: none; border: 0; color: var(--azul); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 6px 2px; min-height: 40px; }
+    .semana-caja { margin-top: 18px; }
+    .sem-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sem-cab h2 { margin: 0; font-size: 1.15rem; }
+    .sem-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 10px 0 6px; font-family: var(--f-titulos); color: var(--azul); }
+    .sem-flecha { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--linea); background: #fff; font-size: 1.3rem; color: var(--azul); cursor: pointer; }
+    .sem-flecha:disabled { opacity: .35; cursor: default; }
+    .sem-scroll { overflow-x: auto; }
+    .sem-tabla { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 320px; }
+    .sem-tabla th { font-size: .8rem; color: var(--gris); font-weight: 600; }
+    .sem-tabla tbody th { text-align: right; padding-right: 4px; white-space: nowrap; position: sticky; left: 0; background: #fff; z-index: 1; }
+    .sem-dia { width: 100%; border: 0; background: none; font: inherit; font-family: var(--f-titulos); font-weight: 700; color: var(--azul); cursor: pointer; padding: 4px 2px; border-radius: 8px; line-height: 1.15; }
+    .sem-dia small { display: block; font-family: var(--f-texto); font-weight: 600; color: var(--gris); }
+    .sem-dia.hoy { background: var(--azul); color: #fff; } .sem-dia.hoy small { color: #dfe6f5; }
+    .sem-celda { width: 100%; height: 34px; border-radius: 8px; border: 1.5px solid transparent; font: inherit; font-weight: 700; cursor: pointer; color: #14361f; }
+    .sem-celda.n0 { background: repeating-linear-gradient(45deg, #eceff4 0 4px, #f6f7fa 4px 8px); color: #9aa3b2; cursor: default; }
+    .sem-celda.n1 { background: #e3f3ea; } .sem-celda.n2 { background: #bfe3cd; } .sem-celda.n3 { background: #8fcaa6; } .sem-celda.n4 { background: #4f9f73; color: #fff; }
+    .sem-celda:not(:disabled):hover { border-color: var(--azul); }
+    .sem-celda.sel { border-color: var(--azul); box-shadow: 0 0 0 2px var(--azul) inset; }
+    .por-cons tbody th { font-family: var(--f-titulos); color: var(--azul); font-weight: 700; }
+    .sem-cons { width: 100%; border: 1.5px solid var(--linea); background: #fff; border-radius: 8px; padding: 6px 4px 4px; cursor: pointer; font: inherit; }
+    .sem-cons:hover { border-color: var(--azul); }
+    .sem-cons .mini { display: flex; gap: 1px; height: 10px; }
+    .sem-cons .mini i { flex: 1; border-radius: 2px; } .sem-cons .mini .l { background: #2f8a59; } .sem-cons .mini .o { background: #dfe3ea; }
+    .sem-cons small { display: block; font-size: .72rem; color: var(--gris); margin-top: 3px; }
+    .slot { margin-top: 14px; border-top: 1px solid var(--linea); padding-top: 12px; }
+    .slot-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+    .slot-cab h3 { margin: 0; font-size: 1.05rem; }
+    .slot-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+    .slot-item { display: grid; grid-template-columns: 74px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--linea); border-radius: 12px; padding: 8px; }
+    .slot-item img { width: 74px; height: 54px; object-fit: cover; border-radius: 8px; }
+    .slot-item strong { display: block; color: var(--azul); font-family: var(--f-titulos); }
+    .slot-item small { color: var(--gris); font-size: .8rem; }
+    .chip-tipo { font-size: 1rem; padding: 9px 16px; }
+    @media (max-width: 640px) {
+      .sem-tabla { border-spacing: 2px; } .sem-celda { height: 32px; font-size: .85rem; } .sem-dia { font-size: .8rem; }
+      .slot-item { grid-template-columns: 60px 1fr; } .slot-item img { width: 60px; height: 46px; } .slot-item .btn { grid-column: 1 / -1; }
+    }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
 
     .lista-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 10px; }
@@ -238,15 +275,25 @@
 
   <section class="portada"><div class="ancho">
     <h1>Elegí tu consultorio</h1>
-    <p>6 espacios en pleno Microcentro, desde <strong id="desde-precio">—</strong> la hora. Mirá cuál está libre, recorrelo en fotos y reservalo.</p>
+    <p>6 espacios en pleno Microcentro, desde <strong id="desde-precio">—</strong> la hora. Mirá qué hay libre en la semana, recorrelos y reservá.</p>
   </div></section>
 
   <div class="ancho">
     <div class="panel-filtros" role="region" aria-label="Filtros">
-      <div class="dias" id="dias" role="group" aria-label="Día"></div>
+      <div class="fila-f" style="margin-top:0"><span>Busco</span><div id="tipos" role="group" aria-label="Tipo de consultorio" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
       <div class="fila-f"><span>Horario</span><div id="franjas" role="group" aria-label="Horario" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
-      <div class="fila-f"><span>Para</span><div id="para" role="group" aria-label="Tipo de sesión" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
     </div>
+
+    <section class="tarjeta-b semana-caja" aria-labelledby="titulo-semana">
+      <div class="sem-cab">
+        <h2 id="titulo-semana">Disponibilidad de la semana</h2>
+        <div class="vista-plano" role="group" aria-label="Ver la semana"><button type="button" data-vista-sem="horario" aria-pressed="true">Por horario</button><button type="button" data-vista-sem="consultorio" aria-pressed="false">Por consultorio</button></div>
+      </div>
+      <div class="sem-nav"><button type="button" class="sem-flecha" id="sem-ant" aria-label="Semana anterior">‹</button><strong id="sem-rango"></strong><button type="button" class="sem-flecha" id="sem-sig" aria-label="Semana siguiente">›</button></div>
+      <div class="sem-scroll" id="semana"></div>
+      <p class="suave chico" id="sem-leyenda" style="margin:8px 0 0"></p>
+      <div class="slot oculto" id="slot" aria-live="polite"></div>
+    </section>
 
     <div class="cuerpo">
       <aside class="col-plano">
