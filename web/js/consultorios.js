@@ -2,6 +2,7 @@
 // agenda semanal por consultorio, comparador y paso directo al formulario de reserva.
 import { crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos, precioHora, mensajeError, DIAS_CORTOS } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
+import { plano3d } from './plano3d.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -38,6 +39,8 @@ const st = {
   comparar: new Set(),
   seleccion: new Map(),       // ficha abierta: fecha → Set(horas)
   abierto: null,
+  vista: (() => { try { return localStorage.getItem('psicostudios-plano') || '3d'; } catch { return '3d'; } })(),
+  apuntado: null,             // consultorio con el mouse encima (para el recorrido en 3D)
 };
 
 const horasDelDia = () => {
@@ -107,6 +110,16 @@ const SALAS = { // x, y, ancho, alto en el croquis (720 × 420)
 };
 function pintarPlano() {
   const visibles = new Set(filtrados().map((c) => c.id));
+  $$('[data-vista-plano]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.vistaPlano === st.vista));
+  if (st.vista === '3d') {
+    $('#plano').innerHTML = plano3d(st.consultorios.filter((c) => SALAS[c.id]).map((c) => {
+      const [clase, texto] = estadoDe(c), d = datos(c);
+      return { id: c.id, rect: SALAS[c.id], nombre: esc(d.corto.replace('Consultorio ', 'Cons. ')), texto: esc(texto), estado: clase,
+               ventana: !!d.ventana, apagada: !visibles.has(c.id), activa: st.abierto === c.id || st.apuntado === c.id };
+    }), { destino: st.abierto || st.apuntado });
+    conectarPlano();
+    return;
+  }
   const salas = st.consultorios.filter((c) => SALAS[c.id]).map((c) => {
     const [x, y, w, h] = SALAS[c.id], [clase, texto] = estadoDe(c), d = datos(c);
     const ventana = d.ventana ? `<line x1="${x + 18}" y1="${y + 3}" x2="${x + w - 18}" y2="${y + 3}" class="pl-ventana"/>` : '';
@@ -124,6 +137,9 @@ function pintarPlano() {
       <text x="275" y="316" text-anchor="middle" class="pl-nombre">Recepción</text><text x="275" y="344" text-anchor="middle" class="pl-estado">y sala de espera</text></g>
     <path d="M250 400 v-14 a14 14 0 0 1 14 14" class="pl-puerta"/><text x="300" y="414" class="pl-zona">Entrada</text>
     ${salas}</svg>`;
+  conectarPlano();
+}
+function conectarPlano() {
   $$('#plano [data-cons]').forEach((g) => {
     const abrir = () => abrirFicha(Number(g.dataset.cons));
     g.onclick = abrir;
@@ -131,10 +147,22 @@ function pintarPlano() {
     g.onmouseenter = () => $(`.card[data-card="${g.dataset.cons}"]`)?.classList.add('resaltada');
     g.onmouseleave = () => $(`.card[data-card="${g.dataset.cons}"]`)?.classList.remove('resaltada');
   });
-  const comun = $('#plano [data-comun]');
-  comun.onclick = () => abrirComunes();
-  comun.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirComunes(); } };
+  $$('#plano [data-comun]').forEach((comun) => {
+    comun.onclick = () => abrirComunes();
+    comun.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirComunes(); } };
+  });
 }
+// En 3D, al pasar por una ficha se marca el recorrido hasta ese consultorio
+function apuntar(id) {
+  if (st.vista !== '3d' || st.apuntado === id) return;
+  st.apuntado = id;
+  pintarPlano();
+}
+$$('[data-vista-plano]').forEach((b) => (b.onclick = () => {
+  st.vista = b.dataset.vistaPlano;
+  try { localStorage.setItem('psicostudios-plano', st.vista); } catch { /* sin almacenamiento */ }
+  pintarPlano();
+}));
 
 // ---------------------------------------------------------------- fichas
 const filtrados = () => st.consultorios.filter((c) => st.para === 'todos' || datos(c).ideal.includes(st.para));
@@ -184,8 +212,8 @@ function pintarFichas() {
     pintarBarraComparar();
   }));
   $$('#fichas .card').forEach((card) => {
-    card.onmouseenter = () => $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.add('hover');
-    card.onmouseleave = () => $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.remove('hover');
+    card.onmouseenter = () => { $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.add('hover'); apuntar(Number(card.dataset.card)); };
+    card.onmouseleave = () => { $(`#plano [data-cons="${card.dataset.card}"]`)?.classList.remove('hover'); apuntar(null); };
   });
 }
 

@@ -69,6 +69,26 @@
     .leyenda i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; }
     .leyenda .l { background: var(--verde-fondo); border: 2px solid var(--verde); } .leyenda .p { background: var(--ambar-fondo); border: 2px solid #d99a1e; }
     .leyenda .c { background: #e9ecf2; border: 2px dashed var(--rojo-suave); } .leyenda .v { background: #6fb3e8; height: 5px; border-radius: 3px; }
+    .plano-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .vista-plano { display: flex; background: var(--fondo-web); border-radius: 999px; padding: 3px; flex: none; }
+    .vista-plano button { border: 0; background: transparent; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 700; font-size: .85rem; color: var(--gris); cursor: pointer; min-height: 36px; }
+    .vista-plano button[aria-pressed="true"] { background: var(--azul); color: #fff; }
+    /* plano 3D */
+    .p3-sala { cursor: pointer; transition: transform .2s ease, opacity .2s; }
+    .p3-sala:hover, .p3-sala:focus, .p3-sala.activa, .p3-sala.hover { transform: translateY(-8px); outline: none; }
+    .p3-sala.activa .p3-suelo, .p3-sala:hover .p3-suelo, .p3-sala.hover .p3-suelo { stroke: var(--azul); stroke-width: 4; }
+    .p3-sala.apagada { opacity: .35; }
+    .p3-sala.completo .p3-suelo { stroke-dasharray: 8 5; }
+    .p3-cartel { cursor: pointer; filter: drop-shadow(0 3px 6px rgba(18,39,90,.18)); }
+    .p3-cartel rect { fill: #fff; stroke: #d5dbe6; }
+    .p3-cartel.libre rect { stroke: var(--verde); } .p3-cartel.pocas rect { stroke: #d99a1e; }
+    .p3-nombre { font-family: var(--f-titulos); font-weight: 700; font-size: 27px; fill: var(--azul); pointer-events: none; }
+    .p3-estado { font-size: 21px; fill: #3c4659; font-family: var(--f-texto); pointer-events: none; }
+    .p3-camino { fill: none; stroke: #c0623a; stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; animation: camina 1.2s linear infinite; }
+    .p3-destino { fill: #c0623a; }
+    @keyframes camina { to { stroke-dashoffset: -22; } }
+    @media (prefers-reduced-motion: reduce) { .p3-camino { animation: none; } .p3-sala { transition: none; } }
+    .p3-entrada { font-size: 22px; font-weight: 700; fill: #7a8496; font-family: var(--f-texto); }
     .nota-croquis { font-size: .78rem; color: var(--gris); margin: 8px 0 0; }
 
     .lista-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 10px; }
@@ -199,10 +219,11 @@
     <div class="cuerpo">
       <aside class="col-plano">
         <div class="tarjeta-b">
-          <h2>Piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2>
+          <div class="plano-cab"><h2>Piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2>
+            <div class="vista-plano" role="group" aria-label="Vista del plano"><button type="button" data-vista-plano="3d" aria-pressed="true">3D</button><button type="button" data-vista-plano="2d" aria-pressed="false">Plano</button></div></div>
           <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
           <div id="plano"></div>
-          <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span></div>
+          <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>
           <p class="nota-croquis">Croquis ilustrativo: la ubicación real de cada consultorio se ajusta con el plano del piso.</p>
         </div>
       </aside>
