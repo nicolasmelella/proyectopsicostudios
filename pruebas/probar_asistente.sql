@@ -333,7 +333,7 @@ select pg_temp.ok((select (r->>'diferencia')::int = 500 and (r->>'total')::int =
 select pg_temp.espera_error(format($$select public.asistente_mover_reserva(%s, %s, %L, array[10, 11]::smallint[])$$, :chat, :res, (select lunes + 3 from as_f)), 'OTRA_DURACION');
 -- poca anticipación: lo tiene que ver el equipo
 reset role;
-update public.reservas set fecha = public.hoy_ar() + 1, horas = array[(extract(hour from public.ahora_ar())::int % 12) + 8]::smallint[] where id = :res;
+update public.reservas set fecha = public.hoy_ar(), horas = array[20]::smallint[] where id = :res;   -- hoy a las 20: siempre faltan menos de 24 hs
 delete from public.ocupaciones where reserva_id = :res;
 set role service_role;
 select pg_temp.espera_error(format($$select public.asistente_mover_reserva(%s, %s, %L, array[19]::smallint[])$$, :chat, :res, (select lunes + 4 from as_f)), 'POCA_ANTICIPACION');
