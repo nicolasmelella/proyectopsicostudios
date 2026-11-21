@@ -39,6 +39,7 @@ const estado = {
   desde: null,
   libresFijo: new Map(),
   horasFijo: new Set(),
+  consFijo: null,         // consultorio elegido desde "Elegí tu consultorio" (opcional)
 };
 
 // ---------------------------------------------------------------- inicio
@@ -611,6 +612,8 @@ $('#form-datos').onsubmit = async (e) => {
       const { data, error } = await sb.rpc('crear_fijo_web', {
         p_nombre: nombre, p_whatsapp: whatsapp, p_profesion: profesion, p_email: email,
         p_dia: estado.dia, p_horas: [...estado.horasFijo].sort((a, b) => a - b), p_desde: estado.desde,
+        // el consultorio que eligió en "Elegí tu consultorio", si sigue libre en esas horas
+        ...(estado.consFijo && consultoriosComunes(estado.libresFijo, [...estado.horasFijo]).has(estado.consFijo) ? { p_consultorio: estado.consFijo } : {}),
       });
       if (error) throw error;
       guardarMisDatos({ nombre, whatsapp, profesion, email });
@@ -1113,14 +1116,37 @@ try {
   if (primero) await elegirFecha(primero);
   else { pintarCalendario(); $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres en los próximos meses. Escribinos por WhatsApp.</p>'; }
   const q = new URLSearchParams(location.search);
+  if (q.has('demo')) { const l = $('#link-consultorios'); if (l) l.href = 'consultorios.html?demo'; document.querySelectorAll('a[href="consultorios.html"]').forEach((a) => (a.href = 'consultorios.html?demo')); }
   // Links que comparte el asistente de WhatsApp: ?dia=AAAA-MM-DD (horas sueltas) o ?fijo=1…6 (horario fijo ese día de la semana)
-  const diaLink = q.get('dia'), fijoLink = q.get('fijo');
-  if (diaLink && /^\d{4}-\d{2}-\d{2}$/.test(diaLink) && diaLink >= hoyAR()) {
+  // Desde "Elegí tu consultorio": ?p=AAAA-MM-DD.consultorio.h,h|… → días, consultorio y horas ya elegidos
+  const diaLink = q.get('dia'), fijoLink = q.get('fijo'), pedidoLink = q.get('p');
+  const items = (pedidoLink || '').split('|').map((x) => x.split('.')).filter(([f, c, hs]) => /^\d{4}-\d{2}-\d{2}$/.test(f || '') && f >= hoyAR()
+    && /^\d+$/.test(c || '') && /^\d+(,\d+)*$/.test(hs || ''));
+  if (items.length) {
+    for (const [f, c, hs] of items.slice(0, Number(estado.cfg.max_dias_por_pedido || 8))) {
+      estado.pedido.set(f, { consultorio: Number(c), horas: hs.split(',').map(Number).sort((a, b) => a - b) });
+    }
+    await elegirFecha(items[0][0]);
+    document.getElementById('reservar')?.scrollIntoView({ block: 'start' });
+    if (calculo().listo) $('#btn-continuar').click();
+  } else if (diaLink && /^\d{4}-\d{2}-\d{2}$/.test(diaLink) && diaLink >= hoyAR()) {
     await elegirFecha(diaLink);
     document.getElementById('reservar')?.scrollIntoView({ block: 'start' });
   } else if (fijoLink && /^[1-6]$/.test(fijoLink)) {
     cambiarModo('fijo');
     elegirDiaFijo(Number(fijoLink));
+    // Desde "Elegí tu consultorio": ?fijo=2&h=15,16&c=3 → arranca la próxima semana, con esas horas y ese consultorio
+    const hs = (q.get('h') || '').split(',').filter((x) => /^\d+$/.test(x)).map(Number), cons = Number(q.get('c')) || null;
+    const primera = document.querySelector('#inicio-fijo .chip');
+    if (hs.length && primera) {
+      await elegirInicioFijo(primera.dataset.f);
+      if (hs.every((h) => estado.libresFijo.get(h)?.size)) {
+        estado.horasFijo = new Set(hs);
+        estado.consFijo = cons && hs.every((h) => estado.libresFijo.get(h)?.has(cons)) ? cons : null;
+        pintarHorasFijo();
+        if (calculo().listo) $('#btn-continuar').click();
+      }
+    }
     document.getElementById('reservar')?.scrollIntoView({ block: 'start' });
   }
   if (q.has('pago') && q.has('pedido') && q.has('t')) {
