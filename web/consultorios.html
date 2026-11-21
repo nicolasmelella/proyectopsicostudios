@@ -171,7 +171,28 @@
     .bk-ejemplos button { flex: none; border: 1px dashed #b8c0cd; background: #fff; border-radius: 999px; padding: 4px 10px; font: inherit; color: var(--azul); cursor: pointer; white-space: nowrap; }
     .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--fondo-web); border-radius: 14px; padding: 4px; }
     .modo { text-align: center; border: 0; background: transparent; border-radius: 11px; padding: 8px 6px; font: inherit; cursor: pointer; color: #1b2333; min-height: 52px; line-height: 1.2; }
-    .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1rem; }
+    .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1.05rem; }
+    .modo span { display: block; font-size: .8rem; color: #3c4659; margin: 1px 0; }
+    .modo[aria-pressed="true"] span { color: rgba(255,255,255,.9); }
+    .panel-filtros .modos { margin-bottom: 10px; }
+    .panel-filtros .bianki { margin-bottom: 10px; } .panel-filtros .bk-resp { margin: -2px 4px 10px; }
+    .conoce { margin-top: 14px; }
+    .tira { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 24px) / 3); gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: thin; }
+    .tira > * { scroll-snap-align: start; min-width: 0; }
+    .t-card { border: 1px solid var(--linea); border-radius: 14px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+    .t-foto { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #dfe3ea; aspect-ratio: 4 / 3; cursor: pointer; overflow: hidden; }
+    .t-foto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s; }
+    .t-card:hover .t-foto img { transform: scale(1.04); }
+    .t-cuerpo { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .t-cuerpo h3 { margin: 0; font-size: 1.05rem; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+    .t-cuerpo .lema { font-size: .9rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .t-cuerpo .tipos-t { font-size: .82rem; color: var(--gris); display: flex; gap: 10px; flex-wrap: wrap; }
+    .t-cuerpo .tipos-t span { display: inline-flex; align-items: center; gap: 4px; }
+    .t-cuerpo .tipos-t svg { width: 15px; height: 15px; }
+    .t-cuerpo .btn { margin-top: auto; }
+    .t-precio { font-size: .88rem; color: #1b2333; } .t-precio b { color: var(--verde); }
+    .slot .tira { margin-top: 10px; }
+    .pasar-fijo-slot { display: block; margin: 10px 0 0; text-align: left; }
     .modo small { color: var(--gris); font-size: .82rem; }
     .modo em { font-style: normal; font-family: var(--f-texto); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; background: var(--verde); color: #fff; border-radius: 999px; padding: 2px 7px; vertical-align: 2px; margin-left: 2px; }
     .modo[aria-pressed="true"] { background: var(--azul); } .modo[aria-pressed="true"] strong, .modo[aria-pressed="true"] small { color: #fff; }
@@ -296,8 +317,9 @@
       .ficha-pie { flex-direction: column; align-items: stretch; } .ficha-pie .btn { width: 100%; }
       .barra-comp { bottom: 80px; }
       .fichas { grid-template-columns: 1fr; }
+      .tira { grid-auto-columns: 78%; }
       .ayuda-wa { padding: 0; width: 48px; height: 48px; justify-content: center; bottom: 12px; right: 12px; } .ayuda-wa span { display: none; }
-      .portada { padding: 14px 0 58px; } .portada h1 { font-size: 1.45rem; margin: 0; } .portada p { display: none; }
+      .portada { padding: 14px 0 58px; } .portada h1 { font-size: 1.45rem; margin: 0; } .portada p { font-size: .92rem; margin-top: 2px; }
       .cab .ancho { min-height: 52px; } .panel-filtros { padding: 10px; } .semana-caja { margin-top: 10px; padding: 12px 10px; }
       .sem-cab h2 { font-size: 1rem; } .sem-nav { margin: 6px 0 2px; } .sem-flecha { width: 34px; height: 34px; }
       .ficha-info { padding: 16px 12px; }
@@ -313,11 +335,15 @@
 
   <section class="portada"><div class="ancho">
     <h1>Elegí tu consultorio</h1>
-    <p>6 espacios en pleno Microcentro, desde <strong id="desde-precio">—</strong> la hora. Mirá qué hay libre en la semana, recorrelos y reservá.</p>
+    <p>6 consultorios en pleno Microcentro, desde <strong id="desde-precio">—</strong> la hora.</p>
   </div></section>
 
   <div class="ancho">
     <div class="panel-filtros" role="region" aria-label="Filtros">
+      <div class="modos" role="group" aria-label="Cómo querés alquilar">
+        <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>Por horas</strong><span>Cuando lo necesitás</span><small id="precio-horas"></small></button>
+        <button type="button" class="modo fijo" data-modo="fijo" aria-pressed="false"><strong>Horario fijo <em>Ahorrás</em></strong><span>El mismo horario cada semana</span><small id="precio-fijo"></small></button>
+      </div>
       <form class="bianki" id="bianki" role="search" aria-label="Buscar con Bianki">
         <span class="bk-avatar" aria-hidden="true">B</span>
         <label class="oculto" for="bk-texto">Decile a Bianki qué buscás</label>
@@ -326,11 +352,6 @@
         <button type="submit" class="bk-ir" aria-label="Buscar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </form>
       <p class="bk-resp oculto" id="bk-resp" role="status" aria-live="polite"></p>
-      <div class="bk-ejemplos"><span>Probá:</span><button type="button" data-bk-ej>mañana a la tarde con sillones</button><button type="button" data-bk-ej>fijo los martes a las 15</button></div>
-      <div class="modos" role="group" aria-label="Cómo querés alquilar">
-        <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>Por horas</strong><small id="precio-horas"></small></button>
-        <button type="button" class="modo fijo" data-modo="fijo" aria-pressed="false"><strong>Horario fijo <em>Ahorrás</em></strong><small id="precio-fijo"></small></button>
-      </div>
       <div class="tipos-fila" id="tipos" role="group" aria-label="Tipo de consultorio"></div>
     </div>
 
@@ -347,32 +368,25 @@
       <div class="slot oculto" id="slot" aria-live="polite"></div>
     </section>
 
+    <section class="tarjeta-b conoce" aria-labelledby="t-conoce">
+      <div class="lista-cab"><h2 id="t-conoce">Conocé los consultorios</h2><span class="suave chico solo-cel">Deslizá →</span></div>
+      <div class="tira" id="galeria"><div class="cargando">Cargando consultorios…</div></div>
+    </section>
+
     <div class="cuerpo">
       <aside class="col-plano">
         <div class="tarjeta-b">
-          <div class="plano-cab"><h2>Piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2>
-            <div class="vista-plano" role="group" aria-label="Vista del plano"><button type="button" data-vista-plano="4d" aria-pressed="true">4D</button><button type="button" data-vista-plano="plano" aria-pressed="false">Plano</button></div></div>
-          <p class="suave" style="margin:0;font-size:.9rem">Tocá un consultorio para verlo y reservarlo.</p>
+          <div class="plano-cab"><h2>Recorré el piso 7 · <span id="titulo-dia" class="suave" style="font-weight:600"></span></h2></div>
           <div id="plano"></div>
           <div class="ayuda-4d" id="ayuda-4d">
             <span class="solo-compu">Tocá un consultorio para ver fotos y reservar · arrastrá para girar · rueda para acercar</span><span class="solo-cel">Tocá un consultorio para ver fotos y reservar · deslizá de costado para girar, con dos dedos acercás</span>
             <button type="button" class="lnk-4d" id="vista-general">Vista general</button>
           </div>
-          <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span><span><i class="v"></i>Ventanal</span><span style="color:#c0623a">··· Recorrido desde la entrada</span></div>
+          <div class="leyenda"><span><i class="l"></i>Disponible</span><span><i class="p"></i>Pocas horas</span><span><i class="c"></i>Completo</span></div>
           <p class="nota-croquis">Según el plano del piso 7. Los muebles son ilustrativos.</p>
         </div>
       </aside>
-      <main>
-        <div class="lista-cab"><h2>Consultorios</h2><span class="suave" id="cantidad"></span></div>
-        <div class="fichas" id="fichas"><div class="cargando">Cargando consultorios…</div></div>
-      </main>
     </div>
-  </div>
-
-  <div class="barra-comp oculto" id="barra-comp" role="region" aria-label="Comparar">
-    <span id="barra-comp-txt"></span>
-    <button type="button" class="lnk" id="limpiar-comp">Limpiar</button>
-    <button type="button" class="btn btn-primario" id="btn-comparar">Comparar</button>
   </div>
 
   <!-- Ficha del consultorio -->
@@ -382,11 +396,6 @@
       <div id="ficha-cuerpo"></div>
       <div class="ficha-pie" id="ficha-pie"></div>
     </div>
-  </div>
-  <!-- Comparar -->
-  <div class="capa capa-centro oculto" id="modal-comp" role="dialog" aria-modal="true" aria-labelledby="comp-titulo">
-    <div class="modal-c"><button type="button" class="cerrar-c" data-cerrar aria-label="Cerrar">×</button>
-      <h2 id="comp-titulo" style="margin-top:0">Comparar consultorios</h2><div id="comp-cuerpo"></div></div>
   </div>
   <!-- Espacios comunes -->
   <div class="capa capa-centro oculto" id="modal-comunes" role="dialog" aria-modal="true" aria-labelledby="comunes-titulo">
