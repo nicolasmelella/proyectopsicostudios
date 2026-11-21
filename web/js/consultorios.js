@@ -1,8 +1,9 @@
 // Vista "Elegí tu consultorio": plano del piso, fichas con fotos, disponibilidad en vivo,
 // agenda semanal por consultorio, comparador y paso directo al formulario de reserva.
-import { crearCliente, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos, precioHora, mensajeError, DIAS_CORTOS } from './comun.js';
+import { crearCliente, esDemo, esc, pesos, hoyAR, horaAR, sumarDias, diaSemana, fechaLarga, horaTxt, rangos, precioHora, mensajeError, DIAS_CORTOS } from './comun.js';
 import { WHATSAPP_AYUDA } from './config.js';
 import { plano3d, plano2d } from './plano3d.js';
+import { preguntar as preguntarBianki, completar as completarBusqueda } from './bianki.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -538,6 +539,72 @@ let tAviso;
 function avisar(t) { const a = $('#aviso-flot'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(() => a.classList.remove('ver'), 2600); }
 
 function pintarTodo() { pintarFiltros(); pintarSemana(); pintarSlot(); pintarPlano(); pintarFichas(); pintarBarraComparar(); }
+
+// ---------------------------------------------------------------- Bianki (buscadora)
+// Aplica lo que entendió Bianki a los filtros de la página y arma la respuesta con la agenda real.
+async function aplicarBusqueda(r0) {
+  const hoy = hoyAR();
+  if (r0.limite) return 'Hiciste muchas búsquedas seguidas. Probá en un rato o usá los filtros de abajo.';
+  if (!r0.entendido) return 'No llegué a entenderte. Probá con algo como “lunes a las 14 con escritorio” o usá los filtros de abajo.';
+  const r = completarBusqueda(r0, hoy, horaAR());
+  const quiereFijo = r.modo === 'fijo';
+  if (quiereFijo && st.modo !== 'fijo') await cambiarModo('fijo');
+  if (!quiereFijo && st.modo === 'fijo' && (r.modo === 'horas' || r0.fecha)) await cambiarModo('horas');
+  if (r.tipo) st.tipo = r.tipo;
+  let aviso = '';
+  if (st.modo === 'fijo') { if (r.dia_semana) st.fecha = `fijo-${r.dia_semana}`; }
+  else if (r.fecha) {
+    const i = st.dias.indexOf(r.fecha);
+    if (i >= 0) { st.fecha = r.fecha; st.semana = Math.floor(i / 6); }
+    else aviso = diaSemana(r.fecha) === 7 ? 'Los domingos está cerrado. Te muestro la semana para que elijas otro día.'
+      : r.fecha < st.dias[0] ? 'Ese día ya pasó o ya no le quedan horarios. Te muestro la semana.' : `Por acá se ve hasta el ${fechaCortaTxt(st.dias[st.dias.length - 1])}; para más adelante usá “Reservar por día y hora”. `;
+  }
+  st.hora = r.hora !== null && !aviso ? r.hora : null;
+  if (st.hora !== null) st.franja = st.hora < Number(st.cfg.hora_fin_manana || 13) ? 'manana' : 'tarde';
+  else if (r.franja) st.franja = r.franja;
+  pintarTodo();
+  if (aviso) return aviso;
+  const lista = filtrados(), tipoTxt = st.tipo === 'todos' ? '' : ` ${TIPOS.find((t) => t[0] === st.tipo)[1].toLowerCase()}`;
+  const cuando = esFijo(st.fecha) ? `todos los ${PLURAL[diaFijo(st.fecha)]}` : `el ${fechaLarga(st.fecha).toLowerCase()}`;
+  if (st.hora === null) {
+    const n = lista.filter((c) => libresDe(st.fecha, c.id).length).length;
+    return n ? `Te muestro ${cuando}${st.franja === 'dia' ? '' : st.franja === 'manana' ? ' a la mañana' : ' a la tarde'}${tipoTxt ? `, consultorios${tipoTxt}` : ''}. Tocá un horario para ver cuáles hay libres.`
+      : `No queda lugar${tipoTxt} ${cuando}. Mirá los otros días de la semana.`;
+  }
+  const libres = lista.filter((c) => libre(st.fecha, st.hora, c.id));
+  if (libres.length) {
+    const nombres = libres.map((c) => datos(c).corto.replace('Consultorio ', '')).join(', ').replace(/, ([^,]*)$/, ' y $1');
+    return `Sí: ${cuando} a las ${horaTxt(st.hora)} ${libres.length === 1 ? `queda libre${tipoTxt ? ' uno' + tipoTxt : ''}: el ${nombres}` : `hay ${libres.length} libres${tipoTxt}: ${nombres}`}. Elegí uno acá abajo.`;
+  }
+  const otras = todasLasHoras().filter((h) => lista.some((c) => libre(st.fecha, h, c.id)));
+  const cerca = otras.sort((a, b) => Math.abs(a - st.hora) - Math.abs(b - st.hora)).slice(0, 3).sort((a, b) => a - b);
+  return `A las ${horaTxt(st.hora)} no queda lugar${tipoTxt} ${cuando}.${cerca.length ? ` Lo más cerca: ${cerca.map(horaTxt).join(', ')}.` : ' Mirá los otros días de la semana.'}`;
+}
+$('#bianki').onsubmit = async (e) => {
+  e.preventDefault();
+  const texto = $('#bk-texto').value.trim(), resp = $('#bk-resp');
+  if (texto.length < 3) return $('#bk-texto').focus();
+  $('#bianki').classList.add('pensando'); resp.textContent = 'Bianki está buscando…'; resp.classList.remove('oculto');
+  try {
+    const r = await preguntarBianki(sb, texto, hoyAR(), { demo: esDemo() });
+    resp.textContent = await aplicarBusqueda(r);
+    if (st.hora !== null) $('#slot').scrollIntoView({ behavior: reducido() ? 'auto' : 'smooth', block: 'center' });
+  } catch (err) { resp.textContent = mensajeError(err); }
+  $('#bianki').classList.remove('pensando');
+};
+$$('[data-bk-ej]').forEach((b) => (b.onclick = () => { $('#bk-texto').value = b.textContent; $('#bianki').requestSubmit(); }));
+// Dictado por voz (si el navegador lo permite)
+const Voz = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+if (Voz) {
+  const mic = $('#bk-mic'); mic.classList.remove('oculto');
+  mic.onclick = () => {
+    const v = new Voz(); v.lang = 'es-AR'; v.interimResults = false; v.maxAlternatives = 1;
+    mic.classList.add('escuchando');
+    v.onresult = (ev) => { $('#bk-texto').value = ev.results[0][0].transcript; $('#bianki').requestSubmit(); };
+    v.onend = v.onerror = () => mic.classList.remove('escuchando');
+    v.start();
+  };
+}
 
 // ---------------------------------------------------------------- arranque
 $('#wa-ayuda').href = `https://wa.me/${WHATSAPP_AYUDA}?text=${encodeURIComponent('Hola! Quería consultar por los consultorios.')}`;

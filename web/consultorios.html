@@ -154,6 +154,21 @@
     .slot-item strong { display: block; color: var(--azul); font-family: var(--f-titulos); }
     .slot-item small { color: var(--gris); font-size: .8rem; }
     .slot-item .btn, .slot-item > .suave { grid-column: 1 / -1; text-align: center; }
+    .bianki { display: flex; align-items: center; gap: 8px; border: 2px solid var(--azul); border-radius: 999px; padding: 4px 4px 4px 6px; background: #fff; }
+    .bianki:focus-within { box-shadow: 0 0 0 3px rgba(57,135,229,.3); }
+    .bk-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-family: var(--f-titulos); font-weight: 800;
+      background: linear-gradient(135deg, #3987e5, #7a5cf0 60%, #e87ba4); }
+    .bianki.pensando .bk-avatar { animation: late 1s ease-in-out infinite; }
+    @keyframes late { 50% { transform: scale(1.15); } }
+    @media (prefers-reduced-motion: reduce) { .bianki.pensando .bk-avatar { animation: none; } }
+    .bianki input { flex: 1; min-width: 0; border: 0; outline: 0; font: inherit; font-size: 1rem; background: transparent; color: #1b2333; padding: 8px 2px; }
+    .bk-mic, .bk-ir { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; }
+    .bk-mic { background: var(--fondo-web); color: var(--azul); } .bk-mic.escuchando { background: #d03b3b; color: #fff; }
+    .bk-ir { background: var(--azul); color: #fff; }
+    .bk-resp { margin: 8px 4px 0; padding: 9px 12px; background: #eef2fa; border-radius: 12px; color: #1b2333; font-size: .97rem; }
+    .bk-ejemplos { display: flex; gap: 6px; align-items: center; overflow-x: auto; margin: 8px 0 10px; font-size: .82rem; color: var(--gris); scrollbar-width: none; }
+    .bk-ejemplos::-webkit-scrollbar { display: none; }
+    .bk-ejemplos button { flex: none; border: 1px dashed #b8c0cd; background: #fff; border-radius: 999px; padding: 4px 10px; font: inherit; color: var(--azul); cursor: pointer; white-space: nowrap; }
     .modos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--fondo-web); border-radius: 14px; padding: 4px; }
     .modo { text-align: center; border: 0; background: transparent; border-radius: 11px; padding: 8px 6px; font: inherit; cursor: pointer; color: #1b2333; min-height: 52px; line-height: 1.2; }
     .modo strong { display: block; font-family: var(--f-titulos); color: var(--azul); font-size: 1rem; }
@@ -303,6 +318,15 @@
 
   <div class="ancho">
     <div class="panel-filtros" role="region" aria-label="Filtros">
+      <form class="bianki" id="bianki" role="search" aria-label="Buscar con Bianki">
+        <span class="bk-avatar" aria-hidden="true">B</span>
+        <label class="oculto" for="bk-texto">Decile a Bianki qué buscás</label>
+        <input id="bk-texto" type="text" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="Decile a Bianki: “lunes a las 14 con escritorio”">
+        <button type="button" class="bk-mic oculto" id="bk-mic" aria-label="Dictar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
+        <button type="submit" class="bk-ir" aria-label="Buscar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </form>
+      <p class="bk-resp oculto" id="bk-resp" role="status" aria-live="polite"></p>
+      <div class="bk-ejemplos"><span>Probá:</span><button type="button" data-bk-ej>mañana a la tarde con sillones</button><button type="button" data-bk-ej>fijo los martes a las 15</button></div>
       <div class="modos" role="group" aria-label="Cómo querés alquilar">
         <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>Por horas</strong><small id="precio-horas"></small></button>
         <button type="button" class="modo fijo" data-modo="fijo" aria-pressed="false"><strong>Horario fijo <em>Ahorrás</em></strong><small id="precio-fijo"></small></button>
