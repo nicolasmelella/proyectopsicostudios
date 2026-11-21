@@ -254,11 +254,12 @@ function ahorroFijo(horas) {
   return { semanal, ahorroMes: Math.max(0, Math.round(((suelto - semanal) * 4.33) / 100) * 100) };
 }
 const linkFijo = (f, horas, c) => `index.html?fijo=${diaFijo(f)}&h=${horas.join(',')}&c=${c}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
+const linkHoras = (f, h, c) => `index.html?p=${encodeURIComponent(`${f}.${c}.${h}`)}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
 function pintarSemana() {
   const dias = diasSemana(), hs = horasDelDia(), lista = filtrados();
   $('#sem-rango').textContent = st.modo === 'fijo' ? 'Libre todas las semanas, desde la próxima'
     : dias.length ? `${fechaCortaTxt(dias[0])} al ${fechaCortaTxt(dias[dias.length - 1])}` : '';
-  $('#titulo-semana').textContent = st.modo === 'fijo' ? 'Horario fijo: qué hay libre todas las semanas' : 'Disponibilidad de la semana';
+  $('#titulo-semana').innerHTML = `<span class="paso">1</span>¿Cuándo? <small>${st.modo === 'fijo' ? 'Libre todas las semanas' : 'Disponibilidad de la semana'}</small>`;
   $('#sem-ant').classList.toggle('oculto', st.modo === 'fijo'); $('#sem-sig').classList.toggle('oculto', st.modo === 'fijo');
   $('#sem-ant').disabled = st.semana === 0;
   $('#sem-sig').disabled = (st.semana + 1) * 6 >= st.dias.length;
@@ -298,7 +299,7 @@ function pintarSlot() {
   if (st.hora === null) { caja.classList.add('oculto'); return; }
   const libres = filtrados().filter((c) => libre(st.fecha, st.hora, c.id));
   caja.classList.remove('oculto');
-  caja.innerHTML = `<div class="slot-cab"><h3>${esc(fechaTxt(st.fecha))} · ${horaTxt(st.hora)} a ${horaTxt(st.hora + 1)}</h3>
+  caja.innerHTML = `<div class="slot-cab"><h3><span class="paso">2</span>¿Cuál? <small>${esc(fechaTxt(st.fecha))} · ${horaTxt(st.hora)} a ${horaTxt(st.hora + 1)}</small></h3>
       <span class="suave">${libres.length} ${libres.length === 1 ? 'consultorio libre' : 'consultorios libres'}${st.tipo === 'todos' ? '' : ' ' + TIPOS.find((t) => t[0] === st.tipo)[1].toLowerCase()}</span>
       <button type="button" class="lnk-4d" id="slot-quitar">Quitar horario</button></div>
     <div class="tira">${libres.map((c) => {
@@ -316,13 +317,12 @@ function pintarSlot() {
             const hs = horasParaFijo(st.fecha, st.hora, c.id);
             return hs ? `<a class="btn btn-primario btn-chico" href="${linkFijo(st.fecha, hs, c.id)}">Quiero este fijo · ${esc(rangos(hs))}</a>`
               : '<span class="suave chico">Por la tarde el fijo es de 2 horas seguidas y la de al lado está ocupada</span>';
-          })() : `<button type="button" class="btn btn-primario btn-chico" data-reservar="${c.id}">Reservar ${horaTxt(st.hora)}</button>`}
+          })() : `<a class="btn btn-primario btn-chico" href="${linkHoras(st.fecha, st.hora, c.id)}">Reservar ${horaTxt(st.hora)} →</a>`}
         </div></article>`;
     }).join('')}</div>
     ${st.modo === 'horas' && libres.length ? (() => { const a = ahorroFijo([st.hora, st.hora + 1].filter((h) => h < Number(st.cfg.hora_cierre || 21)));
       return a.ahorroMes ? `<button type="button" class="lnk-4d pasar-fijo pasar-fijo-slot" id="slot-fijo">¿Venís todas las semanas? Con horario fijo ahorrás hasta ${pesos(a.ahorroMes)} por mes →</button>` : ''; })() : ''}`;
   $('#slot-quitar').onclick = () => { st.hora = null; pintarTodo(); };
-  $$('#slot [data-reservar]').forEach((b) => (b.onclick = () => abrirFicha(Number(b.dataset.reservar), { fecha: st.fecha, hora: st.hora })));
   $$('#slot [data-ver]').forEach((b) => (b.onclick = () => abrirFicha(Number(b.dataset.ver), { fecha: st.fecha, hora: st.hora })));
   $('#slot-fijo')?.addEventListener('click', async () => {
     const h = st.hora, d = diaSemana(st.fecha);
