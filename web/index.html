@@ -37,10 +37,11 @@
     /* encabezado */
     .cab { background: var(--azul); color: #fff; }
     .cab .ancho { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; }
-    .cab img { height: 34px; display: block; }
-    .cab nav { display: flex; gap: 8px; flex-wrap: wrap; }
-    .cab nav a { color: #fff; text-decoration: none; font-weight: 600; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); font-size: .92rem; }
-    .cab nav a.prim { background: var(--rosa); color: var(--azul); border-color: var(--rosa); }
+    .cab img { height: 42px; width: auto; display: block; }
+    .cab nav { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .cab nav a { color: #fff; text-decoration: none; font-weight: 600; padding: 8px 12px; border-radius: 8px; font-size: .95rem; }
+    .cab nav a:not(.prim):hover { text-decoration: underline; text-underline-offset: 4px; }
+    .cab nav a.prim { background: var(--rosa); color: var(--azul); margin-left: 8px; padding: 9px 18px; font-family: var(--f-titulos); font-weight: 700; }
 
     /* portada */
     .portada { background: linear-gradient(180deg, var(--azul) 0%, #1c3576 100%); color: #fff; padding: 26px 0 70px; }
@@ -218,7 +219,7 @@
     .aviso-chico { flex: 1; font-size: .85rem; color: #8a4b00; font-weight: 600; }
     .con-seleccion .ayuda-wa { display: none; }
     /* información (antes estaba en otra página) */
-    .info { margin-top: 14px; scroll-margin-top: 12px; }
+    .info, #elegir { margin-top: 14px; scroll-margin-top: 12px; }
     .info h2 { font-size: 1.15rem; margin: 0 0 8px; }
     .info-bajada { margin: 0 0 12px; color: #3c4659; }
     .beneficios { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
@@ -430,8 +431,8 @@
 </head>
 <body>
   <header class="cab"><div class="ancho">
-    <a href="./" aria-label="Psico Studios, inicio"><img src="img/logo-crema.png" alt="Psico Studios" width="120" height="34"></a>
-    <nav><a href="#como">Cómo funciona</a><a href="#precios" class="prim">Precios</a></nav>
+    <a href="./" aria-label="Psico Studios, inicio"><img src="img/logo-crema.png" alt="Psico Studios" width="76" height="42"></a>
+    <nav><a href="#como">Cómo funciona</a><a href="#precios">Precios</a><a href="#elegir" class="prim">Reservar</a></nav>
   </div></header>
 
   <section class="portada"><div class="ancho">
@@ -440,7 +441,7 @@
   </div></section>
 
   <div class="ancho">
-    <div class="panel-filtros" role="region" aria-label="Filtros">
+    <div class="panel-filtros" id="elegir" role="region" aria-label="Filtros">
       <div class="modos" role="group" aria-label="Cómo querés alquilar">
         <button type="button" class="modo" data-modo="horas" aria-pressed="true"><strong>Por horas</strong><span>Cuando lo necesitás</span><small id="precio-horas"></small></button>
         <button type="button" class="modo fijo" data-modo="fijo" aria-pressed="false"><strong>Horario fijo <em>Ahorrás</em></strong><span>El mismo horario cada semana</span><small id="precio-fijo"></small></button>
