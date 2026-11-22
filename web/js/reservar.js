@@ -1116,7 +1116,7 @@ try {
   if (primero) await elegirFecha(primero);
   else { pintarCalendario(); $('#horas-suelta').innerHTML = '<p class="aviso aviso-alerta">No quedan horarios libres en los próximos meses. Escribinos por WhatsApp.</p>'; }
   const q = new URLSearchParams(location.search);
-  if (q.has('demo')) { const l = $('#link-consultorios'); if (l) l.href = 'consultorios.html?demo'; document.querySelectorAll('a[href="consultorios.html"]').forEach((a) => (a.href = 'consultorios.html?demo')); }
+  if (q.has('demo')) document.querySelectorAll('a[href="./"]').forEach((a) => (a.href = './?demo'));
   // Links que comparte el asistente de WhatsApp: ?dia=AAAA-MM-DD (horas sueltas) o ?fijo=1…6 (horario fijo ese día de la semana)
   // Desde "Elegí tu consultorio": ?p=AAAA-MM-DD.consultorio.h,h|… → días, consultorio y horas ya elegidos
   const diaLink = q.get('dia'), fijoLink = q.get('fijo'), pedidoLink = q.get('p');

@@ -297,8 +297,8 @@ function ahorroFijo(horas) {
   const suelto = horas.reduce((t, h) => t + precioHora(st.precios, st.cfg, 'suelta', h, hoy), 0);
   return { semanal, ahorroMes: Math.max(0, Math.round(((suelto - semanal) * 4.33) / 100) * 100) };
 }
-const linkFijo = (f, horas, c) => `index.html?fijo=${diaFijo(f)}&h=${horas.join(',')}&c=${c}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
-const linkHoras = (f, horas, c) => `index.html?p=${encodeURIComponent(`${f}.${c}.${[...horas].sort((a, b) => a - b).join(',')}`)}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
+const linkFijo = (f, horas, c) => `reservar.html?fijo=${diaFijo(f)}&h=${horas.join(',')}&c=${c}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
+const linkHoras = (f, horas, c) => `reservar.html?p=${encodeURIComponent(`${f}.${c}.${[...horas].sort((a, b) => a - b).join(',')}`)}${new URLSearchParams(location.search).has('demo') ? '&demo' : ''}#reservar`;
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const mesMover = (ym, n) => { const [a, m] = ym.split('-').map(Number); return new Date(Date.UTC(a, m - 1 + n, 1)).toISOString().slice(0, 7); };
 
@@ -552,7 +552,7 @@ function pintarResumenFicha() {
   $('#ir-reservar')?.addEventListener('click', () => {
     const p = dias.map(([f, s]) => `${f}.${st.abierto}.${[...s].sort((a, b) => a - b).join(',')}`).join('|');
     const demo = new URLSearchParams(location.search).has('demo') ? '&demo' : '';
-    location.href = `index.html?p=${encodeURIComponent(p)}${demo}#reservar`;
+    location.href = `reservar.html?p=${encodeURIComponent(p)}${demo}#reservar`;
   });
 }
 
