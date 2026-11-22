@@ -67,6 +67,7 @@ async function cargarBase() {
 }
 
 function pintarPrecios() {
+  if (!$('#tabla-precios')) return;   // los precios ahora están en la portada
   const hoy = hoyAR();
   const hm = Number(estado.cfg.hora_apertura), ht = Number(estado.cfg.hora_fin_manana);
   const plan = (mod, nombre, texto, destacado) => `<div class="plan ${destacado ? 'dest' : ''}">
@@ -328,6 +329,7 @@ function pintarSeleccion() {
 
 // ================================================================ FOTOS
 function pintarGaleria() {
+  if (!$('#galeria')) return;   // las fotos ahora están en la portada
   const items = estado.consultorios.filter((c) => FOTOS[c.id]).map((c) => ({ id: c.id, nombre: c.nombre, ...FOTOS[c.id] }));
   items.push({ id: 'espacios', ...ESPACIOS });
   $('#galeria').innerHTML = items.map((x) => `<button type="button" class="card-cons" data-fotos="${x.id}">
