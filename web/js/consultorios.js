@@ -580,6 +580,18 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m 
 let tAviso;
 function avisar(t) { const a = $('#aviso-flot'); a.textContent = t; a.classList.add('ver'); clearTimeout(tAviso); tAviso = setTimeout(() => a.classList.remove('ver'), 2600); }
 
+// Precios por hora (por horas y fijo), como estaban en la web anterior
+function pintarPlanes() {
+  const hoy = hoyAR(), hm = Number(st.cfg.hora_apertura || 8), ht = Number(st.cfg.hora_fin_manana || 13);
+  const plan = (mod, nombre, texto, dest) => `<div class="plan-p ${dest ? 'dest' : ''}">${dest ? '<span class="tag-p">Ahorrás todas las semanas</span>' : ''}
+    <h3>${nombre}</h3><p>${texto}</p>
+    <dl><dt>Mañana</dt><dd>${pesos(precioHora(st.precios, st.cfg, mod, hm, hoy))} <small>/ hora</small></dd>
+      <dt>Tarde</dt><dd>${pesos(precioHora(st.precios, st.cfg, mod, ht, hoy))} <small>/ hora</small></dd></dl></div>`;
+  $('#planes').innerHTML = plan('suelta', 'Por horas', 'Reservás cuando lo necesitás.', false)
+    + plan('fijo', 'Horario fijo', 'El mismo día, horario y consultorio cada semana.', true);
+  $$('[data-cfg]').forEach((el) => { const v = st.cfg[el.dataset.cfg]; if (v) el.textContent = v; });
+}
+
 function pintarTodo() { pintarFiltros(); pintarCuando(); pintarCual(); pintarPlano(); pintarGaleria(); }
 
 // ---------------------------------------------------------------- Bianki (buscadora)
@@ -648,10 +660,12 @@ if (Voz) {
 }
 
 // ---------------------------------------------------------------- arranque
+$('#wa-dudas').href = `https://wa.me/${WHATSAPP_AYUDA}?text=${encodeURIComponent('Hola! Tengo una consulta sobre los consultorios de Psico Studios.')}`;
 $('#wa-ayuda').href = `https://wa.me/${WHATSAPP_AYUDA}?text=${encodeURIComponent('Hola! Quería consultar por los consultorios.')}`;
 try {
   await cargar();
   $('#desde-precio').textContent = pesos(precioDesde());
+  pintarPlanes();
   pintarTodo();
   // el 3D se descarga recién cuando el mapa está por verse
   new IntersectionObserver((e, o) => { if (e.some((x) => x.isIntersecting)) { mapaCerca = true; o.disconnect(); pintarPlano(); } }, { rootMargin: '0px' }).observe($('#plano'));

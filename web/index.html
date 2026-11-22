@@ -8,7 +8,8 @@
     (function () {
       var q = new URLSearchParams(location.search);
       var delFormulario = ['ver', 'comprobante', 'dia', 'fijo', 'p', 'pago', 'pedido', 'payment_id', 'collection_id', 'preference_id'];
-      if (location.hash || delFormulario.some(function (k) { return q.has(k); })) location.replace('reservar.html' + location.search + location.hash);
+      if (/type=(invite|recovery)/.test(location.hash)) location.replace('panel.html' + location.hash);
+      else if (location.hash === '#reservar' || delFormulario.some(function (k) { return q.has(k); })) location.replace('reservar.html' + location.search + location.hash);
     })();
   </script>
   <title>Consultorios por hora en el Microcentro | Psico Studios</title>
@@ -216,6 +217,34 @@
     .sel-acc .btn { flex: 1; }
     .aviso-chico { flex: 1; font-size: .85rem; color: #8a4b00; font-weight: 600; }
     .con-seleccion .ayuda-wa { display: none; }
+    /* información (antes estaba en otra página) */
+    .info { margin-top: 14px; scroll-margin-top: 12px; }
+    .info h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    .info-bajada { margin: 0 0 12px; color: #3c4659; }
+    .beneficios { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+    .beneficios li { display: flex; gap: 8px; align-items: flex-start; color: #1b2333; }
+    .beneficios svg { flex: none; color: var(--verde); margin-top: 2px; }
+    .beneficios small { color: var(--gris); }
+    .pasos-cf { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .pasos-cf li { display: flex; gap: 10px; align-items: flex-start; }
+    .pasos-cf .paso { flex: none; margin: 0; }
+    .pasos-cf strong { display: block; color: var(--azul); font-family: var(--f-titulos); }
+    .pasos-cf small { color: var(--gris); font-size: .88rem; }
+    .planes-p { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .plan-p { position: relative; border: 1px solid var(--linea); border-radius: 14px; padding: 14px; }
+    .plan-p.dest { border: 2px solid var(--verde); background: var(--verde-fondo); }
+    .plan-p .tag-p { position: absolute; top: -11px; left: 12px; background: var(--verde); color: #fff; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; }
+    .plan-p h3 { margin: 4px 0 2px; color: var(--azul); font-size: 1.05rem; }
+    .plan-p p { margin: 0 0 8px; color: var(--gris); font-size: .9rem; }
+    .plan-p dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+    .plan-p dt { color: var(--gris); } .plan-p dd { margin: 0; font-weight: 700; color: #1b2333; text-align: right; } .plan-p dd small { font-weight: 400; color: var(--gris); }
+    .dudas { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .pie-p { background: var(--azul); color: #dfe6f5; font-size: .88rem; padding: 18px 16px 80px; margin-top: 22px; }
+    .pie-p .ancho { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+    @media (max-width: 640px) {
+      .beneficios, .pasos-cf, .planes-p { grid-template-columns: 1fr; }
+      .planes-p { gap: 18px; } .dudas .btn { width: 100%; }
+    }
     .paso { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--azul); color: #fff; font-size: .85rem; margin-right: 8px; vertical-align: 1px; }
     .modo-fijo .paso { background: var(--verde); }
     #titulo-semana small, .slot-cab h3 small { font-family: var(--f-texto); font-weight: 600; color: var(--gris); font-size: .85rem; margin-left: 4px; }
@@ -402,7 +431,7 @@
 <body>
   <header class="cab"><div class="ancho">
     <a href="./" aria-label="Psico Studios, inicio"><img src="img/logo-crema.png" alt="Psico Studios" width="120" height="34"></a>
-    <nav><a href="reservar.html#reservar">Reservar por día y hora</a><a href="reservar.html" class="prim">Cómo funciona</a></nav>
+    <nav><a href="#como">Cómo funciona</a><a href="#precios" class="prim">Precios</a></nav>
   </div></header>
 
   <section class="portada"><div class="ancho">
@@ -454,7 +483,37 @@
         </div>
       </aside>
     </div>
+
+    <section class="tarjeta-b info" id="por-que" aria-labelledby="t-porque">
+      <h2 id="t-porque">Por qué Psico Studios</h2>
+      <p class="info-bajada">Más de 15 años alquilando consultorios a profesionales de la salud en el Microcentro. Reservás las horas que necesitás y atendés: <strong>sin contratos ni costos ocultos.</strong></p>
+      <ul class="beneficios"><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Espacios amplios y luminosos, con aire acondicionado</span></li><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Habilitados por el Ministerio de Salud y para obras sociales</span></li><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Wifi de alta velocidad</span></li><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Café y snacks para vos</span></li><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Atendido por sus dueños</span></li><li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg><span>Derivación de pacientes <small>(consultanos)</small></span></li></ul>
+      <p class="suave chico" style="margin:10px 0 0">Lunes a sábados, de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs.</p>
+    </section>
+
+    <section class="tarjeta-b info" id="como" aria-labelledby="t-como">
+      <h2 id="t-como">Cómo funciona</h2>
+      <ol class="pasos-cf">
+        <li><span class="paso">1</span><div><strong>Elegí día, horario y consultorio</strong><small>Hasta dos meses adelante. Podés sumar varios días en un mismo pedido.</small></div></li>
+        <li><span class="paso">2</span><div><strong>Completá tus datos</strong><small>Nombre, profesión, celular y mail. Los recordamos para la próxima.</small></div></li>
+        <li><span class="paso">3</span><div><strong>Pagá la seña del <span data-cfg="porcentaje_sena">50</span>%</strong><small>Transferís y mandás la captura por WhatsApp. El saldo, hasta el día anterior al turno.</small></div></li>
+      </ol>
+    </section>
+
+    <section class="tarjeta-b info" id="precios" aria-labelledby="t-precios">
+      <h2 id="t-precios">Precios por hora</h2>
+      <p class="suave chico" style="margin:0 0 10px">Mañana de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_fin_manana">13</span> hs · Tarde de <span data-cfg="hora_fin_manana">13</span> a <span data-cfg="hora_cierre">21</span> hs · Lunes a sábados.</p>
+      <div class="planes-p" id="planes"><div class="cargando">Cargando…</div></div>
+      <p class="suave chico" style="margin:10px 0 0">Por horas: se confirma con una seña del <span data-cfg="porcentaje_sena">50</span>% (o pagás el total); el saldo, hasta el día anterior al turno. Fijo: se paga el primer mes.</p>
+    </section>
+
+    <section class="tarjeta-b info dudas" aria-labelledby="t-dudas">
+      <div><h2 id="t-dudas">¿Tenés alguna duda?</h2><p class="suave" style="margin:0">Escribinos por WhatsApp y te ayudamos.</p></div>
+      <a class="btn btn-wa" id="wa-dudas" target="_blank" rel="noopener">Escribinos por WhatsApp</a>
+    </section>
   </div>
+
+  <footer class="pie-p"><div class="ancho"><span>Psico Studios · Consultorios por hora en Microcentro, Buenos Aires</span><span>Lunes a sábados de <span data-cfg="hora_apertura">8</span> a <span data-cfg="hora_cierre">21</span> hs</span></div></footer>
 
   <!-- Ficha del consultorio -->
   <div class="capa oculto" id="ficha" role="dialog" aria-modal="true" aria-labelledby="ficha-titulo">
