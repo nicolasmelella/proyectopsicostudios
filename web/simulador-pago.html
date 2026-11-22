@@ -41,14 +41,14 @@
     const id = Number(q.get('pedido'));
     const token = q.get('t');
     const pagar = q.get('pagar') === 'total' ? 'total' : 'sena';
-    const volver = (resultado) => { location.href = `index.html?pago=${resultado}&pedido=${id}&t=${token}`; };
+    const volver = (resultado) => { location.href = `reservar.html?pago=${resultado}&pedido=${id}&t=${token}`; };
     const caja = document.getElementById('caja');
     const sb = crearClienteDemo();
 
     const { data: r, error } = await sb.rpc('estado_pago_pedido', { p_pedido_id: id, p_token: token });
     if (error) {
       caja.innerHTML = `<h1>No encontramos la reserva</h1><p>${esc(error.hint || error.message)}</p>
-        <a class="btn btn-borde btn-bloque" href="index.html">Volver a la web</a>`;
+        <a class="btn btn-borde btn-bloque" href="reservar.html">Volver a la web</a>`;
     } else {
       const monto = Math.max(0, (pagar === 'total' || r.tipo === 'fijo' ? r.total : r.sena) - r.pagado);
       const que = r.tipo === 'fijo' ? 'Primer mes del fijo' : pagar === 'total' ? 'Pago total' : 'Seña';
