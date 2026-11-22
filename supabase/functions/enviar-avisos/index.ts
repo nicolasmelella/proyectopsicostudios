@@ -115,7 +115,7 @@ function tablaConfirmada(reservas: any[] = []) {
 }
 
 function tablaTurnos(reservas: any[] = [], conEstado = false) {
-  const etiqueta: Record<string, string> = { confirmada: 'Confirmada', pendiente: 'Sin seña', vencida: 'Vencida', cancelada: 'Cancelada' };
+  const etiqueta: Record<string, string> = { confirmada: 'Confirmada', pendiente: 'Sin pagar', vencida: 'Vencida', cancelada: 'Cancelada' };
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 14px;border-collapse:collapse">${reservas.map((r) =>
     `<tr><td style="padding:9px 0;border-bottom:1px solid ${LINEA}"><strong>${esc(mayuscula(fechaLarga(r.fecha)))}</strong><br>
      <span style="color:${SUAVE}">${esc(rangos(r.horas))}</span></td>
@@ -157,19 +157,19 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
   let asunto = '', titulo = '', cuerpo = '', boton: { texto: string; url: string } | undefined;
   switch (a.tipo) {
     case 'reserva_creada': {
-      const falta = Math.max(0, (d.sena || 0) - (d.pagado || 0));
+      // por horas se paga el total (sin seña)
+      const falta = Math.max(0, (d.total || d.sena || 0) - (d.pagado || 0));
       asunto = `Recibimos tu reserva · Pedido #${d.pedido}`;
       const primero = primerTurno(d.reservas);
       titulo = varios ? 'Recibimos tu reserva' : 'Recibimos tu reserva';
       cuerpo = `${estadoReserva(1)}${hola}<p style="margin:0">Estos son los turnos de tu pedido <strong>#${esc(d.pedido)}</strong>:</p>${tablaTurnos(d.reservas)}
-        <p style="margin:0">Total: <strong>${pesos(d.total)}</strong> · Seña para confirmar: <strong>${pesos(falta)}</strong></p>
-        <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}: enviá la reserva por WhatsApp (botón de abajo), transferí la seña (o el total, si preferís) y mandá la captura en ese chat.</strong>
-        ${primero ? `El saldo se paga hasta el ${esc(fechaLarga(diaAnterior(primero)))}.` : 'El saldo se paga hasta el día anterior al turno.'}</p>
-        ${d.expira_en ? `<p style="margin:10px 0 0">Te guardamos ${varios ? 'los horarios' : 'el horario'} <strong>hasta las ${esc(horaCorta(d.expira_en))}</strong> (hora de Argentina). Si no llega la seña, se libera para otra persona.
+        <p style="margin:0">Total a pagar: <strong>${pesos(falta)}</strong></p>
+        <p style="margin:10px 0 0;color:${ALERTA}"><strong>Para confirmar${varios ? 'las' : 'la'}: enviá la reserva por WhatsApp (botón de abajo), transferí el total y mandá la captura en ese chat.</strong></p>
+        ${d.expira_en ? `<p style="margin:10px 0 0">Te guardamos ${varios ? 'los horarios' : 'el horario'} <strong>hasta las ${esc(horaCorta(d.expira_en))}</strong> (hora de Argentina). Si no llega el pago, se libera para otra persona.
           Cuando transfieras, entrá a <a href="${esc(linkPedido(sitio, d))}" style="color:${AZUL}">tu reserva</a> y tocá <strong>«Ya transferí»</strong>: te lo guardamos un rato más mientras lo revisamos.</p>` : ''}
-        ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir la seña')}`;
+        ${cajaTransferencia(d.transferencia, falta, 'Datos para transferir')}`;
       const wa = linkWhatsComprobante(d, falta, (d.reservas || []).map((r: any) => `${mayuscula(fechaLarga(r.fecha))}, ${rangos(r.horas)}, ${r.consultorio}`).join('; '),
-        `Pago la seña: ${pesos(falta)} (total ${pesos(d.total)})`);
+        `Pago el total: ${pesos(falta)}`);
       boton = wa ? { texto: 'Enviar reserva por WhatsApp', url: wa } : { texto: 'Ver mi reserva', url: linkPedido(sitio, d) };
       if (wa) cuerpo += soloWhats;
       break;
@@ -198,7 +198,7 @@ export function armarMail(a: Aviso, sitio: string): { asunto: string; html: stri
     case 'reserva_vencida':
       asunto = `Tu reserva se venció · Pedido #${d.pedido}`;
       titulo = 'Tu reserva se venció';
-      cuerpo = `${hola}<p style="margin:0">No recibimos la seña a tiempo y ${varios ? 'estos horarios se liberaron' : 'este horario se liberó'}:</p>${tablaTurnos(d.reservas)}
+      cuerpo = `${hola}<p style="margin:0">No recibimos el pago a tiempo y ${varios ? 'estos horarios se liberaron' : 'este horario se liberó'}:</p>${tablaTurnos(d.reservas)}
         <p style="margin:0">Si ya pagaste, respondé este mail con el comprobante y lo resolvemos.</p>`;
       boton = { texto: 'Hacer una nueva reserva', url: `${sitio}/` };
       break;

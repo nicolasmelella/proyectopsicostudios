@@ -164,8 +164,8 @@ async function compartirReserva(r, pagado) {
   const senaFalta = Math.max(0, lista.reduce((s, x) => s + sena(x.precio_total), 0) - pagadoTotal);
   const texto = confirmada
     ? `Hola ${primerNombre(r.profesionales.nombre)}! Te confirmamos tu reserva en Psico Studios:\n\n${lineas}\n\n${saldo > 0 ? `Saldo a abonar: ${pesos(saldo)}. ¡Te esperamos!` : 'Ya está todo pago. ¡Te esperamos!'}`
-    : `Hola ${primerNombre(r.profesionales.nombre)}! Tenemos guardada tu reserva en Psico Studios:\n\n${lineas}\n\nPara confirmarla falta la seña de ${pesos(senaFalta)}.${st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : ''}`;
-  pintarCompartir(texto, r.profesionales.whatsapp, confirmada ? '' : 'Todavía falta la seña: el mensaje lo avisa.');
+    : `Hola ${primerNombre(r.profesionales.nombre)}! Tenemos guardada tu reserva en Psico Studios:\n\n${lineas}\n\nPara confirmarla falta el pago de ${pesos(senaFalta)}.${st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : ''}`;
+  pintarCompartir(texto, r.profesionales.whatsapp, confirmada ? '' : 'Todavía falta el pago: el mensaje lo avisa.');
 }
 function textoFijo(f) {
   return `Hola ${primerNombre(f.profesionales.nombre)}! Te confirmamos tu horario fijo en Psico Studios:\n\n`
@@ -1025,7 +1025,7 @@ async function detalleReserva(id) {
   const pill = r.estado === 'vencida' && r.motivo_cancelacion === MOTIVO_NO_PAGO ? 'pill-nopago">No pagó'
     : { pendiente: 'pill-alerta">Sin seña', confirmada: 'pill-ok">Confirmada', cancelada: 'pill-error">Cancelada', vencida: 'pill-error">Vencida' }[r.estado];
   const textoRecordatorio = `Hola ${r.profesionales.nombre.split(' ')[0]}! Te escribimos de Psico Studios por tu reserva #${r.id} del ${fechaLarga(r.fecha)} (${rangos(r.horas)}). ` +
-    (r.estado === 'pendiente' ? `Para confirmarla falta la seña de ${pesos(faltaSena)}. Alias: ${st.cfg.alias_transferencia}.` : `¡Te esperamos!`);
+    (r.estado === 'pendiente' ? `Para confirmarla falta el pago de ${pesos(faltaSena)}. Alias: ${st.cfg.alias_transferencia}.` : `¡Te esperamos!`);
 
   abrirModal(`
     <h2 id="modal-titulo">Reserva #${r.id} <span class="pill ${pill}</span></h2>
@@ -1441,8 +1441,8 @@ function textoAlertaWa(x) {
   const n = x.nombre.split(' ')[0];
   const alias = st.cfg.alias_transferencia && st.cfg.alias_transferencia !== 'COMPLETAR' ? ` Alias: ${st.cfg.alias_transferencia}.` : '';
   const turno = `${fechaLarga(x.fecha_turno)} (${rangos(x.horas)})`;
-  if (x.tipo === 'sena') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Para confirmarla falta la seña de ${pesos(x.falta)}.${alias}`;
-  if (x.tipo === 'no_pago') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Como no nos llegó la seña, el horario se liberó. Si todavía lo querés, avisanos y vemos si sigue disponible.`;
+  if (x.tipo === 'sena') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Para confirmarla falta el pago de ${pesos(x.falta)}.${alias}`;
+  if (x.tipo === 'no_pago') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Como no nos llegó el pago, el horario se liberó. Si todavía lo querés, avisanos y vemos si sigue disponible.`;
   if (x.tipo === 'saldo') return `Hola ${n}! Te escribimos de Psico Studios por tu reserva del ${turno}. Te recordamos que el saldo de ${pesos(x.falta)} se paga hasta el ${fechaLarga(x.fecha_limite)}.${alias}`;
   if (x.tipo === 'fijo_inicial') return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Para confirmarlo falta pagar el primer mes: ${pesos(x.falta)}.${alias}`;
   return `Hola ${n}! Te escribimos de Psico Studios por tu horario fijo de los ${DIAS[x.dia_semana].toLowerCase()} (${rangos(x.horas)}). Te recordamos que falta pagar el mes ${x.periodo}: ${pesos(x.falta)}.${alias}`;
