@@ -85,7 +85,8 @@ for (const t of tipos.filter((x) => !['reserva_vencida', 'reserva_creada', 'fijo
   assert.ok(!/se libera|liberan solos|día de cada turno|día del turno/i.test(m.texto), t + ': ' + m.texto);
 }
 const creada = mod.armarMail({ id: 1, tipo: 'reserva_creada', canal: 'email', destino: 'x', datos: { ...ej, total: 18000, sena: 9000, pagado: 0 } }, 'https://s');
-assert.match(creada.texto, /saldo se paga hasta el/); assert.match(creada.texto, /psico\.alias/);
+// por horas se paga el total: el mail pide el total y no habla de seña ni de saldo
+assert.match(creada.texto, /Total a pagar: \$18\.000/); assert.match(creada.texto, /transferí el total/); assert.ok(!/seña|saldo/i.test(creada.texto), creada.texto); assert.match(creada.texto, /psico\.alias/);
 const conf = mod.armarMail({ id: 1, tipo: 'reserva_confirmada', canal: 'email', destino: 'x', datos: { ...ej, total: 18000, pagado: 18000 } }, 'https://s');
 assert.match(conf.texto, /No tenés que pagar nada más/);
 const fijo = mod.armarMail({ id: 1, tipo: 'fijo_solicitado', canal: 'email', destino: 'x', datos: { ...ej, pago_inicial: 49200, pedido: 7, token: 'abc' } }, 'https://s');
@@ -94,7 +95,7 @@ const conWa = { ...ej, total: 18000, sena: 9000, pagado: 0, pedido: 7, token: 'a
 const creadaWa = mod.armarMail({ id: 1, tipo: 'reserva_creada', canal: 'email', destino: 'x', datos: conWa }, 'https://s');
 assert.match(creadaWa.texto, /Enviar reserva por WhatsApp: https:\/\/wa\.me\/5491178224918\?text=/);
 assert.match(decodeURIComponent(creadaWa.texto), /Reservé por la web \(pedido #7\)/); assert.match(decodeURIComponent(creadaWa.texto), /Alias: psico\.alias/); assert.ok(!/Subilo|subir el comprobante/i.test(creadaWa.html));
-ok('textos con la regla nueva: transferencia, saldo hasta el día anterior, fijo paga el primer mes');
+ok('textos con la regla nueva: transferencia, por horas se paga el total, fijo paga el primer mes');
 
 // Estado de la reserva en los mails (Reservada → Revisando el pago → Confirmada)
 const mailDe = (tipo, extra = {}) => mod.armarMail({ id: 1, tipo, canal: 'email', destino: 'x', datos: { ...ej, ...extra } }, 'https://s');
