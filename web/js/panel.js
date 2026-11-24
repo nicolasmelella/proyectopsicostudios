@@ -905,6 +905,7 @@ function modalAnotar({ fecha, consultorio, hora, liberado, horas: horasIniciales
   const actualizar = () => {
     $('#a-rango').textContent = `De ${hora} a ${hora + horasN} hs · Total ${pesos(total())}`;
     $('#a-sena').textContent = pesos(sena(total()));
+    $('#a-pago [data-pago="sena"]').classList.toggle('oculto', sena(total()) >= total());
     $('#a-todo').textContent = pesos(total());
     $('#a-medio-campo').classList.toggle('oculto', pago === 'nada');
   };
@@ -1224,91 +1225,103 @@ function conectarHoras(alCambiar) {
 }
 const horasElegidas = () => $$('#n-horas .chip[aria-pressed="true"]').map((b) => Number(b.dataset.h));
 
-function modalNuevaReserva({ consultorio, fecha, horas = [] }) {
+// Nueva reserva desde el panel: por horas o con horario fijo, con los precios a la vista
+function modalNuevaReserva({ consultorio, fecha, horas = [], modo = 'horas' }) {
   abrirModal(`
     <h2 id="modal-titulo">Nueva reserva</h2>
     <form id="form-nr">
+      <div class="campo"><div class="grupo-grande" id="n-modo" role="group" aria-label="Tipo de reserva">
+        <button type="button" class="chip" data-modo="horas" aria-pressed="${modo === 'horas'}">Por horas</button>
+        <button type="button" class="chip" data-modo="fijo" aria-pressed="${modo === 'fijo'}">Horario fijo</button>
+      </div></div>
       ${camposPersona()}
       <div class="fila2">
-        <div class="campo"><label for="n-fecha">Día</label><input id="n-fecha" type="date" value="${fecha || st.fecha}" required></div>
+        <div class="campo"><label for="n-fecha" id="n-fecha-label">Día</label><input id="n-fecha" type="date" value="${fecha || st.fecha}" required>
+          <div class="ayuda" id="n-dia"></div></div>
         <div class="campo"><label for="n-cons">Consultorio</label><select id="n-cons">${consOpts(consultorio)}</select></div>
       </div>
       <div class="campo"><label>Horas</label>${selectorHoras(horas)}</div>
       <p class="aviso aviso-info chico" id="n-total">Elegí las horas.</p>
       <div class="fila2">
-        <div class="campo"><label for="n-pagado">Pagó ahora ($)</label><input id="n-pagado" type="number" min="0" value="0"></div>
+        <div class="campo"><label for="n-pagado">Pagó ahora ($)</label><input id="n-pagado" type="number" min="0" value="0">
+          <button type="button" class="lnk ayuda" id="n-pago-todo" style="border:0;background:none;padding:4px 0;cursor:pointer;text-decoration:underline"></button></div>
         <div class="campo"><label for="n-medio">Medio</label><select id="n-medio">${medioOpts('transferencia')}</select></div>
       </div>
-      <p class="ayuda">Con la seña (${st.cfg.porcentaje_sena || 50}%) o más queda confirmada. Sin pago queda pendiente y no vence sola.</p>
+      <p class="ayuda" id="n-ayuda"></p>
       <div id="n-error" class="aviso aviso-error oculto" role="alert"></div>
-      <button class="btn btn-acento btn-bloque">Guardar reserva</button>
+      <button class="btn btn-acento btn-bloque" id="n-guardar">Guardar reserva</button>
     </form>`);
   conectarPersona();
-  const precios = { m: null, t: null };
-  const recalcular = async () => {
-    const hs = horasElegidas();
-    if (!hs.length) { $('#n-total').textContent = 'Elegí las horas.'; return; }
-    if (precios.m === null) {
-      const { data } = await sb.from('precios').select('*').eq('modalidad', 'suelta').order('vigente_desde', { ascending: false });
-      const f = $('#n-fecha').value;
-      precios.m = data.find((p) => p.franja === 'manana' && p.vigente_desde <= f)?.valor || 0;
-      precios.t = data.find((p) => p.franja === 'tarde' && p.vigente_desde <= f)?.valor || 0;
-    }
-    const total = hs.reduce((s, h) => s + (h < Number(st.cfg.hora_fin_manana) ? precios.m : precios.t), 0);
-    $('#n-total').innerHTML = `${rangos(hs)} · Total <strong>${pesos(total)}</strong> · Seña <strong>${pesos(sena(total))}</strong>`;
+  let precios = null, aPagar = 0;
+  const esFijo = () => modo === 'fijo';
+  const precioDe = (h, f) => {
+    const franja = h < Number(st.cfg.hora_fin_manana) ? 'manana' : 'tarde', mod = esFijo() ? 'fijo' : 'suelta';
+    return precios.find((p) => p.modalidad === mod && p.franja === franja && p.vigente_desde <= f)?.valor || 0;
   };
+  // Semanas que quedan en el mes desde el primer día (igual que la cuenta del fijo en la base)
+  const semanasDelMes = (desde) => { let n = 0; for (let d = desde; d.slice(0, 7) === desde.slice(0, 7); d = sumarDias(d, 7)) n++; return n; };
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const pintarModo = () => {
+    $$('#n-modo [data-modo]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.modo === modo));
+    $('#n-fecha-label').textContent = esFijo() ? 'Primer día' : 'Día';
+    $('#n-guardar').textContent = esFijo() ? 'Guardar horario fijo' : 'Guardar reserva';
+    $('#n-ayuda').textContent = esFijo()
+      ? `Queda activo y ocupa ese horario todas las semanas. Por la tarde, ${st.cfg.min_horas_fijo_tarde || 2} horas seguidas como mínimo. El pago del mes también se puede registrar después, desde el fijo.`
+      : 'Con el pago total queda confirmada. Sin pago queda pendiente y no vence sola.';
+  };
+  const recalcular = async () => {
+    const f = $('#n-fecha').value;
+    $('#n-dia').textContent = esFijo() && f ? (diaSemana(f) === 7 ? 'Los domingos está cerrado' : `Todos los ${DIAS[diaSemana(f)].toLowerCase()}`) : '';
+    const hs = horasElegidas();
+    if (!hs.length || !f) { $('#n-total').textContent = 'Elegí las horas.'; $('#n-pago-todo').textContent = ''; aPagar = 0; return; }
+    if (!precios) {
+      const { data } = await sb.from('precios').select('*').order('vigente_desde', { ascending: false });
+      precios = data || [];
+    }
+    if (esFijo()) {
+      const semanal = hs.reduce((t, h) => t + precioDe(h, f), 0), n = semanasDelMes(f);
+      const suelto = hs.reduce((t, h) => t + (precios.find((p) => p.modalidad === 'suelta' && p.franja === (h < Number(st.cfg.hora_fin_manana) ? 'manana' : 'tarde') && p.vigente_desde <= f)?.valor || 0), 0);
+      aPagar = semanal * n;
+      $('#n-total').innerHTML = `${rangos(hs)} · <strong>${pesos(semanal)}</strong> por semana`
+        + `<br>${MESES[Number(f.slice(5, 7)) - 1][0].toUpperCase() + MESES[Number(f.slice(5, 7)) - 1].slice(1)}: ${n} ${n === 1 ? 'semana' : 'semanas'} → <strong>${pesos(aPagar)}</strong>`
+        + (suelto > semanal ? ` · ahorra ${pesos((suelto - semanal) * n)} frente a horas sueltas` : '');
+      $('#n-pago-todo').textContent = `Pagó el mes (${pesos(aPagar)})`;
+    } else {
+      aPagar = hs.reduce((t, h) => t + precioDe(h, f), 0);
+      $('#n-total').innerHTML = `${rangos(hs)} · Total <strong>${pesos(aPagar)}</strong>`;
+      $('#n-pago-todo').textContent = `Pagó todo (${pesos(aPagar)})`;
+    }
+  };
+  $$('#n-modo [data-modo]').forEach((b) => (b.onclick = () => { modo = b.dataset.modo; pintarModo(); recalcular(); }));
+  $('#n-pago-todo').onclick = () => { if (aPagar) $('#n-pagado').value = aPagar; };
   conectarHoras(recalcular);
-  $('#n-fecha').onchange = () => { precios.m = null; recalcular(); };
-  recalcular();
+  $('#n-fecha').onchange = recalcular;
+  pintarModo(); recalcular();
   $('#form-nr').onsubmit = async (e) => {
     e.preventDefault();
-    const hs = horasElegidas();
+    const hs = horasElegidas(), f = $('#n-fecha').value, pagado = Number($('#n-pagado').value) || 0;
     if (!hs.length) return errorEn($('#n-error'), 'Elegí al menos una hora.');
     try {
-      await llamar('cargar_reserva', {
-        p_nombre: $('#n-nombre').value.trim(), p_whatsapp: $('#n-wa').value, p_consultorio: Number($('#n-cons').value),
-        p_fecha: $('#n-fecha').value, p_horas: hs, p_monto_pagado: Number($('#n-pagado').value) || 0, p_medio: $('#n-medio').value,
-      }, 'Reserva guardada');
-      st.fecha = $('#n-fecha').value;
+      if (esFijo()) {
+        if (diaSemana(f) === 7) return errorEn($('#n-error'), 'Los domingos está cerrado.');
+        const id = await llamar('cargar_fijo', {
+          p_nombre: $('#n-nombre').value.trim(), p_whatsapp: $('#n-wa').value, p_consultorio: Number($('#n-cons').value),
+          p_dia: diaSemana(f), p_horas: hs, p_desde: f,
+        }, pagado ? null : 'Fijo guardado');
+        if (pagado) await llamar('registrar_pago', { p_monto: pagado, p_medio: $('#n-medio').value, p_fijo_id: id, p_periodo: f.slice(0, 7) }, 'Fijo guardado con su pago');
+      } else {
+        await llamar('cargar_reserva', {
+          p_nombre: $('#n-nombre').value.trim(), p_whatsapp: $('#n-wa').value, p_consultorio: Number($('#n-cons').value),
+          p_fecha: f, p_horas: hs, p_monto_pagado: pagado, p_medio: $('#n-medio').value,
+        }, 'Reserva guardada');
+      }
+      st.fecha = f;
       cerrarModal(); cargarBase(); refrescar();
     } catch (err) { errorEn($('#n-error'), err); }
   };
 }
 
-function modalNuevoFijo() {
-  abrirModal(`
-    <h2 id="modal-titulo">Nuevo horario fijo</h2>
-    <p class="suave chico">Queda activo directamente y ocupa ese horario todas las semanas.</p>
-    <form id="form-nf">
-      ${camposPersona()}
-      <div class="fila2">
-        <div class="campo"><label for="n-cons">Consultorio</label><select id="n-cons">${consOpts()}</select></div>
-        <div class="campo"><label for="n-desde">Primer día</label><input id="n-desde" type="date" value="${st.fecha}" required>
-          <div class="ayuda" id="n-dia"></div></div>
-      </div>
-      <div class="campo"><label>Horas</label>${selectorHoras()}</div>
-      <div id="n-error" class="aviso aviso-error oculto" role="alert"></div>
-      <button class="btn btn-acento btn-bloque">Guardar fijo</button>
-    </form>`);
-  conectarPersona();
-  conectarHoras();
-  const dia = () => { $('#n-dia').textContent = 'Todos los ' + DIAS[diaSemana($('#n-desde').value)].toLowerCase(); };
-  $('#n-desde').onchange = dia; dia();
-  $('#form-nf').onsubmit = async (e) => {
-    e.preventDefault();
-    const hs = horasElegidas();
-    const desde = $('#n-desde').value;
-    if (!hs.length) return errorEn($('#n-error'), 'Elegí al menos una hora.');
-    if (diaSemana(desde) === 7) return errorEn($('#n-error'), 'Los domingos está cerrado.');
-    try {
-      await llamar('cargar_fijo', {
-        p_nombre: $('#n-nombre').value.trim(), p_whatsapp: $('#n-wa').value, p_consultorio: Number($('#n-cons').value),
-        p_dia: diaSemana(desde), p_horas: hs, p_desde: desde,
-      }, 'Fijo guardado');
-      cerrarModal(); cargarBase(); refrescar();
-    } catch (err) { errorEn($('#n-error'), err); }
-  };
-}
+function modalNuevoFijo() { modalNuevaReserva({ modo: 'fijo' }); }
 
 function modalBloqueo() {
   const hs = horasDelDia();
